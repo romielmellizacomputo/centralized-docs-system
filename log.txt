@@ -1,0 +1,544 @@
+Log file created
+[2025-05-08T18:24:12.795Z] Script started
+[2025-05-08T18:24:12.795Z] Error in fetchallissues: Error: Command failed: node "C:/Users/Admin/OneDrive/Documents/Web Project/Centralized Docs System/fetchallissues.js"
+node:internal/modules/cjs/loader:1247
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\Admin\OneDrive\Documents\Web Project\Centralized Docs System\fetchallissues.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1244:15)
+    at Function._load (node:internal/modules/cjs/loader:1070:27)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:217:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:170:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.13.0
+
+    at genericNodeError (node:internal/errors:983:15)
+    at wrappedFn (node:internal/errors:537:14)
+    at ChildProcess.exithandler (node:child_process:414:12)
+    at ChildProcess.emit (node:events:524:28)
+    at maybeClose (node:internal/child_process:1101:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+[2025-05-08T18:24:12.795Z] fetchallissues stderr: node:internal/modules/cjs/loader:1247
+  throw err;
+  ^
+
+Error: Cannot find module 'C:\Users\Admin\OneDrive\Documents\Web Project\Centralized Docs System\fetchallissues.js'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1244:15)
+    at Function._load (node:internal/modules/cjs/loader:1070:27)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:217:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:170:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.13.0
+
+[2025-05-08T18:24:12.795Z] fetchallmr stdout: 🔄 Fetching merge requests for all projects...
+🔄 Fetching merge requests for Backend...
+✅ Page 1 fetched (100 MRs) for Backend
+✅ Page 2 fetched (100 MRs) for Backend
+✅ Page 3 fetched (100 MRs) for Backend
+✅ Page 4 fetched (100 MRs) for Backend
+✅ Page 5 fetched (100 MRs) for Backend
+✅ Page 6 fetched (100 MRs) for Backend
+✅ Page 7 fetched (100 MRs) for Backend
+✅ Page 8 fetched (100 MRs) for Backend
+✅ Page 9 fetched (100 MRs) for Backend
+✅ Page 10 fetched (100 MRs) for Backend
+✅ Page 11 fetched (100 MRs) for Backend
+✅ Page 12 fetched (100 MRs) for Backend
+✅ Page 13 fetched (100 MRs) for Backend
+✅ Page 14 fetched (100 MRs) for Backend
+✅ Page 15 fetched (100 MRs) for Backend
+✅ Page 16 fetched (100 MRs) for Backend
+✅ Page 17 fetched (100 MRs) for Backend
+✅ Page 18 fetched (100 MRs) for Backend
+✅ Page 19 fetched (100 MRs) for Backend
+✅ Page 20 fetched (100 MRs) for Backend
+✅ Page 21 fetched (100 MRs) for Backend
+✅ Page 22 fetched (100 MRs) for Backend
+✅ Page 23 fetched (100 MRs) for Backend
+✅ Page 24 fetched (100 MRs) for Backend
+✅ Page 25 fetched (100 MRs) for Backend
+✅ Page 26 fetched (100 MRs) for Backend
+✅ Page 27 fetched (100 MRs) for Backend
+✅ Page 28 fetched (100 MRs) for Backend
+✅ Page 29 fetched (100 MRs) for Backend
+✅ Page 30 fetched (100 MRs) for Backend
+✅ Page 31 fetched (100 MRs) for Backend
+✅ Page 32 fetched (100 MRs) for Backend
+✅ Page 33 fetched (100 MRs) for Backend
+✅ Page 34 fetched (100 MRs) for Backend
+✅ Page 35 fetched (100 MRs) for Backend
+✅ Page 36 fetched (100 MRs) for Backend
+✅ Page 37 fetched (100 MRs) for Backend
+✅ Page 38 fetched (100 MRs) for Backend
+✅ Page 39 fetched (100 MRs) for Backend
+✅ Page 40 fetched (100 MRs) for Backend
+✅ Page 41 fetched (100 MRs) for Backend
+✅ Page 42 fetched (100 MRs) for Backend
+✅ Page 43 fetched (100 MRs) for Backend
+✅ Page 44 fetched (100 MRs) for Backend
+✅ Page 45 fetched (100 MRs) for Backend
+✅ Page 46 fetched (100 MRs) for Backend
+✅ Page 47 fetched (100 MRs) for Backend
+✅ Page 48 fetched (100 MRs) for Backend
+✅ Page 49 fetched (100 MRs) for Backend
+✅ Page 50 fetched (100 MRs) for Backend
+✅ Page 51 fetched (100 MRs) for Backend
+✅ Page 52 fetched (100 MRs) for Backend
+✅ Page 53 fetched (100 MRs) for Backend
+✅ Page 54 fetched (100 MRs) for Backend
+✅ Page 55 fetched (100 MRs) for Backend
+✅ Page 56 fetched (100 MRs) for Backend
+✅ Page 57 fetched (100 MRs) for Backend
+✅ Page 58 fetched (100 MRs) for Backend
+✅ Page 59 fetched (100 MRs) for Backend
+✅ Page 60 fetched (100 MRs) for Backend
+✅ Page 61 fetched (100 MRs) for Backend
+✅ Page 62 fetched (100 MRs) for Backend
+✅ Page 63 fetched (100 MRs) for Backend
+✅ Page 64 fetched (100 MRs) for Backend
+✅ Page 65 fetched (100 MRs) for Backend
+✅ Page 66 fetched (100 MRs) for Backend
+✅ Page 67 fetched (100 MRs) for Backend
+✅ Page 68 fetched (100 MRs) for Backend
+✅ Page 69 fetched (100 MRs) for Backend
+✅ Page 70 fetched (100 MRs) for Backend
+✅ Page 71 fetched (100 MRs) for Backend
+✅ Page 72 fetched (100 MRs) for Backend
+✅ Page 73 fetched (100 MRs) for Backend
+✅ Page 74 fetched (100 MRs) for Backend
+✅ Page 75 fetched (100 MRs) for Backend
+✅ Page 76 fetched (100 MRs) for Backend
+✅ Page 77 fetched (100 MRs) for Backend
+✅ Page 78 fetched (100 MRs) for Backend
+✅ Page 79 fetched (100 MRs) for Backend
+✅ Page 80 fetched (100 MRs) for Backend
+✅ Page 81 fetched (100 MRs) for Backend
+✅ Page 82 fetched (100 MRs) for Backend
+✅ Page 83 fetched (100 MRs) for Backend
+✅ Page 84 fetched (100 MRs) for Backend
+✅ Page 85 fetched (100 MRs) for Backend
+✅ Page 86 fetched (100 MRs) for Backend
+✅ Page 87 fetched (100 MRs) for Backend
+✅ Page 88 fetched (100 MRs) for Backend
+✅ Page 89 fetched (100 MRs) for Backend
+✅ Page 90 fetched (100 MRs) for Backend
+✅ Page 91 fetched (100 MRs) for Backend
+✅ Page 92 fetched (100 MRs) for Backend
+✅ Page 93 fetched (100 MRs) for Backend
+✅ Page 94 fetched (100 MRs) for Backend
+✅ Page 95 fetched (100 MRs) for Backend
+✅ Page 96 fetched (100 MRs) for Backend
+✅ Page 97 fetched (100 MRs) for Backend
+✅ Page 98 fetched (100 MRs) for Backend
+✅ Page 99 fetched (100 MRs) for Backend
+✅ Page 100 fetched (100 MRs) for Backend
+✅ Page 101 fetched (100 MRs) for Backend
+✅ Page 102 fetched (100 MRs) for Backend
+✅ Page 103 fetched (100 MRs) for Backend
+✅ Page 104 fetched (100 MRs) for Backend
+✅ Page 105 fetched (100 MRs) for Backend
+✅ Page 106 fetched (100 MRs) for Backend
+✅ Page 107 fetched (100 MRs) for Backend
+✅ Page 108 fetched (100 MRs) for Backend
+✅ Page 109 fetched (100 MRs) for Backend
+✅ Page 110 fetched (100 MRs) for Backend
+✅ Page 111 fetched (100 MRs) for Backend
+✅ Page 112 fetched (100 MRs) for Backend
+✅ Page 113 fetched (100 MRs) for Backend
+✅ Page 114 fetched (100 MRs) for Backend
+✅ Page 115 fetched (100 MRs) for Backend
+✅ Page 116 fetched (100 MRs) for Backend
+✅ Page 117 fetched (100 MRs) for Backend
+✅ Page 118 fetched (100 MRs) for Backend
+✅ Page 119 fetched (100 MRs) for Backend
+✅ Page 120 fetched (100 MRs) for Backend
+✅ Page 121 fetched (100 MRs) for Backend
+✅ Page 122 fetched (100 MRs) for Backend
+✅ Page 123 fetched (100 MRs) for Backend
+✅ Page 124 fetched (100 MRs) for Backend
+✅ Page 125 fetched (100 MRs) for Backend
+✅ Page 126 fetched (100 MRs) for Backend
+✅ Page 127 fetched (100 MRs) for Backend
+✅ Page 128 fetched (100 MRs) for Backend
+✅ Page 129 fetched (100 MRs) for Backend
+✅ Page 130 fetched (100 MRs) for Backend
+✅ Page 131 fetched (100 MRs) for Backend
+✅ Page 132 fetched (100 MRs) for Backend
+✅ Page 133 fetched (100 MRs) for Backend
+✅ Page 134 fetched (100 MRs) for Backend
+✅ Page 135 fetched (100 MRs) for Backend
+✅ Page 136 fetched (100 MRs) for Backend
+✅ Page 137 fetched (100 MRs) for Backend
+✅ Page 138 fetched (100 MRs) for Backend
+✅ Page 139 fetched (100 MRs) for Backend
+✅ Page 140 fetched (100 MRs) for Backend
+✅ Page 141 fetched (100 MRs) for Backend
+✅ Page 142 fetched (100 MRs) for Backend
+✅ Page 143 fetched (100 MRs) for Backend
+✅ Page 144 fetched (100 MRs) for Backend
+✅ Page 145 fetched (100 MRs) for Backend
+✅ Page 146 fetched (100 MRs) for Backend
+✅ Page 147 fetched (100 MRs) for Backend
+✅ Page 148 fetched (100 MRs) for Backend
+✅ Page 149 fetched (100 MRs) for Backend
+✅ Page 150 fetched (100 MRs) for Backend
+✅ Page 151 fetched (100 MRs) for Backend
+✅ Page 152 fetched (100 MRs) for Backend
+✅ Page 153 fetched (100 MRs) for Backend
+✅ Page 154 fetched (100 MRs) for Backend
+✅ Page 155 fetched (25 MRs) for Backend
+🔄 Fetching merge requests for ApplyBPO...
+✅ Page 1 fetched (100 MRs) for ApplyBPO
+✅ Page 2 fetched (100 MRs) for ApplyBPO
+✅ Page 3 fetched (100 MRs) for ApplyBPO
+✅ Page 4 fetched (100 MRs) for ApplyBPO
+✅ Page 5 fetched (100 MRs) for ApplyBPO
+✅ Page 6 fetched (100 MRs) for ApplyBPO
+✅ Page 7 fetched (100 MRs) for ApplyBPO
+✅ Page 8 fetched (100 MRs) for ApplyBPO
+✅ Page 9 fetched (100 MRs) for ApplyBPO
+✅ Page 10 fetched (100 MRs) for ApplyBPO
+✅ Page 11 fetched (100 MRs) for ApplyBPO
+✅ Page 12 fetched (100 MRs) for ApplyBPO
+✅ Page 13 fetched (100 MRs) for ApplyBPO
+✅ Page 14 fetched (100 MRs) for ApplyBPO
+✅ Page 15 fetched (100 MRs) for ApplyBPO
+✅ Page 16 fetched (100 MRs) for ApplyBPO
+✅ Page 17 fetched (100 MRs) for ApplyBPO
+✅ Page 18 fetched (100 MRs) for ApplyBPO
+✅ Page 19 fetched (100 MRs) for ApplyBPO
+✅ Page 20 fetched (100 MRs) for ApplyBPO
+✅ Page 21 fetched (100 MRs) for ApplyBPO
+✅ Page 22 fetched (100 MRs) for ApplyBPO
+✅ Page 23 fetched (100 MRs) for ApplyBPO
+✅ Page 24 fetched (100 MRs) for ApplyBPO
+✅ Page 25 fetched (100 MRs) for ApplyBPO
+✅ Page 26 fetched (100 MRs) for ApplyBPO
+✅ Page 27 fetched (100 MRs) for ApplyBPO
+✅ Page 28 fetched (100 MRs) for ApplyBPO
+✅ Page 29 fetched (100 MRs) for ApplyBPO
+✅ Page 30 fetched (100 MRs) for ApplyBPO
+✅ Page 31 fetched (100 MRs) for ApplyBPO
+✅ Page 32 fetched (100 MRs) for ApplyBPO
+✅ Page 33 fetched (100 MRs) for ApplyBPO
+✅ Page 34 fetched (100 MRs) for ApplyBPO
+✅ Page 35 fetched (100 MRs) for ApplyBPO
+✅ Page 36 fetched (100 MRs) for ApplyBPO
+✅ Page 37 fetched (100 MRs) for ApplyBPO
+✅ Page 38 fetched (100 MRs) for ApplyBPO
+✅ Page 39 fetched (100 MRs) for ApplyBPO
+✅ Page 40 fetched (100 MRs) for ApplyBPO
+✅ Page 41 fetched (100 MRs) for ApplyBPO
+✅ Page 42 fetched (100 MRs) for ApplyBPO
+✅ Page 43 fetched (100 MRs) for ApplyBPO
+✅ Page 44 fetched (100 MRs) for ApplyBPO
+✅ Page 45 fetched (100 MRs) for ApplyBPO
+✅ Page 46 fetched (100 MRs) for ApplyBPO
+✅ Page 47 fetched (100 MRs) for ApplyBPO
+✅ Page 48 fetched (100 MRs) for ApplyBPO
+✅ Page 49 fetched (100 MRs) for ApplyBPO
+✅ Page 50 fetched (100 MRs) for ApplyBPO
+✅ Page 51 fetched (100 MRs) for ApplyBPO
+✅ Page 52 fetched (100 MRs) for ApplyBPO
+✅ Page 53 fetched (100 MRs) for ApplyBPO
+✅ Page 54 fetched (100 MRs) for ApplyBPO
+✅ Page 55 fetched (100 MRs) for ApplyBPO
+✅ Page 56 fetched (100 MRs) for ApplyBPO
+✅ Page 57 fetched (100 MRs) for ApplyBPO
+✅ Page 58 fetched (100 MRs) for ApplyBPO
+✅ Page 59 fetched (100 MRs) for ApplyBPO
+✅ Page 60 fetched (100 MRs) for ApplyBPO
+✅ Page 61 fetched (100 MRs) for ApplyBPO
+✅ Page 62 fetched (100 MRs) for ApplyBPO
+✅ Page 63 fetched (100 MRs) for ApplyBPO
+✅ Page 64 fetched (100 MRs) for ApplyBPO
+✅ Page 65 fetched (100 MRs) for ApplyBPO
+✅ Page 66 fetched (100 MRs) for ApplyBPO
+✅ Page 67 fetched (44 MRs) for ApplyBPO
+🔄 Fetching merge requests for BPOSeats.com...
+✅ Page 1 fetched (100 MRs) for BPOSeats.com
+✅ Page 2 fetched (100 MRs) for BPOSeats.com
+✅ Page 3 fetched (100 MRs) for BPOSeats.com
+✅ Page 4 fetched (100 MRs) for BPOSeats.com
+✅ Page 5 fetched (100 MRs) for BPOSeats.com
+✅ Page 6 fetched (100 MRs) for BPOSeats.com
+✅ Page 7 fetched (100 MRs) for BPOSeats.com
+✅ Page 8 fetched (100 MRs) for BPOSeats.com
+✅ Page 9 fetched (100 MRs) for BPOSeats.com
+✅ Page 10 fetched (100 MRs) for BPOSeats.com
+✅ Page 11 fetched (100 MRs) for BPOSeats.com
+✅ Page 12 fetched (100 MRs) for BPOSeats.com
+✅ Page 13 fetched (100 MRs) for BPOSeats.com
+✅ Page 14 fetched (100 MRs) for BPOSeats.com
+✅ Page 15 fetched (100 MRs) for BPOSeats.com
+✅ Page 16 fetched (100 MRs) for BPOSeats.com
+✅ Page 17 fetched (100 MRs) for BPOSeats.com
+✅ Page 18 fetched (100 MRs) for BPOSeats.com
+✅ Page 19 fetched (100 MRs) for BPOSeats.com
+✅ Page 20 fetched (100 MRs) for BPOSeats.com
+✅ Page 21 fetched (100 MRs) for BPOSeats.com
+✅ Page 22 fetched (100 MRs) for BPOSeats.com
+✅ Page 23 fetched (100 MRs) for BPOSeats.com
+✅ Page 24 fetched (100 MRs) for BPOSeats.com
+✅ Page 25 fetched (100 MRs) for BPOSeats.com
+✅ Page 26 fetched (100 MRs) for BPOSeats.com
+✅ Page 27 fetched (100 MRs) for BPOSeats.com
+✅ Page 28 fetched (100 MRs) for BPOSeats.com
+✅ Page 29 fetched (80 MRs) for BPOSeats.com
+🔄 Fetching merge requests for Desktop...
+✅ Page 1 fetched (100 MRs) for Desktop
+✅ Page 2 fetched (100 MRs) for Desktop
+✅ Page 3 fetched (100 MRs) for Desktop
+✅ Page 4 fetched (100 MRs) for Desktop
+✅ Page 5 fetched (100 MRs) for Desktop
+✅ Page 6 fetched (100 MRs) for Desktop
+✅ Page 7 fetched (100 MRs) for Desktop
+✅ Page 8 fetched (100 MRs) for Desktop
+✅ Page 9 fetched (100 MRs) for Desktop
+✅ Page 10 fetched (100 MRs) for Desktop
+✅ Page 11 fetched (100 MRs) for Desktop
+✅ Page 12 fetched (100 MRs) for Desktop
+✅ Page 13 fetched (100 MRs) for Desktop
+✅ Page 14 fetched (100 MRs) for Desktop
+✅ Page 15 fetched (100 MRs) for Desktop
+✅ Page 16 fetched (100 MRs) for Desktop
+✅ Page 17 fetched (100 MRs) for Desktop
+✅ Page 18 fetched (100 MRs) for Desktop
+✅ Page 19 fetched (38 MRs) for Desktop
+🔄 Fetching merge requests for Android...
+✅ Page 1 fetched (100 MRs) for Android
+✅ Page 2 fetched (100 MRs) for Android
+✅ Page 3 fetched (100 MRs) for Android
+✅ Page 4 fetched (100 MRs) for Android
+✅ Page 5 fetched (100 MRs) for Android
+✅ Page 6 fetched (100 MRs) for Android
+✅ Page 7 fetched (100 MRs) for Android
+✅ Page 8 fetched (100 MRs) for Android
+✅ Page 9 fetched (100 MRs) for Android
+✅ Page 10 fetched (100 MRs) for Android
+✅ Page 11 fetched (100 MRs) for Android
+✅ Page 12 fetched (100 MRs) for Android
+✅ Page 13 fetched (100 MRs) for Android
+✅ Page 14 fetched (100 MRs) for Android
+✅ Page 15 fetched (100 MRs) for Android
+✅ Page 16 fetched (100 MRs) for Android
+✅ Page 17 fetched (100 MRs) for Android
+✅ Page 18 fetched (100 MRs) for Android
+✅ Page 19 fetched (100 MRs) for Android
+✅ Page 20 fetched (100 MRs) for Android
+✅ Page 21 fetched (100 MRs) for Android
+✅ Page 22 fetched (100 MRs) for Android
+✅ Page 23 fetched (100 MRs) for Android
+✅ Page 24 fetched (100 MRs) for Android
+✅ Page 25 fetched (100 MRs) for Android
+✅ Page 26 fetched (100 MRs) for Android
+✅ Page 27 fetched (100 MRs) for Android
+✅ Page 28 fetched (100 MRs) for Android
+✅ Page 29 fetched (100 MRs) for Android
+✅ Page 30 fetched (100 MRs) for Android
+✅ Page 31 fetched (100 MRs) for Android
+✅ Page 32 fetched (100 MRs) for Android
+✅ Page 33 fetched (100 MRs) for Android
+✅ Page 34 fetched (100 MRs) for Android
+✅ Page 35 fetched (100 MRs) for Android
+✅ Page 36 fetched (100 MRs) for Android
+🔄 Fetching merge requests for Ministry...
+✅ Page 1 fetched (100 MRs) for Ministry
+✅ Page 2 fetched (100 MRs) for Ministry
+✅ Page 3 fetched (100 MRs) for Ministry
+✅ Page 4 fetched (100 MRs) for Ministry
+✅ Page 5 fetched (100 MRs) for Ministry
+✅ Page 6 fetched (100 MRs) for Ministry
+✅ Page 7 fetched (100 MRs) for Ministry
+✅ Page 8 fetched (100 MRs) for Ministry
+✅ Page 9 fetched (76 MRs) for Ministry
+🔄 Fetching merge requests for Scalema...
+✅ Page 1 fetched (100 MRs) for Scalema
+✅ Page 2 fetched (100 MRs) for Scalema
+✅ Page 3 fetched (38 MRs) for Scalema
+🔄 Fetching merge requests for HQZen...
+✅ Page 1 fetched (100 MRs) for HQZen
+✅ Page 2 fetched (100 MRs) for HQZen
+✅ Page 3 fetched (100 MRs) for HQZen
+✅ Page 4 fetched (100 MRs) for HQZen
+✅ Page 5 fetched (100 MRs) for HQZen
+✅ Page 6 fetched (100 MRs) for HQZen
+✅ Page 7 fetched (100 MRs) for HQZen
+✅ Page 8 fetched (100 MRs) for HQZen
+✅ Page 9 fetched (100 MRs) for HQZen
+✅ Page 10 fetched (100 MRs) for HQZen
+✅ Page 11 fetched (100 MRs) for HQZen
+✅ Page 12 fetched (100 MRs) for HQZen
+✅ Page 13 fetched (100 MRs) for HQZen
+✅ Page 14 fetched (100 MRs) for HQZen
+✅ Page 15 fetched (100 MRs) for HQZen
+✅ Page 16 fetched (100 MRs) for HQZen
+✅ Page 17 fetched (100 MRs) for HQZen
+✅ Page 18 fetched (100 MRs) for HQZen
+✅ Page 19 fetched (100 MRs) for HQZen
+✅ Page 20 fetched (100 MRs) for HQZen
+✅ Page 21 fetched (100 MRs) for HQZen
+✅ Page 22 fetched (100 MRs) for HQZen
+✅ Page 23 fetched (100 MRs) for HQZen
+✅ Page 24 fetched (100 MRs) for HQZen
+✅ Page 25 fetched (100 MRs) for HQZen
+✅ Page 26 fetched (100 MRs) for HQZen
+✅ Page 27 fetched (100 MRs) for HQZen
+✅ Page 28 fetched (100 MRs) for HQZen
+✅ Page 29 fetched (100 MRs) for HQZen
+✅ Page 30 fetched (100 MRs) for HQZen
+✅ Page 31 fetched (100 MRs) for HQZen
+✅ Page 32 fetched (100 MRs) for HQZen
+✅ Page 33 fetched (100 MRs) for HQZen
+✅ Page 34 fetched (100 MRs) for HQZen
+✅ Page 35 fetched (100 MRs) for HQZen
+✅ Page 36 fetched (100 MRs) for HQZen
+✅ Page 37 fetched (100 MRs) for HQZen
+✅ Page 38 fetched (100 MRs) for HQZen
+✅ Page 39 fetched (100 MRs) for HQZen
+✅ Page 40 fetched (100 MRs) for HQZen
+✅ Page 41 fetched (100 MRs) for HQZen
+✅ Page 42 fetched (100 MRs) for HQZen
+✅ Page 43 fetched (100 MRs) for HQZen
+✅ Page 44 fetched (100 MRs) for HQZen
+✅ Page 45 fetched (100 MRs) for HQZen
+✅ Page 46 fetched (100 MRs) for HQZen
+✅ Page 47 fetched (100 MRs) for HQZen
+✅ Page 48 fetched (100 MRs) for HQZen
+✅ Page 49 fetched (100 MRs) for HQZen
+✅ Page 50 fetched (100 MRs) for HQZen
+✅ Page 51 fetched (100 MRs) for HQZen
+✅ Page 52 fetched (100 MRs) for HQZen
+✅ Page 53 fetched (100 MRs) for HQZen
+✅ Page 54 fetched (100 MRs) for HQZen
+✅ Page 55 fetched (100 MRs) for HQZen
+✅ Page 56 fetched (100 MRs) for HQZen
+✅ Page 57 fetched (100 MRs) for HQZen
+✅ Page 58 fetched (100 MRs) for HQZen
+✅ Page 59 fetched (100 MRs) for HQZen
+✅ Page 60 fetched (100 MRs) for HQZen
+✅ Page 61 fetched (100 MRs) for HQZen
+✅ Page 62 fetched (100 MRs) for HQZen
+✅ Page 63 fetched (100 MRs) for HQZen
+✅ Page 64 fetched (100 MRs) for HQZen
+✅ Page 65 fetched (100 MRs) for HQZen
+✅ Page 66 fetched (100 MRs) for HQZen
+✅ Page 67 fetched (100 MRs) for HQZen
+✅ Page 68 fetched (100 MRs) for HQZen
+✅ Page 69 fetched (100 MRs) for HQZen
+✅ Page 70 fetched (100 MRs) for HQZen
+✅ Page 71 fetched (100 MRs) for HQZen
+✅ Page 72 fetched (100 MRs) for HQZen
+✅ Page 73 fetched (100 MRs) for HQZen
+✅ Page 74 fetched (100 MRs) for HQZen
+✅ Page 75 fetched (100 MRs) for HQZen
+✅ Page 76 fetched (100 MRs) for HQZen
+✅ Page 77 fetched (100 MRs) for HQZen
+✅ Page 78 fetched (100 MRs) for HQZen
+✅ Page 79 fetched (100 MRs) for HQZen
+✅ Page 80 fetched (100 MRs) for HQZen
+✅ Page 81 fetched (100 MRs) for HQZen
+✅ Page 82 fetched (100 MRs) for HQZen
+✅ Page 83 fetched (100 MRs) for HQZen
+✅ Page 84 fetched (100 MRs) for HQZen
+✅ Page 85 fetched (100 MRs) for HQZen
+✅ Page 86 fetched (100 MRs) for HQZen
+✅ Page 87 fetched (100 MRs) for HQZen
+✅ Page 88 fetched (100 MRs) for HQZen
+✅ Page 89 fetched (100 MRs) for HQZen
+✅ Page 90 fetched (100 MRs) for HQZen
+✅ Page 91 fetched (100 MRs) for HQZen
+✅ Page 92 fetched (100 MRs) for HQZen
+✅ Page 93 fetched (100 MRs) for HQZen
+✅ Page 94 fetched (100 MRs) for HQZen
+✅ Page 95 fetched (100 MRs) for HQZen
+✅ Page 96 fetched (100 MRs) for HQZen
+✅ Page 97 fetched (100 MRs) for HQZen
+✅ Page 98 fetched (100 MRs) for HQZen
+✅ Page 99 fetched (100 MRs) for HQZen
+✅ Page 100 fetched (100 MRs) for HQZen
+✅ Page 101 fetched (100 MRs) for HQZen
+✅ Page 102 fetched (100 MRs) for HQZen
+✅ Page 103 fetched (100 MRs) for HQZen
+✅ Page 104 fetched (100 MRs) for HQZen
+✅ Page 105 fetched (100 MRs) for HQZen
+✅ Page 106 fetched (100 MRs) for HQZen
+✅ Page 107 fetched (100 MRs) for HQZen
+✅ Page 108 fetched (100 MRs) for HQZen
+✅ Page 109 fetched (100 MRs) for HQZen
+✅ Page 110 fetched (100 MRs) for HQZen
+✅ Page 111 fetched (100 MRs) for HQZen
+✅ Page 112 fetched (100 MRs) for HQZen
+✅ Page 113 fetched (100 MRs) for HQZen
+✅ Page 114 fetched (100 MRs) for HQZen
+✅ Page 115 fetched (100 MRs) for HQZen
+✅ Page 116 fetched (100 MRs) for HQZen
+✅ Page 117 fetched (100 MRs) for HQZen
+✅ Page 118 fetched (100 MRs) for HQZen
+✅ Page 119 fetched (100 MRs) for HQZen
+✅ Page 120 fetched (100 MRs) for HQZen
+✅ Page 121 fetched (100 MRs) for HQZen
+✅ Page 122 fetched (100 MRs) for HQZen
+✅ Page 123 fetched (100 MRs) for HQZen
+✅ Page 124 fetched (100 MRs) for HQZen
+✅ Page 125 fetched (100 MRs) for HQZen
+✅ Page 126 fetched (100 MRs) for HQZen
+✅ Page 127 fetched (100 MRs) for HQZen
+✅ Page 128 fetched (100 MRs) for HQZen
+✅ Page 129 fetched (100 MRs) for HQZen
+✅ Page 130 fetched (100 MRs) for HQZen
+✅ Page 131 fetched (100 MRs) for HQZen
+✅ Page 132 fetched (100 MRs) for HQZen
+✅ Page 133 fetched (100 MRs) for HQZen
+✅ Page 134 fetched (100 MRs) for HQZen
+✅ Page 135 fetched (100 MRs) for HQZen
+✅ Page 136 fetched (100 MRs) for HQZen
+✅ Page 137 fetched (100 MRs) for HQZen
+✅ Page 138 fetched (100 MRs) for HQZen
+✅ Page 139 fetched (100 MRs) for HQZen
+✅ Page 140 fetched (100 MRs) for HQZen
+✅ Page 141 fetched (100 MRs) for HQZen
+✅ Page 142 fetched (100 MRs) for HQZen
+✅ Page 143 fetched (100 MRs) for HQZen
+✅ Page 144 fetched (100 MRs) for HQZen
+✅ Page 145 fetched (100 MRs) for HQZen
+✅ Page 146 fetched (100 MRs) for HQZen
+✅ Page 147 fetched (100 MRs) for HQZen
+✅ Page 148 fetched (100 MRs) for HQZen
+✅ Page 149 fetched (100 MRs) for HQZen
+✅ Page 150 fetched (100 MRs) for HQZen
+✅ Page 151 fetched (100 MRs) for HQZen
+✅ Page 152 fetched (100 MRs) for HQZen
+✅ Page 153 fetched (100 MRs) for HQZen
+✅ Page 154 fetched (100 MRs) for HQZen
+✅ Page 155 fetched (100 MRs) for HQZen
+✅ Page 156 fetched (100 MRs) for HQZen
+✅ Page 157 fetched (100 MRs) for HQZen
+✅ Page 158 fetched (100 MRs) for HQZen
+✅ Page 159 fetched (100 MRs) for HQZen
+✅ Page 160 fetched (100 MRs) for HQZen
+✅ Page 161 fetched (100 MRs) for HQZen
+✅ Page 162 fetched (100 MRs) for HQZen
+✅ Page 163 fetched (100 MRs) for HQZen
+✅ Page 164 fetched (100 MRs) for HQZen
+✅ Page 165 fetched (100 MRs) for HQZen
+✅ Page 166 fetched (100 MRs) for HQZen
+✅ Page 167 fetched (100 MRs) for HQZen
+✅ Page 168 fetched (70 MRs) for HQZen
+✅ Updated 48270 merge requests.
+✅ Inserted 1 new merge requests.
+
+[2025-05-08T18:24:12.795Z] fetchallmr stderr: (node:93604) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
