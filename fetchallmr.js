@@ -5,8 +5,8 @@ const path = require('path');
 
 const keyFile = './service-account.json';
 const GITLAB_URL = 'https://forge.bposeats.com/';
-const GITLAB_TOKEN = 'EAZxxU1-x2pYf5YoPrHb';
-const SPREADSHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';
+const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
 const PROJECT_CONFIG = {
   155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
