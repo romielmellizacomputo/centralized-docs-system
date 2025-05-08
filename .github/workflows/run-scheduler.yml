@@ -1,0 +1,25 @@
+name: Run Scheduler
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # ⏰ Runs every hour (UTC time)
+  workflow_dispatch:     # Allows manual trigger from GitHub UI
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'  # Or your Node version
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run scheduler script
+        run: node scheduler.js
