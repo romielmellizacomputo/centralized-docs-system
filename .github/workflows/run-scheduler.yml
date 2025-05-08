@@ -24,5 +24,6 @@ jobs:
       - name: Run scheduler script
         run: node scheduler.js
         env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+            GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+            SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+            GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
