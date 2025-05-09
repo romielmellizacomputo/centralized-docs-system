@@ -1,5 +1,4 @@
 import { google } from 'googleapis';
-import { authenticate } from './fetch-issues.js';
 
 // Your Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
@@ -20,6 +19,61 @@ async function authenticate() {
   });
 
   return auth;
+}
+
+async function getSelectedMilestones(sheets, sheetId) {
+  // Implement the logic to fetch milestones data from the sheet
+  // Example (adjust according to your actual sheet structure):
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `${G_MILESTONES}!A2:A`, // Adjust as per your sheet
+  });
+
+  return data.values.flat().filter(Boolean);
+}
+
+async function getAllIssues(sheets) {
+  // Implement the logic to fetch all issues data
+  // Example (adjust according to your actual sheet structure):
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: UTILS_SHEET_ID,
+    range: `${ALL_ISSUES_SHEET}!A2:H`, // Adjust as per your sheet
+  });
+
+  return data.values;
+}
+
+async function clearSheet(sheets, sheetId) {
+  // Implement the logic to clear the existing sheet data
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: sheetId,
+    range: `${G_ISSUES}!A2:Z`, // Adjust as per your sheet structure
+  });
+}
+
+async function insertData(sheets, sheetId, data) {
+  // Implement the logic to insert the processed data
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `${G_ISSUES}!A2`, // Adjust as per your sheet structure
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: data,
+    },
+  });
+}
+
+async function updateTimestamp(sheets, sheetId) {
+  // Implement the logic to update the timestamp for when the sheet was processed
+  const timestamp = new Date().toISOString();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `${DASHBOARD}!A1`, // Adjust as per your sheet structure
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: [[timestamp]],
+    },
+  });
 }
 
 async function main() {
