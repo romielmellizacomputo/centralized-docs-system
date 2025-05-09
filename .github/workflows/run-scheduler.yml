@@ -1,29 +1,27 @@
-name: Run Scheduler
+name: Run Scripts Every 5 Minutes
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # ⏰ Runs every 5 minutes (UTC time)
-  workflow_dispatch:     # Allows manual trigger from GitHub UI
+    - cron: '*/5 * * * *'  # Runs every 5 minutes
+  workflow_dispatch:  # Allows you to trigger manually
 
 jobs:
-  run-script:
-    runs-on: ubuntu-latest
-
+  run-scripts:
+    runs-on: ubuntu-latest  # You can change the OS based on your needs
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v2
         with:
-          node-version: '22'  # Or your Node version
+          node-version: '14'  # Replace with your desired Node.js version
 
       - name: Install dependencies
         run: npm install
 
-      - name: Run scheduler script
-        run: node scheduler.js
-        env:
-            GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-            SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-            GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      - name: Run fetchallissues.js
+        run: node fetchallissues.js
+        
+      - name: Run fetchallmr.js
+        run: node fetchallmr.js
