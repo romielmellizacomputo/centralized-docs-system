@@ -1,0 +1,20 @@
+name: Auto Numbering
+
+on:
+  workflow_dispatch:
+    inputs:
+      sheet_data:
+        description: 'Data from Google Sheets'
+        required: true
+
+jobs:
+  auto_number:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run Auto Number Script
+        run: |
+          echo "Running auto-numbering script with data: ${{ github.event.inputs.sheet_data }}"
+          # Here you would add the logic to perform auto-numbering
