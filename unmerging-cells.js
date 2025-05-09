@@ -38,43 +38,44 @@ async function main() {
       const mergedRanges = sheetMeta.merges || [];
       const requests = [];
 
-      // We will iterate over all merged ranges and unmerge if they are empty in either column E or F
+      // Iterate through all merged ranges
       const toUnmerge = [];
 
       for (const merge of mergedRanges) {
         const { startRowIndex, endRowIndex, startColumnIndex, endColumnIndex } = merge;
 
-        // Check merged ranges that affect E12:E (Column 4) or F12:F (Column 5)
-        if ((startColumnIndex === 4 || startColumnIndex === 5) && endColumnIndex === startColumnIndex + 1) {
+        // Only check merged ranges in columns E (index 4) and F (index 5)
+        if (startColumnIndex === 4 && endColumnIndex === 5) {
           const mergeStart = startRowIndex;
           const mergeEnd = endRowIndex;
+
           let isEmpty = true;
 
-          // Check the merged cells in column E and column F for emptiness
-          for (let r = mergeStart; r < mergeEnd; r++) {
-            const rowE = (rowsE[r - 12] && rowsE[r - 12][0]) || ''; // Safe check for empty rowE
-            const rowF = (rowsF[r - 12] && rowsF[r - 12][0]) || ''; // Safe check for empty rowF
+          // Check if all cells in the merged range (both E and F) are empty
+          for (let rowIndex = mergeStart; rowIndex < mergeEnd; rowIndex++) {
+            const valueE = (rowsE[rowIndex - startRow] && rowsE[rowIndex - startRow][0]) || ''; // Get value from column E
+            const valueF = (rowsF[rowIndex - startRow] && rowsF[rowIndex - startRow][0]) || ''; // Get value from column F
 
-            // If any cell is not empty, set isEmpty to false and break
-            if (rowE.trim() || rowF.trim()) {
+            if (valueE.trim() || valueF.trim()) {
               isEmpty = false;
               break;
             }
           }
 
+          // If both columns are empty, mark for unmerging
           if (isEmpty) {
             toUnmerge.push(merge);
           }
         }
       }
 
-      // Unmerge all empty merged ranges in E and F
+      // Unmerge empty merged cells
       for (const merge of toUnmerge) {
         requests.push({
           unmergeCells: { range: { ...merge, sheetId } }
         });
 
-        // Add black border to newly unmerged empty merged ranges
+        // Optional: Add borders to unmerged cells
         requests.push({
           updateBorders: {
             range: { ...merge, sheetId },
