@@ -52,8 +52,8 @@ async function main() {
 
           // Check the merged cells in column E and column F for emptiness
           for (let r = mergeStart; r < mergeEnd; r++) {
-            const rowE = rowsE[r - 12] ? rowsE[r - 12][0] : '';
-            const rowF = rowsF[r - 12] ? rowsF[r - 12][0] : '';
+            const rowE = (rowsE[r - 12] && rowsE[r - 12][0]) || ''; // Safe check for empty rowE
+            const rowF = (rowsF[r - 12] && rowsF[r - 12][0]) || ''; // Safe check for empty rowF
 
             // If any cell is not empty, set isEmpty to false and break
             if (rowE.trim() || rowF.trim()) {
