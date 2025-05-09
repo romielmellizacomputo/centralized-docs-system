@@ -1,6 +1,6 @@
-const { google } = require('googleapis');
-const path = require('path');
-const fs = require('fs');
+import { google } from 'googleapis'; // Import googleapis
+import path from 'path';
+import fs from 'fs';
 
 // Google Sheets API authentication using the service account
 async function getAuthClient() {
