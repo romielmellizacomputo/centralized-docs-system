@@ -123,10 +123,19 @@ async function main() {
         // Filter issues based on milestones and label conditions
         const filtered = issuesData.filter(row => {
           const milestoneMatches = milestones.includes(row[6]); // Column G (index 6) for selected milestone
-          const labels = row[7]?.split(',').map(label => label.trim().toLowerCase()) || []; // Column H (index 7)
+          
+          const labelsRaw = row[7] || '';  // Column H (index 7)
+          const labels = labelsRaw.split(',').map(label => label.trim().toLowerCase());  // Split and trim
+
+          // Log to debug the raw and processed labels
+          console.log(`Raw labels for row: ${labelsRaw}`);
+          console.log(`Processed labels for row: ${labels}`);
+
+          // Check for any of the required labels
           const labelsMatch = labels.some(label => 
             ["needs test case", "needs test scenario", "test case needs update"].includes(label)
           );
+
           return milestoneMatches && labelsMatch;
         });
 
