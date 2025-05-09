@@ -3,16 +3,18 @@ name: Auto Number Sheets
 on:
   workflow_dispatch:
     inputs:
-      spreadsheetUrl:
-        description: "Google Sheet URL"
+      sheet_data:
+        description: 'Data from the edited sheet'
         required: true
         type: string
 
 jobs:
   autonumber:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -23,7 +25,9 @@ jobs:
         run: npm install
 
       - name: Run autonumber script
-        run: node autonumber.js
+        run: |
+          echo "Sheet Data: ${{ github.event.inputs.sheet_data }}"
+          node autonumber.js
         env:
-          SHEET_URL: ${{ github.event.inputs.spreadsheetUrl }}
+          SHEET_DATA: ${{ github.event.inputs.sheet_data }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
