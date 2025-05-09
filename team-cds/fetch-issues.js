@@ -41,31 +41,35 @@ async function getSelectedMilestones(sheets, sheetId) {
   return data.values?.flat().filter(Boolean) || [];
 }
 
-// 🔄 Get issue data with hyperlinks preserved
 async function getAllIssues(sheets) {
-  const res = await sheets.spreadsheets.get({
+  const { data } = await sheets.spreadsheets.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
     ranges: [ALL_ISSUES_RANGE],
     includeGridData: true,
-    fields: 'sheets.data.rowData.values(userEnteredValue,formattedValue,hyperlink)',
   });
 
-  const rows = res.data.sheets?.[0]?.data?.[0]?.rowData || [];
+  const gridData = data.sheets?.[0]?.data?.[0]?.rowData || [];
+  if (gridData.length === 0) {
+    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
+  }
 
-  return rows.map(row =>
-    (row.values || []).map(cell => {
-      const val = cell?.userEnteredValue;
-      const link = cell?.hyperlink;
+  // Extract values with hyperlinks preserved
+  const values = gridData.map(row => {
+    return (row.values || []).slice(0, 11).map(val => {
+      const link = val?.hyperlink;
+      const display = val?.formattedValue || '';
+
       if (link) {
-        const display = val?.stringValue || link;
-        return `=HYPERLINK("${link}", "${display}")`;
+        return display.trim() !== link.trim()
+          ? `=HYPERLINK("${link}", "${display}")`
+          : link;
       }
-      if (val?.stringValue) return val.stringValue;
-      if (val?.numberValue != null) return val.numberValue;
-      if (val?.boolValue != null) return val.boolValue;
-      return '';
-    })
-  );
+
+      return display;
+    });
+  });
+
+  return values;
 }
 
 async function clearGIssues(sheets, sheetId) {
@@ -123,16 +127,15 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([
+        const [milestones, allIssues] = await Promise.all([
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
         ]);
 
-        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
-        const processedData = filtered.map(row => row.slice(0, 11)); // C to N
+        const filtered = allIssues.filter(row => milestones.includes(row[6])); // Column I (index 6)
 
         await clearGIssues(sheets, sheetId);
-        await insertDataToGIssues(sheets, sheetId, processedData);
+        await insertDataToGIssues(sheets, sheetId, filtered);
         await updateTimestamp(sheets, sheetId);
 
         console.log(`✅ Finished: ${sheetId}`);
