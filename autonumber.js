@@ -1,55 +1,43 @@
 const { google } = require('googleapis');
 
 async function main() {
+  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  const spreadsheetUrl = process.env.SHEET_URL;
+  const spreadsheetId = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
+
   const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
+    credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets']
   });
 
   const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = extractSheetId(process.env.SHEET_URL);
 
   const metadata = await sheets.spreadsheets.get({ spreadsheetId });
-  const allSheets = metadata.data.sheets.map(s => s.properties.title);
-  const skipSheets = ['ToC', 'Roster', 'Issues'];
+  const sheetNames = metadata.data.sheets.map(s => s.properties.title);
+  const skip = ['ToC', 'Roster', 'Issues'];
 
-  for (const title of allSheets) {
-    if (skipSheets.includes(title)) continue;
+  for (const name of sheetNames) {
+    if (skip.includes(name)) continue;
 
-    const range = `'${title}'!E12:F`;
-    const result = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-    const rows = result.data.values || [];
+    const range = `'${name}'!E12:F`;
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+    const rows = res.data.values || [];
 
-    const updates = [];
-    let number = 1;
+    let num = 1;
+    const values = rows.map(([_, f]) => [(f || '').trim() ? num++ : '']);
 
-    for (let i = 0; i < rows.length; i++) {
-      const [_, fValue] = rows[i];
-      if (fValue && fValue.trim() !== '') {
-        updates.push([number++]);
-      } else {
-        updates.push(['']);
-      }
-    }
-
-    const updateRange = `'${title}'!E12:E${12 + updates.length - 1}`;
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: updateRange,
+      range: `'${name}'!E12:E${12 + values.length - 1}`,
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: updates }
+      requestBody: { values }
     });
 
-    console.log(`Updated: ${title}`);
+    console.log(`Updated sheet: ${name}`);
   }
 }
 
-function extractSheetId(url) {
-  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : null;
-}
-
 main().catch(err => {
-  console.error('Failed to auto-number:', err);
+  console.error('ERROR:', err);
   process.exit(1);
 });
