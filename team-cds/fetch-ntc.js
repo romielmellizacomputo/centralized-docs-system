@@ -44,6 +44,7 @@ async function getSelectedMilestones(sheets, sheetId) {
     spreadsheetId: sheetId,
     range: `${G_MILESTONES}!G4:G`,
   });
+  console.log(`📝 Fetched Milestones for ${sheetId}:`, data.values);
   return data.values?.flat().filter(Boolean) || [];
 }
 
@@ -70,6 +71,7 @@ async function getIssueStatuses(sheets) {
     throw new Error(`No data found in range ${H_ISSUE_STATUS_RANGE}`);
   }
 
+  console.log(`📝 Fetched Issue Statuses:`, data.values);
   return data.values;
 }
 
@@ -145,6 +147,11 @@ async function main() {
           getAllIssues(sheets),
           getIssueStatuses(sheets),
         ]);
+
+        // Debugging: Log fetched arrays for inspection
+        console.log(`📝 Milestones for ${sheetId}:`, milestones);
+        console.log(`📝 Issue Data for ${sheetId}:`, issuesData);
+        console.log(`📝 Issue Statuses for ${sheetId}:`, issueStatuses);
 
         // Ensure the data arrays are defined
         if (!Array.isArray(milestones) || !Array.isArray(issuesData) || !Array.isArray(issueStatuses)) {
