@@ -96,13 +96,25 @@ async function main() {
     for (const sheetId of sheetIds) {
       try {
         console.log(`🔄 Processing: ${sheetId}`);
+
+        const sheetTitles = await getSheetTitles(sheets, sheetId);
+
+        if (!sheetTitles.includes(G_MILESTONES)) {
+          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MILESTONES}' sheet`);
+          continue;
+        }
+
+        if (!sheetTitles.includes(G_ISSUES_SHEET)) {
+          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_ISSUES_SHEET}' sheet`);
+          continue;
+        }
+
         const [milestones, issuesData] = await Promise.all([
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
         ]);
 
         const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
-
         const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
 
         await clearGIssues(sheets, sheetId);
