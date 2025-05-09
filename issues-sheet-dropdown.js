@@ -77,54 +77,35 @@ async function refreshDropdown() {
 
     console.log('Dropdown updated successfully.');
 
-    // 2. Add hyperlinks to column K (K3:K)
-    const hyperlinks = sheetNames.map(name => {
-      const url = baseSheetUrl + sheetNameToGid[name];
-      return [{
-        userEnteredValue: name,
-        userEnteredFormat: {
-          textFormat: { foregroundColor: { red: 0, green: 0, blue: 1 }, underline: true }
-        },
-        hyperlink: url
-      }];
+    // 2. Fetch existing K3:K values
+    const getRes = await sheetsAPI.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${ISSUES_SHEET}!K3:K`
+    });
+
+    const values = getRes.data.values || [];
+
+    // 3. Replace with =HYPERLINK formulas if matching a valid sheet name
+    const updatedValues = values.map(row => {
+      const val = row[0]?.trim();
+      if (sheetNameToGid[val]) {
+        const link = `${baseSheetUrl}${sheetNameToGid[val]}`;
+        return [`=HYPERLINK("${link}", "${val}")`];
+      } else {
+        return [val || ''];
+      }
     });
 
     await sheetsAPI.spreadsheets.values.update({
       spreadsheetId,
-      range: `Issues!K3:K${2 + hyperlinks.length}`,
+      range: `${ISSUES_SHEET}!K3`,
       valueInputOption: 'USER_ENTERED',
-      requestBody: {
-        values: hyperlinks.map(row => [row[0].userEnteredValue]) // For preview only
-      }
-    });
-
-    // Use batchUpdate to apply the hyperlink formatting and link
-    const hyperlinkRequests = hyperlinks.map((cell, i) => ({
-      updateCells: {
-        rows: [{
-          values: [{
-            userEnteredValue: { stringValue: cell[0].userEnteredValue },
-            userEnteredFormat: cell[0].userEnteredFormat,
-            hyperlink: cell[0].hyperlink
-          }]
-        }],
-        fields: 'userEnteredValue,userEnteredFormat.textFormat,hyperlink',
-        start: {
-          sheetId: issuesSheet.properties.sheetId,
-          rowIndex: 2 + i,
-          columnIndex: 10
-        }
-      }
-    }));
-
-    await sheetsAPI.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: { requests: hyperlinkRequests }
+      requestBody: { values: updatedValues }
     });
 
     console.log('Hyperlinks added successfully.');
 
-    // Notify web app
+    // 4. Notify web app
     const postRes = await fetch(webAppUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
