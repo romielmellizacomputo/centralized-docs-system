@@ -27,5 +27,3 @@ jobs:
         env:
           SHEET_URL: ${{ github.event.inputs.spreadsheetUrl }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-
-
