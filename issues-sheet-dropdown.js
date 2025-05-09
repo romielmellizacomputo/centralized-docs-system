@@ -3,14 +3,12 @@
 const { google } = require('googleapis');
 const fetch = require('node-fetch'); // Use global fetch if on Node 18+
 
-// Constants
 const skipSheets = ['ToC', 'Issues', 'Roster'];
 const ISSUES_SHEET = 'Issues';
 const DROPDOWN_RANGE = 'K3:K';
 const webAppUrl = 'https://script.google.com/macros/s/AKfycbzR3hWvfItvEOKjadlrVRx5vNTz4QH04WZbz2ufL8fAdbiZVsJbkzueKfmMCfGsAO62/exec';
 
 async function refreshDropdown() {
-  // Load environment variables
   const sheetData = JSON.parse(process.env.SHEET_DATA);
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
@@ -21,7 +19,6 @@ async function refreshDropdown() {
 
   const sheetsAPI = google.sheets({ version: 'v4', auth });
 
-  // Extract Spreadsheet ID from URL
   const spreadsheetIdMatch = sheetData.spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
   if (!spreadsheetIdMatch) {
     console.error('Invalid spreadsheet URL');
@@ -29,9 +26,9 @@ async function refreshDropdown() {
   }
 
   const spreadsheetId = spreadsheetIdMatch[1];
+  const baseSheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=`;
 
   try {
-    // Get metadata including sheet names and IDs
     const metadata = await sheetsAPI.spreadsheets.get({ spreadsheetId });
     const sheets = metadata.data.sheets;
 
@@ -39,18 +36,26 @@ async function refreshDropdown() {
       .map(s => s.properties.title)
       .filter(name => !skipSheets.includes(name));
 
-    const issuesSheet = sheets.find(s => s.properties.title === ISSUES_SHEET);
-    if (!issuesSheet) {
-      throw new Error(`Sheet "${ISSUES_SHEET}" not found`);
-    }
+    const sheetNameToGid = {};
+    sheets.forEach(s => {
+      const name = s.properties.title;
+      const gid = s.properties.sheetId;
+      if (!skipSheets.includes(name)) {
+        sheetNameToGid[name] = gid;
+      }
+    });
 
+    const issuesSheet = sheets.find(s => s.properties.title === ISSUES_SHEET);
+    if (!issuesSheet) throw new Error(`Sheet "${ISSUES_SHEET}" not found`);
+
+    // 1. Apply dropdown validation
     const dropdownRule = {
       requests: [{
         setDataValidation: {
           range: {
             sheetId: issuesSheet.properties.sheetId,
-            startRowIndex: 2, // Row 3
-            startColumnIndex: 10, // Column K
+            startRowIndex: 2,
+            startColumnIndex: 10,
             endColumnIndex: 11
           },
           rule: {
@@ -65,13 +70,59 @@ async function refreshDropdown() {
       }]
     };
 
-    // Apply validation rule
     await sheetsAPI.spreadsheets.batchUpdate({
       spreadsheetId,
       requestBody: dropdownRule
     });
 
     console.log('Dropdown updated successfully.');
+
+    // 2. Add hyperlinks to column K (K3:K)
+    const hyperlinks = sheetNames.map(name => {
+      const url = baseSheetUrl + sheetNameToGid[name];
+      return [{
+        userEnteredValue: name,
+        userEnteredFormat: {
+          textFormat: { foregroundColor: { red: 0, green: 0, blue: 1 }, underline: true }
+        },
+        hyperlink: url
+      }];
+    });
+
+    await sheetsAPI.spreadsheets.values.update({
+      spreadsheetId,
+      range: `Issues!K3:K${2 + hyperlinks.length}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: hyperlinks.map(row => [row[0].userEnteredValue]) // For preview only
+      }
+    });
+
+    // Use batchUpdate to apply the hyperlink formatting and link
+    const hyperlinkRequests = hyperlinks.map((cell, i) => ({
+      updateCells: {
+        rows: [{
+          values: [{
+            userEnteredValue: { stringValue: cell[0].userEnteredValue },
+            userEnteredFormat: cell[0].userEnteredFormat,
+            hyperlink: cell[0].hyperlink
+          }]
+        }],
+        fields: 'userEnteredValue,userEnteredFormat.textFormat,hyperlink',
+        start: {
+          sheetId: issuesSheet.properties.sheetId,
+          rowIndex: 2 + i,
+          columnIndex: 10
+        }
+      }
+    }));
+
+    await sheetsAPI.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: hyperlinkRequests }
+    });
+
+    console.log('Hyperlinks added successfully.');
 
     // Notify web app
     const postRes = await fetch(webAppUrl, {
@@ -80,10 +131,7 @@ async function refreshDropdown() {
       body: JSON.stringify({ sheetUrl: sheetData.spreadsheetUrl })
     });
 
-    if (!postRes.ok) {
-      throw new Error(`Web app POST failed: ${postRes.statusText}`);
-    }
-
+    if (!postRes.ok) throw new Error(`Web app POST failed: ${postRes.statusText}`);
     console.log('Posted to web app successfully.');
 
   } catch (err) {
