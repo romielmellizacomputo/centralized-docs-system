@@ -2,42 +2,42 @@ name: SheetSync
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # Runs every 10 minutes
-  workflow_dispatch:  # Allows you to trigger manually
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
 
 jobs:
   run-scripts:
-    runs-on: ubuntu-latest  # You can change the OS based on your needs
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-        
+
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
-          node-version: '14'  # Replace with your desired Node.js version
+          node-version: '14'
 
       - name: Install dependencies
         run: |
-          cd SheetSync  # Navigate to the SheetSync folder
-          npm install   # Install dependencies within the SheetSync folder
+          cd SheetSync
+          npm install
 
       - name: Run fetchallissues.js
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          GITLAB_URL: ${{ secrets.GITLAB_URL }}  # Add GITLAB_URL secret
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}
         run: |
-          cd SheetSync  # Navigate to the SheetSync folder
-          node fetchallissues.js  # Run the script
+          cd SheetSync
+          node fetchallissues.js
 
       - name: Run fetchallmr.js
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          GITLAB_URL: ${{ secrets.GITLAB_URL }}  # Add GITLAB_URL secret
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}
         run: |
-          cd SheetSync  # Navigate to the SheetSync folder
-          node fetchallmr.js  # Run the script
+          cd SheetSync
+          node fetchallmr.js
