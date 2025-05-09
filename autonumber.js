@@ -11,15 +11,17 @@ async function main() {
 
   const auth = new google.auth.GoogleAuth({
     credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
   const sheets = google.sheets({ version: 'v4', auth });
 
   try {
     const metadata = await sheets.spreadsheets.get({ spreadsheetId });
-    const sheetNames = metadata.data.sheets.map(s => s.properties.title);
+    const sheetNames = metadata.data.sheets.map((s) => s.properties.title);
     const skip = ['ToC', 'Roster', 'Issues'];
+
+    const requests = [];
 
     for (const name of sheetNames) {
       if (skip.includes(name)) continue;
@@ -29,90 +31,77 @@ async function main() {
       const rows = res.data.values || [];
 
       let num = 1;
-      const values = rows.map(([e, f], index) => {
-        const eValue = (e || '').trim();
-        const fValue = (f || '').trim();
+      const values = rows.map(([_, f]) => [(f || '').trim() ? num++ : '']);
 
-        // If F is empty, remove the number in E and unmerge cells
-        if (!fValue) {
-          return ['', '']; // Clear both E and F
-        }
-
-        // Handle merging E cells and clearing F if needed
-        if (eValue && !fValue) {
-          return ['', '']; // Remove number in E if F is empty
-        }
-
-        return [eValue ? num++ : '', fValue];
+      // Request for updating values in the E column
+      requests.push({
+        updateCells: {
+          range: {
+            sheetId: metadata.data.sheets.find((s) => s.properties.title === name).properties.sheetId,
+            startRowIndex: 11,
+            endRowIndex: 11 + values.length,
+            startColumnIndex: 4,
+            endColumnIndex: 5,
+          },
+          rows: values.map((value) => ({
+            values: [
+              {
+                userEnteredValue: {
+                  stringValue: value[0].toString(),
+                },
+              },
+            ],
+          })),
+          fields: 'userEnteredValue',
+        },
       });
 
-      // Update the values in the sheet (columns E and F)
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `'${name}'!E12:E${12 + values.length - 1}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: values.map(row => [row[0]]) }
-      });
-
-      // Update F column values
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `'${name}'!F12:F${12 + values.length - 1}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: values.map(row => [row[1]]) }
-      });
-
-      // Unmerge cells if F is empty
-      const unmergeRequests = [];
+      // Logic to unmerge cells in the E and F columns if necessary
       for (let i = 0; i < rows.length; i++) {
-        const [e, f] = rows[i];
-        if (!f) {
-          unmergeRequests.push({
-            unmerge: {
-              range: {
-                sheetId: metadata.data.sheets.find(s => s.properties.title === name).properties.sheetId,
-                startRowIndex: 12 + i,
-                endRowIndex: 13 + i,
-                startColumnIndex: 4,
-                endColumnIndex: 5
-              }
-            }
-          });
-        }
-      }
+        const eCell = rows[i][0];
+        const fCell = rows[i][1];
 
-      // Handle merging E and F cells if necessary
-      const mergeRequests = [];
-      for (let i = 0; i < rows.length - 1; i++) {
-        const [e1, f1] = rows[i];
-        const [e2, f2] = rows[i + 1];
-        if (f1 && f2 && f1 === f2 && e1 && e2) {
-          mergeRequests.push({
+        if (!fCell || !fCell.trim()) {
+          // If F column is empty, unmerge E column cells
+          requests.push({
             mergeCells: {
               range: {
-                sheetId: metadata.data.sheets.find(s => s.properties.title === name).properties.sheetId,
-                startRowIndex: 12 + i,
-                endRowIndex: 13 + i + 1,
+                sheetId: metadata.data.sheets.find((s) => s.properties.title === name).properties.sheetId,
+                startRowIndex: 11 + i,
+                endRowIndex: 12 + i,
                 startColumnIndex: 4,
-                endColumnIndex: 5
+                endColumnIndex: 5,
               },
-              mergeType: 'MERGE_COLUMNS'
-            }
+              mergeType: 'MERGE_UNDEFINED', // Unmerge cells
+            },
           });
-        }
-      }
-
-      // Execute the unmerge and merge requests
-      if (unmergeRequests.length > 0 || mergeRequests.length > 0) {
-        await sheets.spreadsheets.batchUpdate({
-          spreadsheetId,
-          requestBody: {
-            requests: [...unmergeRequests, ...mergeRequests]
+        } else if (eCell.trim() && fCell.trim()) {
+          // If F column has data, ensure E column is merged appropriately
+          if (i + 1 < rows.length && rows[i + 1][1].trim()) {
+            requests.push({
+              mergeCells: {
+                range: {
+                  sheetId: metadata.data.sheets.find((s) => s.properties.title === name).properties.sheetId,
+                  startRowIndex: 11 + i,
+                  endRowIndex: 12 + i + 1,
+                  startColumnIndex: 4,
+                  endColumnIndex: 5,
+                },
+                mergeType: 'MERGE_ALL', // Merge the E cells when F has data
+              },
+            });
           }
-        });
+        }
       }
 
       console.log(`Updated sheet: ${name}`);
+    }
+
+    if (requests.length) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests },
+      });
     }
   } catch (err) {
     console.error('ERROR:', err);
