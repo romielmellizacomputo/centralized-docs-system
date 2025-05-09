@@ -1,11 +1,30 @@
 import { google } from 'googleapis'; // Import googleapis
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from .env file (if you use it)
+dotenv.config();
+
+// Get the directory name equivalent of __dirname in ES module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Save the secret service account JSON to a file
+const serviceAccountJson = process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON;
+if (!serviceAccountJson) {
+  console.error('SERVICE_ACCOUNT_JSON secret not found!');
+  process.exit(1);
+}
+
+const serviceAccountPath = path.join(__dirname, 'service-account.json');
+fs.writeFileSync(serviceAccountPath, serviceAccountJson);
 
 // Google Sheets API authentication using the service account
 async function getAuthClient() {
   const auth = new google.auth.GoogleAuth({
-    keyFile: path.join(__dirname, 'service-account.json'), // Path to the service account JSON
+    keyFile: serviceAccountPath, // Path to the service account JSON file
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
