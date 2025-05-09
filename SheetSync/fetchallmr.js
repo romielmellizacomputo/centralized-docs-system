@@ -1,9 +1,16 @@
-require('dotenv').config();
-const { google } = require('googleapis');
-const axios = require('axios');
-const path = require('path');
+import dotenv from 'dotenv';
+import { google } from 'googleapis';
+import axios from 'axios';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Validate required environment variables from GitHub secrets
+// Polyfill __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables
+dotenv.config();
+
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
@@ -27,27 +34,24 @@ const PROJECT_CONFIG = {
   124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
 };
 
-// Function to load service account from GitHub secret
 function loadServiceAccount() {
   let serviceAccount;
   if (process.env.GITHUB_ACTIONS) {
-    // GitHub Actions: Load from GitHub secret (GOOGLE_SERVICE_ACCOUNT_JSON)
     if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
       try {
         serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
       } catch (error) {
-        console.error('❌ Error parsing service account JSON from GitHub secrets:', error.message);
+        console.error('❌ Error parsing service account JSON:', error.message);
         throw error;
       }
     } else {
-      console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON GitHub secret is missing.');
+      console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON secret is missing.');
       process.exit(1);
     }
   } else {
-    console.error('❌ This script should be run in a GitHub Actions environment.');
+    console.error('❌ This script should be run in GitHub Actions.');
     process.exit(1);
   }
-
   return serviceAccount;
 }
 
@@ -91,7 +95,7 @@ async function fetchExistingMergeRequestKeys(sheets) {
     }
     return mrKeys;
   } catch (err) {
-    console.error('❌ Failed to read existing merge requests from sheet:', err.message);
+    console.error('❌ Failed to read existing MRs from sheet:', err.message);
     return new Map();
   }
 }
@@ -219,5 +223,5 @@ async function fetchAndUpdateMRsForAllProjects() {
   }
 }
 
-// Run the function
+// Run the script
 fetchAndUpdateMRsForAllProjects();
