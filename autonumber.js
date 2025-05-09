@@ -37,8 +37,8 @@ async function main() {
         const fCell = rows[i][1];
 
         // Ensure the cells are not undefined or null before using trim
-        const eCellTrimmed = eCell ? eCell.trim() : '';
-        const fCellTrimmed = fCell ? fCell.trim() : '';
+        const eCellTrimmed = (eCell && eCell.trim()) || '';
+        const fCellTrimmed = (fCell && fCell.trim()) || '';
 
         // Auto number logic
         const updatedValue = (fCellTrimmed || '') ? num++ : '';
@@ -75,7 +75,7 @@ async function main() {
           });
         } else if (eCellTrimmed && fCellTrimmed) {
           // If F column has data, ensure E column is merged appropriately
-          if (i + 1 < rows.length && rows[i + 1][1].trim()) {
+          if (i + 1 < rows.length && rows[i + 1][1] && rows[i + 1][1].trim()) {
             requests.push({
               mergeCells: {
                 range: {
