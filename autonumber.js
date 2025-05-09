@@ -27,7 +27,7 @@ async function main() {
       const sheetMeta = metadata.data.sheets.find(s => s.properties.title === name);
       const sheetId = sheetMeta.properties.sheetId;
 
-      const range = `'${name}'!E12:F`;
+      const range = `'${name}'!F12:F`;
       const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
       const rows = res.data.values || [];
       const startRow = 12;
@@ -35,35 +35,54 @@ async function main() {
       const mergedRanges = sheetMeta.merges || [];
       const requests = [];
 
-      const mergedMap = new Map();
+      const numberData = [];
+      let row = 0;
+      let number = 1;
 
-      // Identify merged ranges in column F (index 5)
-      for (const merge of mergedRanges) {
-        const { startRowIndex, endRowIndex, startColumnIndex, endColumnIndex } = merge;
-        if (startRowIndex >= 11 && startColumnIndex === 5 && endColumnIndex === 6) {
-          mergedMap.set(startRowIndex, endRowIndex);
+      while (row < rows.length) {
+        const absRow = row + startRow;
+        const fCell = (rows[row] && rows[row][0] || '').trim();
 
-          // Merge column E (index 4) to match
+        // Check if F cell is part of a merged range
+        const merge = mergedRanges.find(m =>
+          m.startColumnIndex === 5 && m.endColumnIndex === 6 &&
+          absRow >= m.startRowIndex && absRow < m.endRowIndex
+        );
+
+        const mergeStart = merge ? merge.startRowIndex : absRow;
+        const mergeEnd = merge ? merge.endRowIndex : absRow + 1;
+        const mergeLength = mergeEnd - mergeStart;
+
+        if (fCell) {
+          // Add number at top of E cell
+          numberData.push({
+            rowIndex: mergeStart,
+            value: number.toString(),
+            mergeStart,
+            mergeEnd
+          });
+
+          // Merge E column to match F
           requests.push({
             mergeCells: {
               range: {
                 sheetId,
-                startRowIndex,
-                endRowIndex,
-                startColumnIndex: 4,
+                startRowIndex: mergeStart,
+                endRowIndex: mergeEnd,
+                startColumnIndex: 4, // column E
                 endColumnIndex: 5,
               },
               mergeType: 'MERGE_ALL',
             }
           });
 
-          // Center alignment for merged E cells
+          // Center alignment
           requests.push({
             repeatCell: {
               range: {
                 sheetId,
-                startRowIndex,
-                endRowIndex,
+                startRowIndex: mergeStart,
+                endRowIndex: mergeEnd,
                 startColumnIndex: 4,
                 endColumnIndex: 5,
               },
@@ -76,31 +95,23 @@ async function main() {
               fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment)',
             }
           });
-        }
-      }
 
-      // Prepare values for E12:E
-      const values = Array(rows.length).fill(['']);
-      let row = 0;
-      let number = 1;
-
-      while (row < rows.length) {
-        const absRow = row + startRow;
-        const fCell = (rows[row] && rows[row][1] || '').trim();
-        const isMerged = mergedMap.has(absRow);
-        const mergeEnd = isMerged ? mergedMap.get(absRow) : absRow + 1;
-        const mergeLength = mergeEnd - absRow;
-
-        if (fCell) {
-          // Write number only in the top cell of the merged block
-          values[row] = [number.toString()];
           number++;
         }
 
         row += mergeLength;
       }
 
-      // Write numbers to E12:E
+      // Prepare values array for E12:E
+      const values = Array(rows.length).fill(['']);
+      for (const item of numberData) {
+        const rowIdx = item.rowIndex - startRow;
+        if (rowIdx >= 0 && rowIdx < values.length) {
+          values[rowIdx] = [item.value];
+        }
+      }
+
+      // Write to E12:E
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: `'${name}'!E12:E${startRow + values.length - 1}`,
@@ -108,11 +119,11 @@ async function main() {
         requestBody: { values },
       });
 
-      // Apply formatting and merging
+      // Apply merging and formatting
       if (requests.length > 0) {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
-          requestBody: { requests }
+          requestBody: { requests },
         });
       }
 
