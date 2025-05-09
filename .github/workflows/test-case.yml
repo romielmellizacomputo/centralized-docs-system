@@ -4,17 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       spreadsheetUrl:
-        description: "The Google Sheet URL"
+        description: "Google Sheet URL"
         required: true
         type: string
 
 jobs:
-  run-script:
+  autonumber:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -29,3 +27,4 @@ jobs:
         env:
           SHEET_URL: ${{ github.event.inputs.spreadsheetUrl }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+
