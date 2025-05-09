@@ -1,4 +1,4 @@
-name: Auto Number Test Case
+name: Automated Test Case Updater
 
 on:
   workflow_dispatch:
