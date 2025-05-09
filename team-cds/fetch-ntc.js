@@ -123,9 +123,9 @@ async function main() {
         // Filter issues based on milestones and label conditions
         const filtered = issuesData.filter(row => {
           const milestoneMatches = milestones.includes(row[6]); // Column G (index 6) for selected milestone
-          const labels = row[7]?.split(',').map(label => label.trim()) || []; // Column H (index 7)
+          const labels = row[7]?.split(',').map(label => label.trim().toLowerCase()) || []; // Column H (index 7)
           const labelsMatch = labels.some(label => 
-            ["Needs Test Case", "Needs Test Scenario", "Test Case Needs Update"].includes(label)
+            ["needs test case", "needs test scenario", "test case needs update"].includes(label)
           );
           return milestoneMatches && labelsMatch;
         });
