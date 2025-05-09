@@ -1,6 +1,5 @@
 require('dotenv').config();
 const { google } = require('googleapis');
-const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 
@@ -21,13 +20,14 @@ const PROJECT_CONFIG = {
   147: { name: 'Scalema', sheet: 'SCALEMA', path: 'bposeats/scalema.com' },
 };
 
-// Function to load service account either from local file or GitHub secret
+// Function to load service account from GitHub secret
 function loadServiceAccount() {
   let serviceAccount;
   if (process.env.GITHUB_ACTIONS) {
     // GitHub Actions: Load from GitHub secret (GOOGLE_SERVICE_ACCOUNT_JSON)
     if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
       try {
+        // Parse the service account JSON from the GitHub secret
         serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
       } catch (error) {
         console.error('❌ Error parsing service account JSON from GitHub secrets:', error.message);
@@ -38,23 +38,8 @@ function loadServiceAccount() {
       process.exit(1);
     }
   } else {
-    // Local Environment: Load from .env and service-account.json
-    const keyFile = process.env.SERVICE_ACCOUNT_KEY_PATH;
-    if (!keyFile) {
-      console.error('❌ Missing SERVICE_ACCOUNT_KEY_PATH in .env');
-      process.exit(1);
-    }
-
-    try {
-      const keyFilePath = path.resolve(keyFile);
-      serviceAccount = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
-      if (serviceAccount.private_key) {
-        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-      }
-    } catch (error) {
-      console.error('❌ Error loading service account from service-account.json:', error.message);
-      throw error;
-    }
+    console.error('❌ This script must be run in GitHub Actions or require a local service-account.json.');
+    process.exit(1);
   }
 
   return serviceAccount;
