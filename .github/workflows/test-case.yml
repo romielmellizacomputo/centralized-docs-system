@@ -1,18 +1,13 @@
 name: Auto Number Sheets
 
-on:
-  workflow_dispatch:
-    inputs:
-      spreadsheetUrl:
-        description: "Google Sheet URL"
-        required: true
-        type: string
-
 jobs:
   autonumber:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
+      - name: Debug - Check Spreadsheet URL
+        run: echo "Spreadsheet URL: ${{ github.event.inputs.spreadsheetUrl }}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
@@ -27,4 +22,3 @@ jobs:
         env:
           SHEET_URL: ${{ github.event.inputs.spreadsheetUrl }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-
