@@ -1,12 +1,10 @@
 const { google } = require('googleapis');
 
-// Retrieve sheet data from environment variable
 const sheetData = JSON.parse(process.env.SHEET_DATA);
 
 async function main() {
   const spreadsheetUrl = sheetData.spreadsheetUrl;
   const spreadsheetId = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
-  
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
   const auth = new google.auth.GoogleAuth({
@@ -19,92 +17,103 @@ async function main() {
   try {
     const metadata = await sheets.spreadsheets.get({ spreadsheetId });
     const sheetNames = metadata.data.sheets.map(s => s.properties.title);
-    const skip = ['ToC', 'Roster', 'Issues']; // Sheets to skip
-
-    const requests = [];
+    const skip = ['ToC', 'Roster', 'Issues'];
 
     for (const name of sheetNames) {
-      if (skip.includes(name)) continue; // Skip certain sheets
+      if (skip.includes(name)) continue;
 
-      const range = `'${name}'!E12:F`; // Range to fetch data from column E to F
+      const sheetMeta = metadata.data.sheets.find(s => s.properties.title === name);
+      const merges = sheetMeta.merges || [];
+      const startRow = 11; // zero-based index for row 12
+      const range = `'${name}'!E12:F`;
       const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
       const rows = res.data.values || [];
 
-      let num = 1;
+      let values = Array(rows.length).fill(['']);
+      let requests = [];
+      let number = 1;
 
-      for (let i = 0; i < rows.length; i++) {
-        const eCell = rows[i][0];
-        const fCell = rows[i][1];
+      const mergedMap = new Map();
 
-        // Ensure the cells are not undefined or null before using trim
-        const eCellTrimmed = (eCell && eCell.trim()) || '';
-        const fCellTrimmed = (fCell && fCell.trim()) || '';
-
-        // Auto number logic: Only increment if F cell has data
-        const updatedValue = (fCellTrimmed || '') ? num++ : '';
-
-        // Prepare request to update the E column with auto-numbering or empty
-        requests.push({
-          updateCells: {
-            rows: [{
-              values: [{
-                userEnteredValue: { stringValue: updatedValue.toString() }
-              }]
-            }],
-            fields: "userEnteredValue",
-            start: {
-              sheetId: metadata.data.sheets.find((s) => s.properties.title === name).properties.sheetId,
-              rowIndex: 11 + i,
-              columnIndex: 4
-            }
-          }
-        });
-
-        // If F column is empty, unmerge E column cells
-        if (!fCellTrimmed) {
-          requests.push({
-            unmergeCells: {
-              range: {
-                sheetId: metadata.data.sheets.find((s) => s.properties.title === name).properties.sheetId,
-                startRowIndex: 11 + i,
-                endRowIndex: 12 + i,
-                startColumnIndex: 4,
-                endColumnIndex: 5,
-              }
-            }
-          });
-        } else if (eCellTrimmed && fCellTrimmed) {
-          // If F column has data, ensure E column is merged appropriately
-          if (i + 1 < rows.length && rows[i + 1][1] && rows[i + 1][1].trim()) {
-            requests.push({
-              mergeCells: {
-                range: {
-                  sheetId: metadata.data.sheets.find((s) => s.properties.title === name).properties.sheetId,
-                  startRowIndex: 11 + i,
-                  endRowIndex: 12 + i + 1,
-                  startColumnIndex: 4,
-                  endColumnIndex: 5,
-                },
-                mergeType: 'MERGE_ALL' // Merge the E cells when F has data
-              }
-            });
-          }
+      for (const merge of merges) {
+        if (
+          merge.startColumnIndex === 5 && // Column F (zero-based)
+          merge.endColumnIndex === 6 &&
+          merge.startRowIndex >= startRow
+        ) {
+          mergedMap.set(merge.startRowIndex, merge.endRowIndex);
         }
       }
 
-      // Execute batch update requests if there are any changes
-      if (requests.length) {
+      let row = 0;
+      while (row < rows.length) {
+        const cellF = (rows[row][1] || '').trim();
+
+        if (cellF) {
+          const absRow = row + startRow;
+          const mergeEnd = mergedMap.get(absRow);
+
+          if (mergeEnd) {
+            const mergeLength = mergeEnd - absRow;
+            values[row] = [number.toString()];
+            requests.push({
+              mergeCells: {
+                range: {
+                  sheetId: sheetMeta.properties.sheetId,
+                  startRowIndex: absRow,
+                  endRowIndex: mergeEnd,
+                  startColumnIndex: 4,
+                  endColumnIndex: 5
+                },
+                mergeType: 'MERGE_ALL'
+              }
+            });
+            row += mergeLength;
+          } else {
+            values[row] = [number.toString()];
+            row += 1;
+          }
+
+          number++;
+        } else {
+          row += 1;
+        }
+      }
+
+      // Clear old merges first
+      requests.unshift({
+        unmergeCells: {
+          range: {
+            sheetId: sheetMeta.properties.sheetId,
+            startRowIndex: startRow,
+            endRowIndex: startRow + rows.length,
+            startColumnIndex: 4,
+            endColumnIndex: 5
+          }
+        }
+      });
+
+      // Update values in column E
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${name}'!E12:E${12 + rows.length - 1}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values }
+      });
+
+      // Apply merge requests
+      if (requests.length > 0) {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
           requestBody: { requests }
         });
-
-        console.log(`Updated sheet: ${name}`);
       }
+
+      console.log(`Updated sheet: ${name}`);
     }
   } catch (err) {
     console.error('ERROR:', err);
-    process.exit(1); // Exit with an error code if something goes wrong
+    process.exit(1);
   }
 }
 
