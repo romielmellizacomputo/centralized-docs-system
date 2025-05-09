@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { authenticate } from './sheets.js';
+import { authenticate } from './fetch-issues.js';
 
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const UTILS_SHEET_NAME = 'UTILS';
