@@ -7,7 +7,7 @@ const G_ISSUES_SHEET = 'G-Issues';
 const DASHBOARD_SHEET = 'Dashboard';
 
 const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // C to N includes E (index 2)
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -41,17 +41,44 @@ async function getSelectedMilestones(sheets, sheetId) {
   return data.values?.flat().filter(Boolean) || [];
 }
 
+// 🔁 NEW: Fetches issue data with hyperlink in column E
 async function getAllIssues(sheets) {
-  const { data } = await sheets.spreadsheets.values.get({
+  const res = await sheets.spreadsheets.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
-    range: ALL_ISSUES_RANGE,
+    ranges: [ALL_ISSUES_RANGE],
+    includeGridData: true,
   });
 
-  if (!data.values || data.values.length === 0) {
-    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
+  const gridData = res.data.sheets[0].data[0].rowData;
+  if (!gridData) throw new Error(`No row data in ${ALL_ISSUES_RANGE}`);
+
+  const result = [];
+
+  for (const row of gridData) {
+    const values = [];
+
+    for (let i = 0; i <= 10; i++) { // C to N → index 0 to 10
+      const cell = row?.values?.[i];
+
+      if (i === 2 && cell?.textFormatRuns && cell.effectiveValue?.stringValue) {
+        // Column E is index 2: handle hyperlink
+        const text = cell.effectiveValue.stringValue;
+        const link = cell.textFormatRuns[0]?.format?.link?.uri;
+        if (link) {
+          values.push(`=HYPERLINK("${link}", "${text}")`);
+        } else {
+          values.push(text);
+        }
+      } else {
+        const val = cell?.formattedValue || '';
+        values.push(val);
+      }
+    }
+
+    result.push(values);
   }
 
-  return data.values;
+  return result;
 }
 
 async function clearGIssues(sheets, sheetId) {
@@ -65,7 +92,7 @@ async function insertDataToGIssues(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4`,
-    valueInputOption: 'RAW',
+    valueInputOption: 'USER_ENTERED', // so HYPERLINK formula is parsed
     requestBody: { values: data },
   });
 }
@@ -85,10 +112,8 @@ async function main() {
     const auth = await authenticate();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Confirm correct sheet titles
     await getSheetTitles(sheets, UTILS_SHEET_ID);
 
-    // Get list of Google Sheet IDs from UTILS!B2:B
     const sheetIds = await getAllTeamCDSSheetIds(sheets);
     if (!sheetIds.length) {
       console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
@@ -111,13 +136,13 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([ 
+        const [milestones, issuesData] = await Promise.all([
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
         ]);
 
         const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
-        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
+        const processedData = filtered.map(row => row.slice(0, 11)); // C to N = columns 0 to 10
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
