@@ -3,12 +3,11 @@ import { google } from 'googleapis';
 // Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const G_MILESTONES = 'G-Milestones';
-const NTC_SHEET = 'NTC'; // Changed target sheet to NTC
+const NTC_SHEET = 'NTC';  // Change to target the NTC sheet
 const DASHBOARD_SHEET = 'Dashboard';
 
 const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
 const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
-const H_ISSUE_STATUS_RANGE = 'ALL ISSUES!H4:H'; // Range for the status check (Needs Test Case, etc.)
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -20,15 +19,10 @@ async function authenticate() {
 }
 
 async function getSheetTitles(sheets, spreadsheetId) {
-  try {
-    const res = await sheets.spreadsheets.get({ spreadsheetId });
-    const titles = res.data.sheets ? res.data.sheets.map(sheet => sheet.properties.title) : [];
-    console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
-    return titles;
-  } catch (error) {
-    console.error(`Error fetching sheet titles for ${spreadsheetId}:`, error);
-    return []; // Return empty array in case of error
-  }
+  const res = await sheets.spreadsheets.get({ spreadsheetId });
+  const titles = res.data.sheets.map(sheet => sheet.properties.title);
+  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
+  return titles;
 }
 
 async function getAllTeamCDSSheetIds(sheets) {
@@ -44,7 +38,6 @@ async function getSelectedMilestones(sheets, sheetId) {
     spreadsheetId: sheetId,
     range: `${G_MILESTONES}!G4:G`,
   });
-  console.log(`📝 Fetched Milestones for ${sheetId}:`, data.values);
   return data.values?.flat().filter(Boolean) || [];
 }
 
@@ -61,28 +54,14 @@ async function getAllIssues(sheets) {
   return data.values;
 }
 
-async function getIssueStatuses(sheets) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
-    range: H_ISSUE_STATUS_RANGE,
-  });
-
-  if (!data.values || data.values.length === 0) {
-    throw new Error(`No data found in range ${H_ISSUE_STATUS_RANGE}`);
-  }
-
-  console.log(`📝 Fetched Issue Statuses:`, data.values);
-  return data.values;
-}
-
-async function clearNTC(sheets, sheetId) {
+async function clearNTCSheet(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
     range: `${NTC_SHEET}!C4:N`,
   });
 }
 
-async function insertDataToNTC(sheets, sheetId, data) {
+async function insertDataToNTCSheet(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${NTC_SHEET}!C4`,
@@ -107,11 +86,7 @@ async function main() {
     const sheets = google.sheets({ version: 'v4', auth });
 
     // Confirm correct sheet titles
-    const sheetTitles = await getSheetTitles(sheets, UTILS_SHEET_ID);
-    if (!Array.isArray(sheetTitles) || sheetTitles.length === 0) {
-      console.error('❌ No sheet titles found in UTILS sheet.');
-      return;
-    }
+    await getSheetTitles(sheets, UTILS_SHEET_ID);
 
     // Get list of Google Sheet IDs from UTILS!B2:B
     const sheetIds = await getAllTeamCDSSheetIds(sheets);
@@ -126,53 +101,31 @@ async function main() {
 
         const sheetTitles = await getSheetTitles(sheets, sheetId);
 
-        // Ensure sheetTitles is an array and contains the necessary sheets
-        if (!sheetTitles || !Array.isArray(sheetTitles) || sheetTitles.length === 0) {
-          console.warn(`⚠️ Skipping ${sheetId} — No sheet titles found.`);
-          continue;
-        }
-
         if (!sheetTitles.includes(G_MILESTONES)) {
-          console.warn(`⚠️ Skipping ${sheetId} — Missing '${G_MILESTONES}' sheet.`);
+          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MILESTONES}' sheet`);
           continue;
         }
 
         if (!sheetTitles.includes(NTC_SHEET)) {
-          console.warn(`⚠️ Skipping ${sheetId} — Missing '${NTC_SHEET}' sheet.`);
+          console.warn(`⚠️ Skipping ${sheetId} — missing '${NTC_SHEET}' sheet`);
           continue;
         }
 
-        const [milestones, issuesData, issueStatuses] = await Promise.all([ 
+        const [milestones, issuesData] = await Promise.all([ 
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
-          getIssueStatuses(sheets),
         ]);
 
-        // Debugging: Log fetched arrays for inspection
-        console.log(`📝 Milestones for ${sheetId}:`, milestones);
-        console.log(`📝 Issue Data for ${sheetId}:`, issuesData);
-        console.log(`📝 Issue Statuses for ${sheetId}:`, issueStatuses);
+        const filtered = issuesData.filter(row => 
+          milestones.includes(row[6]) && // Column G (index 6) for selected milestone
+          (row[7].includes("Needs Test Case") || row[7].includes("Needs Test Scenario") || row[7].includes("Test Case Needs Update"))
+        );
 
-        // Ensure the data arrays are defined
-        if (!Array.isArray(milestones) || !Array.isArray(issuesData) || !Array.isArray(issueStatuses)) {
-          console.error(`❌ Invalid data in one of the arrays for sheet ${sheetId}`);
-          continue;
-        }
-
-        // Filter issues that match both the selected milestones and the issue statuses
-        const filtered = issuesData.filter((row, index) => {
-          const matchesMilestone = milestones.includes(row[6]); // Column I (index 6)
-          const status = issueStatuses[index] ? issueStatuses[index][0] : '';
-          const matchesStatus = ['Needs Test Case', 'Needs Test Scenario', 'Test Case Needs Update'].some(statusText =>
-            status.includes(statusText)
-          );
-          return matchesMilestone && matchesStatus;
-        });
-
+        // Map filtered data to C4:N (columns C to N)
         const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
 
-        await clearNTC(sheets, sheetId);
-        await insertDataToNTC(sheets, sheetId, processedData);
+        await clearNTCSheet(sheets, sheetId);
+        await insertDataToNTCSheet(sheets, sheetId, processedData);
         await updateTimestamp(sheets, sheetId);
 
         console.log(`✅ Finished: ${sheetId}`);
