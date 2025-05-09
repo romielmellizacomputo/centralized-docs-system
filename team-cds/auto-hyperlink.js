@@ -9,6 +9,7 @@ const PROJECT_URLS_MAP = {
   147: `${GITLAB_ROOT_URL}bposeats/scalema.com`,
   89: `${GITLAB_ROOT_URL}bposeats/bposeats.com`
 };
+
 const PROJECT_NAME_ID_MAP = {
   'HQZen': 155,
   'Backend': 23,
@@ -26,47 +27,45 @@ const sheetsToProcess = [
   { name: 'G-MR', projectColumn: 'O', iidColumn: 'D', titleColumn: 'E', urlType: 'merge_requests' }
 ];
 
-function convertTitlesToHyperlinksAcrossSheets() {
-  const masterSheet = SpreadsheetApp.openById('1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k');
-  const utilsSheet = masterSheet.getSheetByName('UTILS');
-  const urls = utilsSheet.getRange('B2:B').getValues().flat().filter(url => url);
+// Example function to simulate fetching sheet data
+function fetchSheetData(sheetName) {
+  // This is just a placeholder to represent your sheet data. You would need to adapt
+  // it to your real data-fetching mechanism (e.g., via API or local JSON).
+  return [
+    { project: 'Backend', iid: 1, title: 'Issue 1' },
+    { project: 'Android', iid: 2, title: 'Issue 2' }
+  ];
+}
 
-  urls.forEach(url => {
+function convertTitlesToHyperlinks() {
+  const sheetUrls = getSheetUrls();  // Get URLs of sheets to process
+  sheetUrls.forEach(url => {
     try {
-      const doc = SpreadsheetApp.openByUrl(url);
-      processSpreadsheet(doc);
+      const sheetData = fetchSheetData(url);
+      processSpreadsheet(sheetData);
     } catch (e) {
-      Logger.log(`Failed to open or process: ${url}, error: ${e}`);
+      console.log(`Failed to open or process: ${url}, error: ${e}`);
     }
   });
 }
 
-function processSpreadsheet(spreadsheet) {
+function processSpreadsheet(sheetData) {
   sheetsToProcess.forEach(sheetInfo => {
-    const sheet = spreadsheet.getSheetByName(sheetInfo.name);
-    if (sheet) {
-      const lastRow = sheet.getLastRow();
-      if (lastRow >= 4) {
-        convertSheetTitlesToHyperlinks(sheet, lastRow, sheetInfo.projectColumn, sheetInfo.iidColumn, sheetInfo.titleColumn, sheetInfo.urlType);
-      }
+    const data = fetchSheetData(sheetInfo.name); // Get data for each sheet
+    if (data && data.length > 0) {
+      convertSheetTitlesToHyperlinks(data, sheetInfo.projectColumn, sheetInfo.iidColumn, sheetInfo.titleColumn, sheetInfo.urlType);
     }
   });
 }
 
-function convertSheetTitlesToHyperlinks(sheet, lastRow, projectColumn, iidColumn, titleColumn, urlType) {
-  const titles = sheet.getRange(`${titleColumn}4:${titleColumn}${lastRow}`).getValues();
-  const projectNames = sheet.getRange(`${projectColumn}4:${projectColumn}${lastRow}`).getValues();
-  const iids = sheet.getRange(`${iidColumn}4:${iidColumn}${lastRow}`).getValues();
-
+function convertSheetTitlesToHyperlinks(data, projectColumn, iidColumn, titleColumn, urlType) {
   const hyperlinks = [];
 
-  for (let i = 0; i < titles.length; i++) {
-    const title = titles[i][0];
-    const projectName = projectNames[i][0];
-    const iid = iids[i][0];
+  data.forEach(row => {
+    const { title, project, iid } = row;
 
     if (title && iid && !title.includes("http")) {
-      const projectId = PROJECT_NAME_ID_MAP[projectName];
+      const projectId = PROJECT_NAME_ID_MAP[project];
       if (projectId && PROJECT_URLS_MAP[projectId]) {
         const hyperlink = `${PROJECT_URLS_MAP[projectId]}/-/${urlType}/${iid}`;
         const escapedTitle = title.replace(/"/g, '""');
@@ -77,9 +76,20 @@ function convertSheetTitlesToHyperlinks(sheet, lastRow, projectColumn, iidColumn
     } else {
       hyperlinks.push([title]);
     }
-  }
+  });
 
-  if (hyperlinks.length > 0) {
-    sheet.getRange(4, sheet.getRange(`${titleColumn}1`).getColumn(), hyperlinks.length, 1).setValues(hyperlinks);
-  }
+  // Example output to log the hyperlinks
+  console.log(hyperlinks);
 }
+
+// Placeholder for a function that fetches sheet URLs from a master sheet
+function getSheetUrls() {
+  return [
+    'NTC',
+    'G-Issues',
+    'G-MR'
+  ];
+}
+
+// Call the main function to initiate the process
+convertTitlesToHyperlinks();
