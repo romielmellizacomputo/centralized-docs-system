@@ -6,26 +6,23 @@ on:
   workflow_dispatch:       # allows manual trigger from GitHub UI
 
 jobs:
-  fetch-gi:
+  build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./team-cds
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
 
-      - name: Install dependencies
-        run: npm install
+    - name: Install dependencies
+      run: npm install
 
-      - name: Run fetchGI script
-        run: node index.js
-        env:
-          GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
-          GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
+    - name: Set the GOOGLE_APPLICATION_CREDENTIALS environment variable
+      run: echo "TEAM_CDS_SERVICE_ACCOUNT_JSON=${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}" >> $GITHUB_ENV
+
+    - name: Run script
+      run: node team-cds/index.js
+
