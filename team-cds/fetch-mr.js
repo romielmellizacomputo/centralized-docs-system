@@ -74,7 +74,7 @@ async function updateTimestamp(sheets, sheetId) {
   const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!A1`,
+    range: `${DASHBOARD_SHEET}!X6`,
     valueInputOption: 'RAW',
     requestBody: { values: [[timestamp]] },
   });
@@ -116,7 +116,7 @@ async function main() {
           getAllMRs(sheets),
         ]);
 
-        const filtered = mrData.filter(row => milestones.includes(row[6])); // Column I (index 6)
+        const filtered = mrData.filter(row => milestones.includes(row[7])); // Column J (index 7)
         const processedData = filtered.map(row => row.slice(0, 12)); // C to O
 
         await clearGMR(sheets, sheetId);
