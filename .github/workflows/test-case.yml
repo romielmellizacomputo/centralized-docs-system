@@ -1,4 +1,4 @@
-name: Auto Number Sheets
+name: Auto Number Test Case
 
 on:
   workflow_dispatch:
