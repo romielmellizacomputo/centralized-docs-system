@@ -1,70 +1,136 @@
 import { google } from 'googleapis';
-import { readFile } from 'fs/promises';
 
-export async function authenticate() {
+// Google Sheets constants
+const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
+const G_MILESTONES = 'G-Milestones';
+const G_ISSUES_SHEET = 'G-Issues';
+const DASHBOARD_SHEET = 'Dashboard';
+
+const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
+
+async function authenticate() {
+  const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
   const auth = new google.auth.GoogleAuth({
-    keyFile: 'credentials.json', // Google service account credentials
+    credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  return await auth.getClient();
+  return auth;
 }
 
-export async function getAllIssues(sheets) {
-  const sheetId = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';
-  const range = `${'ALL ISSUES'}!C4:N`;
+async function getSheetTitles(sheets, spreadsheetId) {
+  const res = await sheets.spreadsheets.get({ spreadsheetId });
+  const titles = res.data.sheets.map(sheet => sheet.properties.title);
+  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
+  return titles;
+}
 
-  const { data } = await sheets.spreadsheets.get({
+async function getAllTeamCDSSheetIds(sheets) {
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: UTILS_SHEET_ID,
+    range: 'UTILS!B2:B',
+  });
+  return data.values?.flat().filter(Boolean) || [];
+}
+
+async function getSelectedMilestones(sheets, sheetId) {
+  const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    ranges: [range],
-    includeGridData: true,
+    range: `${G_MILESTONES}!G4:G`,
   });
-
-  const rows = data.sheets[0].data[0].rowData || [];
-
-  return rows.map(row => {
-    return (row.values || []).map(cell => ({
-      text: cell.formattedValue || '',
-      hyperlink: cell.hyperlink || '',
-    }));
-  });
+  return data.values?.flat().filter(Boolean) || [];
 }
 
-export async function getSelectedMilestones(sheets, sheetId) {
-  const range = `${'G-Milestones'}!C4:G`;
-  const { data } = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range });
+async function getAllIssues(sheets) {
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
+    range: ALL_ISSUES_RANGE,
+  });
 
-  return data.values
-    .filter(row => row[0] === 'TRUE' && row[4])
-    .map(row => row[4]);
+  if (!data.values || data.values.length === 0) {
+    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
+  }
+
+  return data.values;
 }
 
-export async function clearSheet(sheets, sheetId) {
+async function clearGIssues(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${'G-Issues'}!C4:N`,
+    range: `${G_ISSUES_SHEET}!C4:N`,
   });
 }
 
-export async function insertData(sheets, sheetId, values) {
-  if (!values.length) return;
-
+async function insertDataToGIssues(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${'G-Issues'}!C4`,
+    range: `${G_ISSUES_SHEET}!C4`,
     valueInputOption: 'RAW',
-    requestBody: { values },
+    requestBody: { values: data },
   });
 }
 
-export async function updateTimestamp(sheets, sheetId) {
-  const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+async function updateTimestamp(sheets, sheetId) {
+  const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${'Dashboard'}!AB9`,
+    range: `${DASHBOARD_SHEET}!A1`,
     valueInputOption: 'RAW',
-    requestBody: {
-      values: [[`Data was updated on ${now}`]],
-    },
+    requestBody: { values: [[timestamp]] },
   });
 }
 
+async function main() {
+  try {
+    const auth = await authenticate();
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    // Confirm correct sheet titles
+    await getSheetTitles(sheets, UTILS_SHEET_ID);
+
+    // Get list of Google Sheet IDs from UTILS!B2:B
+    const sheetIds = await getAllTeamCDSSheetIds(sheets);
+    if (!sheetIds.length) {
+      console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
+      return;
+    }
+
+    for (const sheetId of sheetIds) {
+      try {
+        console.log(`🔄 Processing: ${sheetId}`);
+
+        const sheetTitles = await getSheetTitles(sheets, sheetId);
+
+        if (!sheetTitles.includes(G_MILESTONES)) {
+          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MILESTONES}' sheet`);
+          continue;
+        }
+
+        if (!sheetTitles.includes(G_ISSUES_SHEET)) {
+          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_ISSUES_SHEET}' sheet`);
+          continue;
+        }
+
+        const [milestones, issuesData] = await Promise.all([ 
+          getSelectedMilestones(sheets, sheetId),
+          getAllIssues(sheets),
+        ]);
+
+        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
+        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
+
+        await clearGIssues(sheets, sheetId);
+        await insertDataToGIssues(sheets, sheetId, processedData);
+        await updateTimestamp(sheets, sheetId);
+
+        console.log(`✅ Finished: ${sheetId}`);
+      } catch (err) {
+        console.error(`❌ Error processing ${sheetId}: ${err.message}`);
+      }
+    }
+  } catch (err) {
+    console.error(`❌ Main failure: ${err.message}`);
+  }
+}
+
+main();
