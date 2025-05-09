@@ -29,53 +29,87 @@ async function main() {
       const rows = res.data.values || [];
 
       let num = 1;
-      let lastStepNumber = 0;
-      const values = rows.map(([_, f], idx) => {
-        const cellF = f || '';
-        const currentStep = cellF.trim() ? num++ : '';
-        if (currentStep) {
-          lastStepNumber = currentStep;
+      const values = rows.map(([e, f], index) => {
+        const eValue = (e || '').trim();
+        const fValue = (f || '').trim();
+
+        // If F is empty, remove the number in E and unmerge cells
+        if (!fValue) {
+          return ['', '']; // Clear both E and F
         }
-        return [currentStep];
+
+        // Handle merging E cells and clearing F if needed
+        if (eValue && !fValue) {
+          return ['', '']; // Remove number in E if F is empty
+        }
+
+        return [eValue ? num++ : '', fValue];
       });
 
-      // Update step numbers in column E
+      // Update the values in the sheet (columns E and F)
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: `'${name}'!E12:E${12 + values.length - 1}`,
         valueInputOption: 'USER_ENTERED',
-        requestBody: { values }
+        requestBody: { values: values.map(row => [row[0]]) }
       });
 
-      // Check and merge/unmerge cells
+      // Update F column values
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${name}'!F12:F${12 + values.length - 1}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: values.map(row => [row[1]]) }
+      });
+
+      // Unmerge cells if F is empty
+      const unmergeRequests = [];
       for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        const cellF = row[1] || ''; // Column F
-        const cellE = values[i][0]; // Column E
-
-        // Fetch current merged ranges in E and F
-        const eRange = `'${name}'!E${12 + i}:E${12 + i}`;
-        const fRange = `'${name}'!F${12 + i}:F${12 + i}`;
-
-        // Merging logic for Column E
-        if (cellF.trim() && cellE) {
-          const mergeCountF = await getMergedCount(spreadsheetId, name, eRange, sheets);
-          if (mergeCountF > 1) {
-            await mergeCells(spreadsheetId, name, eRange, sheets);
-          }
-        } else {
-          await unmergeCells(spreadsheetId, name, eRange, sheets);
+        const [e, f] = rows[i];
+        if (!f) {
+          unmergeRequests.push({
+            unmerge: {
+              range: {
+                sheetId: metadata.data.sheets.find(s => s.properties.title === name).properties.sheetId,
+                startRowIndex: 12 + i,
+                endRowIndex: 13 + i,
+                startColumnIndex: 4,
+                endColumnIndex: 5
+              }
+            }
+          });
         }
+      }
 
-        // Merging logic for Column F
-        if (cellF.trim() && lastStepNumber === cellE) {
-          const mergeCountE = await getMergedCount(spreadsheetId, name, fRange, sheets);
-          if (mergeCountE > 1) {
-            await mergeCells(spreadsheetId, name, fRange, sheets);
-          }
-        } else {
-          await unmergeCells(spreadsheetId, name, fRange, sheets);
+      // Handle merging E and F cells if necessary
+      const mergeRequests = [];
+      for (let i = 0; i < rows.length - 1; i++) {
+        const [e1, f1] = rows[i];
+        const [e2, f2] = rows[i + 1];
+        if (f1 && f2 && f1 === f2 && e1 && e2) {
+          mergeRequests.push({
+            mergeCells: {
+              range: {
+                sheetId: metadata.data.sheets.find(s => s.properties.title === name).properties.sheetId,
+                startRowIndex: 12 + i,
+                endRowIndex: 13 + i + 1,
+                startColumnIndex: 4,
+                endColumnIndex: 5
+              },
+              mergeType: 'MERGE_COLUMNS'
+            }
+          });
         }
+      }
+
+      // Execute the unmerge and merge requests
+      if (unmergeRequests.length > 0 || mergeRequests.length > 0) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [...unmergeRequests, ...mergeRequests]
+          }
+        });
       }
 
       console.log(`Updated sheet: ${name}`);
@@ -84,60 +118,6 @@ async function main() {
     console.error('ERROR:', err);
     process.exit(1);
   }
-}
-
-// Helper function to check for merged ranges in a given range
-async function getMergedCount(spreadsheetId, sheetName, range, sheets) {
-  const res = await sheets.spreadsheets.get({
-    spreadsheetId,
-    ranges: [range], // Ensure ranges is an array of ranges
-    includeGridData: true
-  });
-
-  const gridData = res.data.sheets[0].data[0];
-  const mergedRanges = gridData.merges || [];
-  return mergedRanges.filter(merge => merge.startRowIndex <= range[1] && merge.endRowIndex >= range[0]).length;
-}
-
-// Helper function to merge cells
-async function mergeCells(spreadsheetId, sheetName, range, sheets) {
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      requests: [
-        {
-          mergeCells: {
-            range: {
-              sheetId: sheetName,
-              startRowIndex: range[0],
-              endRowIndex: range[1]
-            },
-            mergeType: 'MERGE_ALL'
-          }
-        }
-      ]
-    }
-  });
-}
-
-// Helper function to unmerge cells
-async function unmergeCells(spreadsheetId, sheetName, range, sheets) {
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      requests: [
-        {
-          unmergeCells: {
-            range: {
-              sheetId: sheetName,
-              startRowIndex: range[0],
-              endRowIndex: range[1]
-            }
-          }
-        }
-      ]
-    }
-  });
 }
 
 main();
