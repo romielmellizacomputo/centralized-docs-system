@@ -1,9 +1,8 @@
-require('dotenv').config(); // This is no longer necessary if you're using GitHub secrets directly
+// GitHub Actions version - no need for dotenv
 const { google } = require('googleapis');
 const axios = require('axios');
-const path = require('path');
 
-// Validate required environment variables from GitHub secrets
+// Validate required GitHub secrets (set in GitHub Actions)
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
@@ -27,29 +26,19 @@ const PROJECT_CONFIG = {
   124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
 };
 
-// Function to load service account from GitHub secret
+// Load and parse service account credentials from GitHub secret
 function loadServiceAccount() {
-  let serviceAccount;
-  if (process.env.GITHUB_ACTIONS) {
-    // GitHub Actions: Load from GitHub secret (GOOGLE_SERVICE_ACCOUNT_JSON)
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-      try {
-        // Parse the service account JSON from the GitHub secret
-        serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-      } catch (error) {
-        console.error('❌ Error parsing service account JSON from GitHub secrets:', error.message);
-        throw error;
-      }
+  try {
+    if (process.env.GITHUB_ACTIONS && process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     } else {
-      console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON GitHub secret is missing.');
+      console.error('❌ This script is intended to be run in GitHub Actions with GOOGLE_SERVICE_ACCOUNT_JSON secret.');
       process.exit(1);
     }
-  } else {
-    console.error('❌ This script must be run in GitHub Actions or require a local service-account.json.');
+  } catch (err) {
+    console.error('❌ Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', err.message);
     process.exit(1);
   }
-
-  return serviceAccount;
 }
 
 const serviceAccount = loadServiceAccount();
@@ -92,7 +81,7 @@ async function fetchExistingIssueKeys(sheets) {
     }
     return issueKeys;
   } catch (err) {
-    console.error('❌ Failed to read existing issues from sheet:', err.message);
+    console.error('❌ Failed to read existing issues:', err.message);
     return new Map();
   }
 }
@@ -102,109 +91,114 @@ async function fetchAndUpdateIssuesForAllProjects() {
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
   const existingIssues = await fetchExistingIssueKeys(sheets);
-  let allIssues = [];
+  const newIssues = [];
 
-  console.log('🔄 Fetching issues for all projects...');
+  console.log('🔄 Starting issue fetch and update process...');
 
   for (const projectId in PROJECT_CONFIG) {
     const config = PROJECT_CONFIG[projectId];
     let page = 1;
 
-    console.log(`🔄 Fetching issues for ${config.name}...`);
+    console.log(`📂 Fetching issues for ${config.name}...`);
 
     while (true) {
-      const response = await axios.get(
-        `${GITLAB_URL}api/v4/projects/${projectId}/issues?state=all&per_page=100&page=${page}`,
-        {
-          headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-        }
-      );
+      try {
+        const response = await axios.get(
+          `${GITLAB_URL}api/v4/projects/${projectId}/issues?state=all&per_page=100&page=${page}`,
+          {
+            headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+          }
+        );
 
-      if (response.status !== 200) {
-        console.error(`❌ Failed to fetch page ${page} for ${config.name}`);
+        if (response.status !== 200) {
+          console.error(`❌ Failed to fetch page ${page} for ${config.name}`);
+          break;
+        }
+
+        const issues = response.data;
+        if (issues.length === 0) break;
+
+        for (const issue of issues) {
+          const key = `${issue.id}_${issue.iid}`;
+          const rowData = [
+            issue.id ?? '',
+            issue.iid ?? '',
+            issue.title && issue.web_url
+              ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
+              : 'No Title',
+            issue.author?.name ?? 'Unknown Author',
+            issue.assignee?.name ?? 'Unassigned',
+            (issue.labels || []).join(', '),
+            issue.milestone?.title ?? 'No Milestone',
+            capitalize(issue.state ?? ''),
+            issue.created_at ? formatDate(issue.created_at) : '',
+            issue.closed_at ? formatDate(issue.closed_at) : '',
+            issue.closed_by?.name ?? '',
+            config.name,
+          ];
+
+          if (existingIssues.has(key)) {
+            existingIssues.set(key, rowData); // Update existing
+          } else {
+            newIssues.push(rowData); // Collect new
+          }
+        }
+
+        console.log(`✅ Page ${page} fetched (${issues.length} issues) for ${config.name}`);
+        page++;
+      } catch (err) {
+        console.error(`❌ Error fetching issues for ${config.name}:`, err.message);
         break;
       }
-
-      const issues = response.data;
-      if (issues.length === 0) break;
-
-      issues.forEach(issue => {
-        const key = `${issue.id}_${issue.iid}`;
-        const existingIssue = existingIssues.get(key);
-
-        const issueData = [
-          issue.id ?? '',
-          issue.iid ?? '',
-          issue.title && issue.web_url
-            ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
-            : 'No Title',
-          issue.author?.name ?? 'Unknown Author',
-          issue.assignee?.name ?? 'Unassigned',
-          (issue.labels || []).join(', '),
-          issue.milestone?.title ?? 'No Milestone',
-          capitalize(issue.state ?? ''),
-          issue.created_at ? formatDate(issue.created_at) : '',
-          issue.closed_at ? formatDate(issue.closed_at) : '',
-          issue.closed_by?.name ?? '',
-          config.name,
-        ];
-
-        if (existingIssue) {
-          existingIssues.set(key, issueData);
-        } else {
-          allIssues.push(issueData);
-        }
-      });
-
-      console.log(`✅ Page ${page} fetched (${issues.length} issues) for ${config.name}`);
-      page++;
     }
   }
 
   const updatedRows = Array.from(existingIssues.values());
 
   if (updatedRows.length > 0) {
-    const safeRows = updatedRows.map(row =>
-      row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
-    );
-
     try {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: 'ALL ISSUES!C4',
         valueInputOption: 'USER_ENTERED',
-        resource: { values: safeRows },
+        resource: {
+          values: updatedRows.map(row =>
+            row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
+          ),
+        },
       });
-
-      console.log(`✅ Updated ${safeRows.length} issues.`);
+      console.log(`✅ Updated ${updatedRows.length} rows.`);
     } catch (err) {
-      console.error('❌ Error updating data:', err.stack || err.message);
+      console.error('❌ Error updating rows:', err.message);
     }
   } else {
-    console.log('ℹ️ No updates to existing issues.');
+    console.log('ℹ️ No existing issues to update.');
   }
 
-  if (allIssues.length > 0) {
-    const safeNewRows = allIssues.map(row =>
-      row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
-    );
-
+  if (newIssues.length > 0) {
     try {
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
         range: 'ALL ISSUES!C4',
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
-        resource: { values: safeNewRows },
+        resource: {
+          values: newIssues.map(row =>
+            row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
+          ),
+        },
       });
-
-      console.log(`✅ Inserted ${safeNewRows.length} new issues.`);
+      console.log(`✅ Inserted ${newIssues.length} new issues.`);
     } catch (err) {
-      console.error('❌ Error inserting new issues:', err.stack || err.message);
+      console.error('❌ Error inserting new issues:', err.message);
     }
   } else {
     console.log('ℹ️ No new issues to insert.');
   }
 }
 
-fetchAndUpdateIssuesForAllProjects();
+// Execute the update
+fetchAndUpdateIssuesForAllProjects().catch((err) => {
+  console.error('❌ Fatal error:', err.stack || err.message);
+  process.exit(1);
+});
