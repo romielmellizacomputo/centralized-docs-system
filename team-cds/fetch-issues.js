@@ -6,8 +6,8 @@ const G_MILESTONES = 'G-Milestones';
 const G_ISSUES_SHEET = 'G-Issues';
 const DASHBOARD_SHEET = 'Dashboard';
 
-const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N';
+const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; // External sheet ID
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -41,39 +41,17 @@ async function getSelectedMilestones(sheets, sheetId) {
   return data.values?.flat().filter(Boolean) || [];
 }
 
-// 🔄 Get issue data with hyperlinks preserved
 async function getAllIssues(sheets) {
-  const res = await sheets.spreadsheets.get({
+  const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
-    ranges: [ALL_ISSUES_RANGE],
-    includeGridData: true,
-    fields: 'sheets.data.rowData.values(userEnteredValue,hyperlink)',
+    range: ALL_ISSUES_RANGE,
   });
 
-  const rows = res.data.sheets?.[0]?.data?.[0]?.rowData || [];
+  if (!data.values || data.values.length === 0) {
+    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
+  }
 
-  // Debugging: log the rows to check what is being returned
-  console.log("🚀 All rows fetched from 'ALL ISSUES' sheet:", rows);
-
-  return rows.map(row => {
-    return (row.values || []).map((cell, colIndex) => {
-      const val = cell?.userEnteredValue;
-      const link = cell?.hyperlink;
-
-      // Handle hyperlinks in column E (index 2) specifically
-      if (link && val?.stringValue) {
-        console.log(`🔗 Hyperlink found at column ${colIndex}:`, { link, val });
-        return colIndex === 2
-          ? `=HYPERLINK("${link}", "${val.stringValue}")` // Embed hyperlink in column E
-          : val.stringValue; // For other columns, just return the string value
-      }
-
-      if (val?.stringValue) return val.stringValue;
-      if (val?.numberValue != null) return val.numberValue;
-      if (val?.boolValue != null) return val.boolValue;
-      return '';
-    });
-  });
+  return data.values;
 }
 
 async function clearGIssues(sheets, sheetId) {
@@ -84,12 +62,10 @@ async function clearGIssues(sheets, sheetId) {
 }
 
 async function insertDataToGIssues(sheets, sheetId, data) {
-  console.log("🔄 Inserting data into 'G-Issues' sheet:", data);
-  
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4`,
-    valueInputOption: 'USER_ENTERED', // Ensure we allow user-entered formulas
+    valueInputOption: 'RAW',
     requestBody: { values: data },
   });
 }
@@ -109,8 +85,10 @@ async function main() {
     const auth = await authenticate();
     const sheets = google.sheets({ version: 'v4', auth });
 
+    // Confirm correct sheet titles
     await getSheetTitles(sheets, UTILS_SHEET_ID);
 
+    // Get list of Google Sheet IDs from UTILS!B2:B
     const sheetIds = await getAllTeamCDSSheetIds(sheets);
     if (!sheetIds.length) {
       console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
@@ -133,15 +111,13 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([
+        const [milestones, issuesData] = await Promise.all([ 
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
         ]);
 
-        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
-        const processedData = filtered.map(row => row.slice(0, 11)); // C to N
-
-        console.log("✅ Processed Data:", processedData);
+        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
+        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
