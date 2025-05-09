@@ -48,11 +48,11 @@ function convertTitlesToHyperlinks() {
         const doc = SpreadsheetApp.openByUrl(url);
         processSpreadsheet(doc);
       } catch (e) {
-        Logger.log(`Failed to open or process: ${url}, error: ${e}`);
+        console.log(`Failed to open or process: ${url}, error: ${e}`);
       }
     });
   } catch (e) {
-    Logger.log(`Failed to open master sheet: ${e}`);
+    console.log(`Failed to open master sheet: ${e}`);
   }
 }
 
