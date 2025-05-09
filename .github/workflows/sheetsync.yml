@@ -1,8 +1,8 @@
-name: Run Scripts Every 5 Minutes
+name: SheetSync
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # Runs every 5 minutes
+    - cron: '*/10 * * * *'  # Runs every 10 minutes
   workflow_dispatch:  # Allows you to trigger manually
 
 jobs:
