@@ -1,9 +1,9 @@
 import { google } from 'googleapis';
 
+// Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
-const ALL_ISSUES_SHEET = 'ALL ISSUES';
-const MILESTONES_SHEET = 'G-Milestones';
-const ISSUES_SHEET = 'G-Issues';
+const G_MILESTONES = 'G-Milestones';
+const G_ISSUES_SHEET = 'G-Issues';
 const DASHBOARD_SHEET = 'Dashboard';
 
 async function authenticate() {
@@ -15,55 +15,63 @@ async function authenticate() {
   return auth;
 }
 
-async function getTeamSheetIds(sheets) {
+async function getSheetTitles(sheets, spreadsheetId) {
+  const res = await sheets.spreadsheets.get({ spreadsheetId });
+  const titles = res.data.sheets.map(sheet => sheet.properties.title);
+  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
+  return titles;
+}
+
+async function getAllTeamCDSUrls(sheets) {
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: UTILS_SHEET_ID,
-    range: 'UTILS!B2:B',
+    range: 'B2:B',
   });
   return data.values?.flat().filter(Boolean) || [];
 }
 
-async function getSelectedMilestones(sheets, teamSheetId) {
+async function getSelectedMilestones(sheets, sheetId) {
   const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: teamSheetId,
-    range: `${MILESTONES_SHEET}!G4:G`,
+    spreadsheetId: sheetId,
+    range: `${G_MILESTONES}!G4:G`,
   });
   return data.values?.flat().filter(Boolean) || [];
 }
 
 async function getAllIssues(sheets) {
+  const range = `'ALL ISSUES'!C4:N`; // Wrap name in quotes to be safe
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: UTILS_SHEET_ID,
-    range: `${ALL_ISSUES_SHEET}!C4:N`,
+    range,
   });
-  return data.values || [];
+
+  if (!data.values || data.values.length === 0) {
+    throw new Error(`No data found in range ${range}`);
+  }
+
+  return data.values;
 }
 
-async function filterIssuesByMilestones(issues, milestones) {
-  return issues.filter(row => milestones.includes(row[6])); // Index 6 = column I
-}
-
-async function clearIssuesSheet(sheets, teamSheetId) {
+async function clearGIssues(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
-    spreadsheetId: teamSheetId,
-    range: `${ISSUES_SHEET}!C4:N`,
+    spreadsheetId: sheetId,
+    range: `${G_ISSUES_SHEET}!C4:N`,
   });
 }
 
-async function insertIssues(sheets, teamSheetId, data) {
-  if (!data.length) return;
+async function insertDataToGIssues(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
-    spreadsheetId: teamSheetId,
-    range: `${ISSUES_SHEET}!C4`,
+    spreadsheetId: sheetId,
+    range: `${G_ISSUES_SHEET}!C4`,
     valueInputOption: 'RAW',
     requestBody: { values: data },
   });
 }
 
-async function updateTimestamp(sheets, teamSheetId) {
+async function updateTimestamp(sheets, sheetId) {
   const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
-    spreadsheetId: teamSheetId,
+    spreadsheetId: sheetId,
     range: `${DASHBOARD_SHEET}!A1`,
     valueInputOption: 'RAW',
     requestBody: { values: [[timestamp]] },
@@ -75,24 +83,38 @@ async function main() {
     const auth = await authenticate();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    const teamSheetIds = await getTeamSheetIds(sheets);
-    const allIssues = await getAllIssues(sheets);
+    // List available sheets in UTILS
+    await getSheetTitles(sheets, UTILS_SHEET_ID);
 
-    for (const teamSheetId of teamSheetIds) {
+    // Get list of all Team CDS URLs
+    const sheetIds = await getAllTeamCDSUrls(sheets);
+    if (!sheetIds.length) {
+      console.error('❌ No Team CDS sheet URLs found in UTILS B2:B');
+      return;
+    }
+
+    // Process each sheet ID
+    for (const sheetId of sheetIds) {
       try {
-        const milestones = await getSelectedMilestones(sheets, teamSheetId);
-        const filtered = await filterIssuesByMilestones(allIssues, milestones);
+        console.log(`🔄 Processing: ${sheetId}`);
+        const [milestones, issuesData] = await Promise.all([
+          getSelectedMilestones(sheets, sheetId),
+          getAllIssues(sheets),
+        ]);
 
-        // Prepare only columns C to N (indexes 0 to 11)
-        const processed = filtered.map(row => row.slice(0, 12));
+        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
 
-        await clearIssuesSheet(sheets, teamSheetId);
-        await insertIssues(sheets, teamSheetId, processed);
-        await updateTimestamp(sheets, teamSheetId);
+        const processedData = filtered.map(row =>
+          row.slice(0, 11) // C to N → index 0 to 10
+        );
 
-        console.log(`✔ Processed: ${teamSheetId}`);
+        await clearGIssues(sheets, sheetId);
+        await insertDataToGIssues(sheets, sheetId, processedData);
+        await updateTimestamp(sheets, sheetId);
+
+        console.log(`✅ Finished: ${sheetId}`);
       } catch (err) {
-        console.error(`❌ Error processing ${teamSheetId}: ${err.message}`);
+        console.error(`❌ Error processing ${sheetId}: ${err.message}`);
       }
     }
   } catch (err) {
