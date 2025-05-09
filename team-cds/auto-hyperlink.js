@@ -1,3 +1,4 @@
+const { google } = require('googleapis'); // Add this import for google APIs
 const GITLAB_ROOT_URL = 'https://forge.bposeats.com/';
 const PROJECT_URLS_MAP = {
   155: `${GITLAB_ROOT_URL}bposeats/hqzen.com`,
