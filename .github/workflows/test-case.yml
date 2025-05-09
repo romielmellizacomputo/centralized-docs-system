@@ -32,7 +32,8 @@ jobs:
 
       # Step 5: Run the autonumber script
       - name: Run autonumber script
-        run: node autonumber.js
+        run: |
+          node autonumber.js
         env:
           SHEET_URL: ${{ github.event.inputs.spreadsheetUrl }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
