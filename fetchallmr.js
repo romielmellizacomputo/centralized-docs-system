@@ -1,10 +1,16 @@
+require('dotenv').config();
 const { google } = require('googleapis');
+const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 
-const GITLAB_URL = 'https://forge.bposeats.com/';
-const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+// Load env variables
+const {
+  GITLAB_URL,
+  GITLAB_TOKEN,
+  SPREADSHEET_ID,
+  GOOGLE_SERVICE_ACCOUNT_KEY_PATH,
+} = process.env;
 
 const PROJECT_CONFIG = {
   155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
@@ -17,22 +23,23 @@ const PROJECT_CONFIG = {
   124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
 };
 
-function getServiceAccountFromGitHubSecrets() {
+function loadServiceAccount() {
   try {
-    const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-    if (!serviceAccountKey) {
-      throw new Error("Service account key not found in environment variables");
+    const keyFilePath = path.resolve(GOOGLE_SERVICE_ACCOUNT_KEY_PATH);
+    const serviceAccount = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
     }
-    const serviceAccount = JSON.parse(serviceAccountKey);
     return serviceAccount;
   } catch (error) {
-    console.error('❌ Error loading service account from GitHub secrets:', error.message);
+    console.error('❌ Error loading service account:', error.message);
     throw error;
   }
 }
 
-const serviceAccount = getServiceAccountFromGitHubSecrets();
+const serviceAccount = loadServiceAccount();
 
+// Initialize Google Auth
 const auth = new google.auth.GoogleAuth({
   credentials: serviceAccount,
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -44,7 +51,6 @@ function capitalize(str) {
 
 function formatDate(dateString) {
   if (!dateString) return '';
-
   const date = new Date(dateString);
   const formatter = new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
@@ -52,7 +58,6 @@ function formatDate(dateString) {
     month: 'short',
     day: 'numeric',
   });
-
   return formatter.format(date);
 }
 
@@ -147,11 +152,7 @@ async function fetchAndUpdateMRsForAllProjects() {
 
   if (updatedRows.length > 0) {
     const safeRows = updatedRows.map(row =>
-      row.map(cell => {
-        if (cell === null || cell === undefined) return '';
-        if (typeof cell === 'object') return JSON.stringify(cell);
-        return String(cell);
-      })
+      row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
     );
 
     try {
@@ -172,11 +173,7 @@ async function fetchAndUpdateMRsForAllProjects() {
 
   if (allMRs.length > 0) {
     const safeNewRows = allMRs.map(row =>
-      row.map(cell => {
-        if (cell === null || cell === undefined) return '';
-        if (typeof cell === 'object') return JSON.stringify(cell);
-        return String(cell);
-      })
+      row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
     );
 
     try {
@@ -185,9 +182,7 @@ async function fetchAndUpdateMRsForAllProjects() {
         range: 'ALL MRs!C4',
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
-        resource: {
-          values: safeNewRows,
-        },
+        resource: { values: safeNewRows },
       });
 
       console.log(`✅ Inserted ${safeNewRows.length} new merge requests.`);
@@ -197,11 +192,6 @@ async function fetchAndUpdateMRsForAllProjects() {
   } else {
     console.log('ℹ️ No new merge requests to insert.');
   }
-}
-
-// Run the function
-fetchAndUpdateMRsForAllProjects();
-
 }
 
 // Run the function

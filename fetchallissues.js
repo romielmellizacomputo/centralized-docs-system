@@ -1,13 +1,22 @@
+require('dotenv').config();
 const { google } = require('googleapis');
+const fs = require('fs');
 const axios = require('axios');
+const path = require('path');
 
-// Remove fs and path since no longer required
-const GITLAB_URL = 'https://forge.bposeats.com/';
+// Validate required env variables
+const requiredEnv = ['SERVICE_ACCOUNT_KEY_PATH', 'GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID'];
+requiredEnv.forEach((key) => {
+  if (!process.env[key]) {
+    console.error(`❌ Missing required environment variable: ${key}`);
+    process.exit(1);
+  }
+});
+
+const keyFile = process.env.SERVICE_ACCOUNT_KEY_PATH;
+const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-
-// The service account credentials are now loaded directly from GitHub Secrets
-const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
 const PROJECT_CONFIG = {
   155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
@@ -20,10 +29,32 @@ const PROJECT_CONFIG = {
   124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
 };
 
+function loadServiceAccount() {
+  try {
+    const keyFilePath = path.resolve(keyFile);
+    const serviceAccount = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
+    return serviceAccount;
+  } catch (error) {
+    console.error('❌ Error loading service account:', error.message);
+    throw error;
+  }
+}
+
+const serviceAccount = loadServiceAccount();
+
 const auth = new google.auth.GoogleAuth({
   credentials: serviceAccount,
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
+
+// Alternative approach using environment variable for Google credentials path
+// const auth = new google.auth.GoogleAuth({
+//   keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+//   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+// });
 
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -31,23 +62,20 @@ function capitalize(str) {
 
 function formatDate(dateString) {
   if (!dateString) return '';
-  
   const date = new Date(dateString);
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  });
-  
-  return formatter.format(date);
+  }).format(date);
 }
 
 async function fetchExistingIssueKeys(sheets) {
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'ALL ISSUES!C4:N', 
+      range: 'ALL ISSUES!C4:N',
     });
 
     const rows = res.data.values || [];
@@ -70,7 +98,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  const existingIssues = await fetchExistingIssueKeys(sheets); 
+  const existingIssues = await fetchExistingIssueKeys(sheets);
   let allIssues = [];
 
   console.log('🔄 Fetching issues for all projects...');
@@ -134,21 +162,15 @@ async function fetchAndUpdateIssuesForAllProjects() {
 
   if (updatedRows.length > 0) {
     const safeRows = updatedRows.map(row =>
-      row.map(cell => {
-        if (cell === null || cell === undefined) return '';
-        if (typeof cell === 'object') return JSON.stringify(cell);
-        return String(cell);
-      })
+      row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
     );
 
     try {
-      const res = await sheets.spreadsheets.values.update({
+      await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: 'ALL ISSUES!C4', 
+        range: 'ALL ISSUES!C4',
         valueInputOption: 'USER_ENTERED',
-        resource: {
-          values: safeRows,
-        },
+        resource: { values: safeRows },
       });
 
       console.log(`✅ Updated ${safeRows.length} issues.`);
@@ -159,25 +181,18 @@ async function fetchAndUpdateIssuesForAllProjects() {
     console.log('ℹ️ No updates to existing issues.');
   }
 
-  // Insert new issues if any
   if (allIssues.length > 0) {
     const safeNewRows = allIssues.map(row =>
-      row.map(cell => {
-        if (cell === null || cell === undefined) return '';
-        if (typeof cell === 'object') return JSON.stringify(cell);
-        return String(cell);
-      })
+      row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
     );
 
     try {
-      const res = await sheets.spreadsheets.values.append({
+      await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
         range: 'ALL ISSUES!C4',
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
-        resource: {
-          values: safeNewRows,
-        },
+        resource: { values: safeNewRows },
       });
 
       console.log(`✅ Inserted ${safeNewRows.length} new issues.`);
