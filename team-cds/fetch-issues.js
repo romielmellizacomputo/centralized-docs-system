@@ -52,6 +52,9 @@ async function getAllIssues(sheets) {
 
   const rows = res.data.sheets?.[0]?.data?.[0]?.rowData || [];
 
+  // Debugging: log the rows to check what is being returned
+  console.log("🚀 All rows fetched from 'ALL ISSUES' sheet:", rows);
+
   return rows.map(row => {
     return (row.values || []).map((cell, colIndex) => {
       const val = cell?.userEnteredValue;
@@ -59,6 +62,7 @@ async function getAllIssues(sheets) {
 
       // Handle hyperlinks in column E (index 2) specifically
       if (link && val?.stringValue) {
+        console.log(`🔗 Hyperlink found at column ${colIndex}:`, { link, val });
         return colIndex === 2
           ? `=HYPERLINK("${link}", "${val.stringValue}")` // Embed hyperlink in column E
           : val.stringValue; // For other columns, just return the string value
@@ -80,6 +84,8 @@ async function clearGIssues(sheets, sheetId) {
 }
 
 async function insertDataToGIssues(sheets, sheetId, data) {
+  console.log("🔄 Inserting data into 'G-Issues' sheet:", data);
+  
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4`,
@@ -134,6 +140,8 @@ async function main() {
 
         const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
         const processedData = filtered.map(row => row.slice(0, 11)); // C to N
+
+        console.log("✅ Processed Data:", processedData);
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
