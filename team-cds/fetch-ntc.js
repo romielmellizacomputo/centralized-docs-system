@@ -3,8 +3,7 @@ import { google } from 'googleapis';
 // Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const G_MILESTONES = 'G-Milestones';
-const G_ISSUES_SHEET = 'G-Issues';
-const DASHBOARD_SHEET = 'Dashboard';
+const NTC_SHEET = 'NTC'; // New sheet where relevant issues will be inserted
 
 const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
 const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
@@ -54,17 +53,10 @@ async function getAllIssues(sheets) {
   return data.values;
 }
 
-async function clearGIssues(sheets, sheetId) {
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4:N`,
-  });
-}
-
-async function insertDataToGIssues(sheets, sheetId, data) {
+async function insertDataToNTC(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4`,
+    range: `${NTC_SHEET}!C4`, // Insert data into NTC sheet starting at C4
     valueInputOption: 'RAW',
     requestBody: { values: data },
   });
@@ -74,7 +66,7 @@ async function updateTimestamp(sheets, sheetId) {
   const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!A1`,
+    range: `${NTC_SHEET}!A1`, // Update timestamp in NTC sheet
     valueInputOption: 'RAW',
     requestBody: { values: [[timestamp]] },
   });
@@ -106,24 +98,31 @@ async function main() {
           continue;
         }
 
-        if (!sheetTitles.includes(G_ISSUES_SHEET)) {
-          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_ISSUES_SHEET}' sheet`);
-          continue;
-        }
+        const milestones = await getSelectedMilestones(sheets, sheetId);
+        const issuesData = await getAllIssues(sheets);
 
-        const [milestones, issuesData] = await Promise.all([ 
-          getSelectedMilestones(sheets, sheetId),
-          getAllIssues(sheets),
-        ]);
+        // Filter issues that match selected milestones and contain the relevant labels
+        const filtered = issuesData.filter(row => {
+          const labels = row[7].split(',').map(label => label.trim()); // Column H (index 7)
+          return milestones.includes(row[6]) && labels.some(label =>
+            ['Needs Test Case', 'Needs Test Scenario', 'Test Case Needs Update'].includes(label)
+          );
+        });
 
-        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
         const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
 
-        await clearGIssues(sheets, sheetId);
-        await insertDataToGIssues(sheets, sheetId, processedData);
+        // Insert matched data into NTC sheet
+        if (processedData.length > 0) {
+          await insertDataToNTC(sheets, sheetId, processedData);
+          console.log(`✅ Data inserted into NTC sheet for ${sheetId}`);
+        } else {
+          console.log(`⚠️ No matching issues for NTC sheet in ${sheetId}`);
+        }
+
+        // Update timestamp in NTC sheet
         await updateTimestamp(sheets, sheetId);
 
-        console.log(`✅ Finished: ${sheetId}`);
+        console.log(`✅ Finished processing ${sheetId}`);
       } catch (err) {
         console.error(`❌ Error processing ${sheetId}: ${err.message}`);
       }
