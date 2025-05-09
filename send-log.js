@@ -1,11 +1,12 @@
 const { google } = require('googleapis');
 
-const targetSpreadsheetId = process.env.AUTOMATED_PORTALS; // Target sheet where "Logs" sheet is
-const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON); // Source service account
+const sheetData = JSON.parse(process.env.SHEET_DATA); // Includes source metadata (like sourceUrl or sheetId)
+const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON); // Source sheet credentials
+const targetSpreadsheetId = process.env.AUTOMATED_PORTALS; // Target sheet (Logs destination)
 
 async function sendUpdateSignal() {
   try {
-    console.log('📤 Starting signal send to Logs');
+    console.log('📤 Starting signal send to Logs sheet');
 
     const auth = new google.auth.GoogleAuth({
       credentials,
@@ -15,9 +16,8 @@ async function sendUpdateSignal() {
     const sheets = google.sheets({ version: 'v4', auth });
 
     const currentDate = new Date().toISOString();
-    const sourceUrl = `https://docs.google.com/spreadsheets/d/${credentials.spreadsheet_id}`;
+    const sourceUrl = sheetData.sourceUrl || `https://docs.google.com/spreadsheets/d/${sheetData.spreadsheetId}`;
 
-    // Append log entry to Logs sheet in the target spreadsheet
     await sheets.spreadsheets.values.append({
       spreadsheetId: targetSpreadsheetId,
       range: 'Logs!A:B',
@@ -27,9 +27,10 @@ async function sendUpdateSignal() {
       },
     });
 
-    console.log(`✅ Log added to Logs sheet in ${targetSpreadsheetId}`);
+    console.log(`✅ Log entry added to Logs sheet in target spreadsheet (${targetSpreadsheetId})`);
   } catch (error) {
-    console.error('❌ Error sending update signal:', error.message);
+    console.error('❌ Error sending log signal:', error.message);
+    process.exit(1);
   }
 }
 
