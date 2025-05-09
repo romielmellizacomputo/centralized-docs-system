@@ -23,7 +23,6 @@ async function authenticate() {
 
 async function getSelectedMilestones(sheets, sheetId) {
   // Implement the logic to fetch milestones data from the sheet
-  // Example (adjust according to your actual sheet structure):
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
     range: `${G_MILESTONES}!A2:A`, // Adjust as per your sheet
@@ -34,7 +33,6 @@ async function getSelectedMilestones(sheets, sheetId) {
 
 async function getAllIssues(sheets) {
   // Implement the logic to fetch all issues data
-  // Example (adjust according to your actual sheet structure):
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: UTILS_SHEET_ID,
     range: `${ALL_ISSUES_SHEET}!A2:H`, // Adjust as per your sheet
