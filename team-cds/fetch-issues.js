@@ -41,24 +41,25 @@ async function getSelectedMilestones(sheets, sheetId) {
   return data.values?.flat().filter(Boolean) || [];
 }
 
-// 🔄 Get issue data with hyperlinks preserved
+// 🔄 Get issue data with hyperlinks properly formatted
 async function getAllIssues(sheets) {
   const res = await sheets.spreadsheets.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
     ranges: [ALL_ISSUES_RANGE],
     includeGridData: true,
-    fields: 'sheets.data.rowData.values(userEnteredValue,formattedValue,hyperlink)',
+    fields: 'sheets.data.rowData.values(userEnteredValue,hyperlink)',
   });
 
   const rows = res.data.sheets?.[0]?.data?.[0]?.rowData || [];
 
   return rows.map(row =>
-    (row.values || []).map((cell, i) => {
+    (row.values || []).map(cell => {
       const val = cell?.userEnteredValue;
       const link = cell?.hyperlink;
+
       if (link) {
         const display = val?.stringValue || link;
-        return `=HYPERLINK("${link}", "${display}")`;
+        return `=HYPERLINK("${link}", "${display}")`; // 🟢 Inserted as real formula
       }
       if (val?.stringValue) return val.stringValue;
       if (val?.numberValue != null) return val.numberValue;
@@ -79,7 +80,7 @@ async function insertDataToGIssues(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4`,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: 'USER_ENTERED', // ✅ Ensures formulas are interpreted
     requestBody: { values: data },
   });
 }
@@ -129,12 +130,7 @@ async function main() {
         ]);
 
         const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
-        const processedData = filtered.map(row => {
-          const rowCopy = [...row];
-          const hyperlink = row[2]; // Column E = index 2
-          rowCopy[2] = hyperlink;  // Ensure hyperlink stays in
-          return rowCopy.slice(0, 11); // Keep C to N (indexes 0 to 10)
-        });
+        const processedData = filtered.map(row => row.slice(0, 11)); // C to N
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
