@@ -6,6 +6,9 @@ const G_MILESTONES = 'G-Milestones';
 const G_ISSUES_SHEET = 'G-Issues';
 const DASHBOARD_SHEET = 'Dashboard';
 
+const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
+
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
   const auth = new google.auth.GoogleAuth({
@@ -39,14 +42,13 @@ async function getSelectedMilestones(sheets, sheetId) {
 }
 
 async function getAllIssues(sheets) {
-  const range = `'ALL TICKETS'!C4:N`;
   const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: UTILS_SHEET_ID,
-    range,
+    spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
+    range: ALL_ISSUES_RANGE,
   });
 
   if (!data.values || data.values.length === 0) {
-    throw new Error(`No data found in range ${range}`);
+    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
   }
 
   return data.values;
@@ -109,7 +111,7 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([
+        const [milestones, issuesData] = await Promise.all([ 
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
         ]);
