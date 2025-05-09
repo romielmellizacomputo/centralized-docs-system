@@ -29,12 +29,19 @@ async function authenticate() {
   return auth;
 }
 
-async function getSheetIds(sheets) {
+async function getSheetTitles(sheets, spreadsheetId) {
+  const res = await sheets.spreadsheets.get({ spreadsheetId });
+  const titles = res.data.sheets.map(sheet => sheet.properties.title);
+  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
+  return titles;
+}
+
+async function getSheetData(sheets, sheetId, range) {
   const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k',
-    range: 'UTILS!B2:B',
+    spreadsheetId: sheetId,
+    range: range,
   });
-  return data.values?.flat().filter(Boolean) || [];
+  return data.values;
 }
 
 async function convertTitlesToHyperlinks(sheet, lastRow, titleColumn, projectColumn, iidColumn, urlType) {
@@ -49,17 +56,18 @@ async function convertTitlesToHyperlinks(sheet, lastRow, titleColumn, projectCol
     const projectName = projectNames[i][0];
     const iid = iids[i][0];
 
-    if (title && iid && !title.includes("http")) { // Only process if title is not already a link
+    if (title && iid && !title.includes("http")) { // Check if title already contains a hyperlink
       const projectId = PROJECT_NAME_ID_MAP[projectName];
       if (projectId && PROJECT_URLS_MAP[projectId]) {
         const hyperlink = `${PROJECT_URLS_MAP[projectId]}/-/${urlType}/${iid}`;
+        // Escape double quotes in the title to avoid formula parse errors
         const escapedTitle = title.replace(/"/g, '""');
         hyperlinks.push([`=HYPERLINK("${hyperlink}", "${escapedTitle}")`]);
       } else {
-        hyperlinks.push([title]); // If no matching project URL, keep the title as is
+        hyperlinks.push([title]); // Add title as is if no URL
       }
     } else {
-      hyperlinks.push([title]); // Skip rows with no title or IID
+      hyperlinks.push([title]); // Skip rows with no title or IID, or already linked
     }
   }
 
@@ -69,21 +77,19 @@ async function convertTitlesToHyperlinks(sheet, lastRow, titleColumn, projectCol
 }
 
 async function processSheets(sheets) {
-  const sheetIds = await getSheetIds(sheets);
-  const sheetsToProcess = sheetIds.map(async (sheetId) => {
-    try {
-      const sheet = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId });
-      const lastRow = sheet.data.values.length;
+  // Define the sheets we want to process
+  const sheetsToProcess = ['NTC', 'G-Issues', 'G-MR'];
+  
+  for (const sheetName of sheetsToProcess) {
+    const sheet = sheets.getSheetByName(sheetName);
+    if (sheet) {
+      const lastRow = sheet.getLastRow();
       if (lastRow >= 4) {
-        await convertTitlesToHyperlinks(sheet, lastRow, 'E', 'B', 'C', 'issues'); // E: title, B: project, C: iid
-        console.log(`✅ Processed sheet: ${sheetId}`);
+        // For each of the sheets, process column E4:E (hyperlinking based on project and iid)
+        await convertTitlesToHyperlinks(sheet, lastRow, 'E', 'A', 'B', 'MR'); // Update column range and other parameters accordingly
       }
-    } catch (err) {
-      console.error(`❌ Error processing sheet ${sheetId}: ${err.message}`);
     }
-  });
-
-  await Promise.all(sheetsToProcess); // Run in parallel
+  }
 }
 
 async function main() {
@@ -91,9 +97,28 @@ async function main() {
     const auth = await authenticate();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    await processSheets(sheets); // Process all sheets in parallel
+    // Get list of Google Sheet IDs from UTILS!B2:B
+    const sheetIds = await getSheetData(sheets, 'UTILS_SHEET_ID', 'UTILS!B2:B');
+    if (!sheetIds.length) {
+      console.error('❌ No Google Sheets found in UTILS!B2:B');
+      return;
+    }
 
-    console.log('✅ All sheets processed successfully');
+    // Iterate over each sheet ID, process the relevant sheets (NTC, G-Issues, G-MR)
+    for (const sheetId of sheetIds) {
+      console.log(`🔄 Processing: ${sheetId}`);
+      
+      // Get sheet titles for this sheet ID
+      const sheetTitles = await getSheetTitles(sheets, sheetId);
+
+      // Check if the required sheets exist
+      if (sheetTitles.includes('NTC') && sheetTitles.includes('G-Issues') && sheetTitles.includes('G-MR')) {
+        await processSheets(sheets, sheetId);
+        console.log(`✅ Finished processing sheets for ${sheetId}`);
+      } else {
+        console.warn(`⚠️ Skipping ${sheetId} — missing one or more required sheets.`);
+      }
+    }
   } catch (err) {
     console.error(`❌ Main failure: ${err.message}`);
   }
