@@ -21,53 +21,59 @@ async function authenticate() {
 }
 
 async function getSelectedMilestones(sheets, sheetId) {
+  // Fetch selected milestones from G4:G of G-Milestones sheet
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: `${G_MILESTONES}!A2:A`,
+    range: `${G_MILESTONES}!G4:G`, // Range for selected milestones
   });
 
-  const milestones = data.values.flat().filter(Boolean);
-  console.log("Milestones:", milestones); // Debugging log
-  return milestones;
+  return data.values.flat().filter(Boolean); // Flatten and filter out any empty values
 }
 
 async function getAllIssues(sheets) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: UTILS_SHEET_ID,
-    range: `${ALL_ISSUES_SHEET}!A2:N`,
-  });
+  try {
+    const { data } = await sheets.spreadsheets.values.get({
+      spreadsheetId: UTILS_SHEET_ID,
+      range: `${ALL_ISSUES_SHEET}!A2:N`, // Adjust as per your sheet
+    });
 
-  return data.values;
+    if (!data.values || data.values.length === 0) {
+      throw new Error(`No data found in range ${ALL_ISSUES_SHEET}!A2:N`);
+    }
+
+    return data.values;
+  } catch (err) {
+    console.error(`❌ Error fetching ALL ISSUES: ${err.message}`);
+    throw err; // Rethrow the error to halt further execution
+  }
 }
 
 async function clearSheet(sheets, sheetId) {
+  // Clear the existing sheet data
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES}!A2:Z`,
+    range: `${G_ISSUES}!A2:Z`, // Adjust as per your sheet structure
   });
 }
 
 async function insertData(sheets, sheetId, data) {
-  try {
-    console.log("Inserting Data:", data); // Debugging log
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: sheetId,
-      range: `${G_ISSUES}!A2`,
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: data,
-      },
-    });
-  } catch (err) {
-    console.error("Error inserting data:", err); // Error handling
-  }
+  // Insert the processed data
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `${G_ISSUES}!A2`, // Adjust as per your sheet structure
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: data,
+    },
+  });
 }
 
 async function updateTimestamp(sheets, sheetId) {
+  // Update the timestamp for when the sheet was processed
   const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${DASHBOARD}!A1`,
+    range: `${DASHBOARD}!A1`, // Adjust as per your sheet structure
     valueInputOption: 'RAW',
     requestBody: {
       values: [[timestamp]],
@@ -76,40 +82,61 @@ async function updateTimestamp(sheets, sheetId) {
 }
 
 async function main() {
-  const auth = await authenticate();
-  const sheets = google.sheets({ version: 'v4', auth });
+  try {
+    // Authenticate using the service account credentials
+    const auth = await authenticate();
+    const sheets = google.sheets({ version: 'v4', auth });
 
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: UTILS_SHEET_ID,
-    range: `${UTILS_SHEET_NAME}!B2:B`,
-  });
+    // Check available sheets and ranges
+    const metadata = await sheets.spreadsheets.get({
+      spreadsheetId: UTILS_SHEET_ID,
+    });
+    console.log(metadata); // Log metadata to check sheet names
 
-  const sheetIds = data.values.flat().filter(Boolean);
+    // Fetch list of spreadsheet IDs from UTILS sheet
+    const { data } = await sheets.spreadsheets.values.get({
+      spreadsheetId: UTILS_SHEET_ID,
+      range: `${UTILS_SHEET_NAME}!B2:B`,
+    });
 
-  for (const sheetId of sheetIds) {
-    try {
-      const [milestones, issuesData] = await Promise.all([
-        getSelectedMilestones(sheets, sheetId),
-        getAllIssues(sheets),
-      ]);
+    const sheetIds = data.values.flat().filter(Boolean);
 
-      const filtered = issuesData.filter(row =>
-        milestones.includes(row[8]) // Ensure this is the correct column for milestones
-      );
+    for (const sheetId of sheetIds) {
+      try {
+        // Fetch selected milestones and issues data
+        const [milestones, issuesData] = await Promise.all([
+          getSelectedMilestones(sheets, sheetId),
+          getAllIssues(sheets),
+        ]);
 
-      console.log("Filtered Issues:", filtered); // Debugging log
+        console.log('Milestones:', milestones); // Debugging log
+        console.log('Issues Data:', issuesData); // Debugging log
 
-      const processedData = filtered.map(row => [
-        row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12],
-      ]);
+        // Filter issues based on the selected milestones
+        const filtered = issuesData.filter(row =>
+          milestones.includes(row[8]) // Assuming column I (index 8) has the milestone name
+        );
 
-      await clearSheet(sheets, sheetId);
-      await insertData(sheets, sheetId, processedData);
-      await updateTimestamp(sheets, sheetId);
-      console.log(`✔ Processed sheet: ${sheetId}`);
-    } catch (err) {
-      console.error(`❌ Failed to process ${sheetId}: ${err.message}`);
+        console.log('Filtered Issues:', filtered); // Debugging log
+
+        // Process data for insertion into the sheet
+        const processedData = filtered.map(row => [
+          row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12],
+        ]);
+
+        console.log('Processed Data:', processedData); // Debugging log
+
+        // Clear the sheet, insert the processed data, and update the timestamp
+        await clearSheet(sheets, sheetId);
+        await insertData(sheets, sheetId, processedData);
+        await updateTimestamp(sheets, sheetId);
+        console.log(`✔ Processed sheet: ${sheetId}`);
+      } catch (err) {
+        console.error(`❌ Failed to process ${sheetId}: ${err.message}`);
+      }
     }
+  } catch (err) {
+    console.error(`❌ Main processing failed: ${err.message}`);
   }
 }
 
