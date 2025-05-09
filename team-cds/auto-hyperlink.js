@@ -45,7 +45,7 @@ async function getSheetData(sheets, sheetId, range) {
   return data.values;
 }
 
-async function convertTitlesToHyperlinks(sheet, lastRow, titleColumn, projectColumn, iidColumn, urlType) {
+async function convertToHyperlinks(sheet, lastRow, titleColumn, projectColumn, iidColumn) {
   const titles = sheet.getRange(`${titleColumn}4:${titleColumn}${lastRow}`).getValues();
   const projectNames = sheet.getRange(`${projectColumn}4:${projectColumn}${lastRow}`).getValues();
   const iids = sheet.getRange(`${iidColumn}4:${iidColumn}${lastRow}`).getValues();
@@ -60,7 +60,7 @@ async function convertTitlesToHyperlinks(sheet, lastRow, titleColumn, projectCol
     if (title && iid && !title.includes("http")) { // Check if title already contains a hyperlink
       const projectId = PROJECT_NAME_ID_MAP[projectName];
       if (projectId && PROJECT_URLS_MAP[projectId]) {
-        const hyperlink = `${PROJECT_URLS_MAP[projectId]}/-/issues/${iid}`; // Updated the URL structure
+        const hyperlink = `${PROJECT_URLS_MAP[projectId]}/-/issues/${iid}`; // Updated URL structure
         // Escape double quotes in the title to avoid formula parse errors
         const escapedTitle = title.replace(/"/g, '""');
         hyperlinks.push([`=HYPERLINK("${hyperlink}", "${escapedTitle}")`]);
@@ -86,8 +86,8 @@ async function processSheets(sheets) {
     if (sheet) {
       const lastRow = sheet.getLastRow();
       if (lastRow >= 4) {
-        // For each of the sheets, process column E4:E (hyperlinking based on project and iid)
-        await convertTitlesToHyperlinks(sheet, lastRow, 'E', 'N', 'C', 'MR'); // Update column range and other parameters accordingly
+        // Process column E4:E (hyperlinking based on project and iid)
+        await convertToHyperlinks(sheet, lastRow, 'E', 'N', 'C');
       }
     }
   }
