@@ -72,17 +72,38 @@ async function convertTitlesToHyperlinks() {
   const sheets = google.sheets({ version: 'v4', auth });
 
   try {
-    const masterSheetId = masterSheetUrl.split('/d/')[1].split('/')[0];
+    const masterSheetId = masterSheetUrl.split('/d/')[1]?.split('/')[0]; // Safe splitting
+    if (!masterSheetId) {
+      console.error('Invalid master sheet URL.');
+      return;
+    }
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: masterSheetId,
       range: 'UTILS!B2:B',
     });
-    const urls = res.data.values.flat().filter(url => url);
+
+    const urls = res.data.values?.flat()?.filter(url => url); // Ensure no empty URLs
+
+    // Check if the URLs array is valid and contains data
+    if (!urls || urls.length === 0) {
+      console.error('No valid URLs found.');
+      return;
+    }
 
     // Process each URL in the sheet
     for (let url of urls) {
+      if (!url) {
+        console.log('Skipping invalid or empty URL');
+        continue;
+      }
+
       try {
-        const spreadsheetId = url.split('/d/')[1].split('/')[0];
+        const spreadsheetId = url.split('/d/')[1]?.split('/')[0]; // Safe splitting
+        if (!spreadsheetId) {
+          console.log(`Invalid URL format: ${url}`);
+          continue;
+        }
+
         const doc = await sheets.spreadsheets.values.get({
           spreadsheetId,
           range: 'Sheet1!A1:Z1000', // Adjust this range to process your sheet
@@ -96,6 +117,7 @@ async function convertTitlesToHyperlinks() {
     console.log(`Failed to open master sheet: ${e}`);
   }
 }
+
 
 // Process each spreadsheet
 function processSpreadsheet(spreadsheetData) {
