@@ -3,7 +3,7 @@ const axios = require('axios');
 
 // Retrieve sheet data from environment variables
 const sheetData = JSON.parse(process.env.SHEET_DATA);
-const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
 
 async function updateToC() {
   const spreadsheetUrl = sheetData.spreadsheetUrl;
