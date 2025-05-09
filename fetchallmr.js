@@ -3,7 +3,7 @@ const { google } = require('googleapis');
 const axios = require('axios');
 const path = require('path');
 
-// Validate required env variables
+// Validate required environment variables from GitHub secrets
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
