@@ -26,4 +26,5 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }} # Use the new secret for credentials
           INPUT_SHEET_DATA: ${{ github.event.inputs.sheet_data }} # Pass the input data to the script
+          GITHUB_TOKEN: ${{ secrets.TC_TOKEN }} # Use the renamed secret here
         run: node autoNumber.js
