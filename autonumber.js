@@ -6,7 +6,7 @@ async function main() {
   const spreadsheetUrl = sheetData.spreadsheetUrl;
   const spreadsheetId = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
 
-  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
 
   const auth = new google.auth.GoogleAuth({
     credentials,
