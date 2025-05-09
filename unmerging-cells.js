@@ -38,72 +38,38 @@ async function main() {
       const mergedRanges = sheetMeta.merges || [];
       const requests = [];
 
-      const toUnmergeE = [];
-      const toUnmergeF = [];
+      // We will iterate over all merged ranges and unmerge if they are empty in either column E or F
+      const toUnmerge = [];
 
-      // Track merged ranges in E12:E and F12:F
       for (const merge of mergedRanges) {
         const { startRowIndex, endRowIndex, startColumnIndex, endColumnIndex } = merge;
 
-        // Unmerge empty merged cells in E12:E (Column 4)
-        if (startRowIndex >= 11 && startColumnIndex === 4 && endColumnIndex === 5) {
+        // Check merged ranges that affect E12:E (Column 4) or F12:F (Column 5)
+        if ((startColumnIndex === 4 || startColumnIndex === 5) && endColumnIndex === startColumnIndex + 1) {
           const mergeStart = startRowIndex;
           const mergeEnd = endRowIndex;
           let isEmpty = true;
 
-          // Check if all cells in the merged range are empty in column E
+          // Check the merged cells in column E and column F for emptiness
           for (let r = mergeStart; r < mergeEnd; r++) {
-            if (rowsE[r - 12] && rowsE[r - 12][0] && rowsE[r - 12][0].trim()) {
+            const rowE = rowsE[r - 12] ? rowsE[r - 12][0] : '';
+            const rowF = rowsF[r - 12] ? rowsF[r - 12][0] : '';
+
+            // If any cell is not empty, set isEmpty to false and break
+            if (rowE.trim() || rowF.trim()) {
               isEmpty = false;
               break;
             }
           }
 
           if (isEmpty) {
-            toUnmergeE.push(merge);
-          }
-        }
-
-        // Unmerge empty merged cells in F12:F (Column 5)
-        if (startRowIndex >= 11 && startColumnIndex === 5 && endColumnIndex === 6) {
-          const mergeStart = startRowIndex;
-          const mergeEnd = endRowIndex;
-          let isEmpty = true;
-
-          // Check if all cells in the merged range are empty in column F
-          for (let r = mergeStart; r < mergeEnd; r++) {
-            if (rowsF[r - 12] && rowsF[r - 12][0] && rowsF[r - 12][0].trim()) {
-              isEmpty = false;
-              break;
-            }
-          }
-
-          if (isEmpty) {
-            toUnmergeF.push(merge);
+            toUnmerge.push(merge);
           }
         }
       }
 
-      // Unmerge empty merged cells in E12:E
-      for (const merge of toUnmergeE) {
-        requests.push({
-          unmergeCells: { range: { ...merge, sheetId } }
-        });
-
-        // Add black border to newly unmerged empty merged ranges
-        requests.push({
-          updateBorders: {
-            range: { ...merge, sheetId },
-            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-          }
-        });
-      }
-
-      // Unmerge empty merged cells in F12:F
-      for (const merge of toUnmergeF) {
+      // Unmerge all empty merged ranges in E and F
+      for (const merge of toUnmerge) {
         requests.push({
           unmergeCells: { range: { ...merge, sheetId } }
         });
