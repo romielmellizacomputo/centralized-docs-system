@@ -22,38 +22,38 @@ async function authenticate() {
 }
 
 async function getSelectedMilestones(sheets, sheetId) {
-  // Implement the logic to fetch milestones data from the sheet
+  // Fetch the selected milestones data from G-Milestones sheet
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: `${G_MILESTONES}!A2:A`, // Adjust as per your sheet
+    range: `${G_MILESTONES}!A2:A`, // Adjust the range as needed
   });
 
-  return data.values.flat().filter(Boolean);
+  return data.values.flat().filter(Boolean); // Returns an array of non-empty values (milestones)
 }
 
 async function getAllIssues(sheets) {
-  // Implement the logic to fetch all issues data
+  // Fetch all issues data from the ALL ISSUES sheet in the UTILS spreadsheet
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: UTILS_SHEET_ID,
-    range: `${ALL_ISSUES_SHEET}!A2:H`, // Adjust as per your sheet
+    range: `${ALL_ISSUES_SHEET}!A2:N`, // Adjust as per your sheet structure
   });
 
   return data.values;
 }
 
 async function clearSheet(sheets, sheetId) {
-  // Implement the logic to clear the existing sheet data
+  // Clears the data from the G-Issues sheet
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES}!A2:Z`, // Adjust as per your sheet structure
+    range: `${G_ISSUES}!A2:Z`, // Adjust the range to clear data as necessary
   });
 }
 
 async function insertData(sheets, sheetId, data) {
-  // Implement the logic to insert the processed data
+  // Inserts the processed data into the G-Issues sheet
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES}!A2`, // Adjust as per your sheet structure
+    range: `${G_ISSUES}!A2`, // Adjust the range to insert data at the correct location
     valueInputOption: 'RAW',
     requestBody: {
       values: data,
@@ -62,11 +62,11 @@ async function insertData(sheets, sheetId, data) {
 }
 
 async function updateTimestamp(sheets, sheetId) {
-  // Implement the logic to update the timestamp for when the sheet was processed
+  // Updates the timestamp for when the sheet was processed
   const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${DASHBOARD}!A1`, // Adjust as per your sheet structure
+    range: `${DASHBOARD}!A1`, // Adjust to where you want the timestamp
     valueInputOption: 'RAW',
     requestBody: {
       values: [[timestamp]],
@@ -79,13 +79,13 @@ async function main() {
   const auth = await authenticate();
   const sheets = google.sheets({ version: 'v4', auth });
 
-  // Fetch list of spreadsheet IDs from UTILS sheet
+  // Fetch list of sheet IDs from the UTILS sheet (column B)
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: UTILS_SHEET_ID,
-    range: `${UTILS_SHEET_NAME}!B2:B`,
+    range: `${UTILS_SHEET_NAME}!B2:B`, // Fetch all sheet IDs from column B
   });
 
-  const sheetIds = data.values.flat().filter(Boolean);
+  const sheetIds = data.values.flat().filter(Boolean); // Filter out any empty values
 
   for (const sheetId of sheetIds) {
     try {
@@ -95,18 +95,18 @@ async function main() {
         getAllIssues(sheets),
       ]);
 
+      // Filter issues based on matching milestones (Column I in ALL ISSUES)
       const filtered = issuesData.filter(row =>
-        milestones.includes(row[6]) // Assuming column I (index 6)
+        milestones.includes(row[8]) // Assuming column I (index 8) holds the milestone data
       );
 
+      // Process data and prepare for insertion into G-Issues
       const processedData = filtered.map(row => {
-        const hyperlink = row[4];
-        const linkText = hyperlink?.text || '';
-        const linkUrl = hyperlink?.hyperlink || '';
-        return [linkText, linkUrl, ...row.slice(0, 4), ...row.slice(5)];
+        // Assuming row[3:5] contains relevant data (adjust as per your sheet)
+        return [row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12]];
       });
 
-      // Clear the sheet, insert the processed data, and update the timestamp
+      // Clear the G-Issues sheet, insert the processed data, and update the timestamp
       await clearSheet(sheets, sheetId);
       await insertData(sheets, sheetId, processedData);
       await updateTimestamp(sheets, sheetId);
