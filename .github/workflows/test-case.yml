@@ -25,47 +25,5 @@ jobs:
       - name: Run Auto Number Script
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }} # Use the new secret for credentials
-        run: |
-          const { GoogleSpreadsheet } = require('google-spreadsheet');
-
-          async function autoNumberSteps(sheetData) {
-            const doc = new GoogleSpreadsheet(sheetData.sheetId); // Access the spreadsheet by ID
-            await doc.useServiceAccountAuth(JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON)); // Authenticate using the new credentials
-
-            await doc.loadInfo(); // Load document properties and worksheets
-            const sheet = doc.sheetsByTitle[sheetData.sheetName]; // Get the sheet by name
-
-            const rangeF = sheet.getRange("F12:F");
-            const valuesF = await rangeF.getValues();
-            const numRows = valuesF.length;
-
-            let lastStepNumber = 0; // Track the last assigned step number
-            for (let i = 0; i < numRows; i++) {
-              const cellF = sheet.getCell(i + 11, 5); // Column F is the 6th column (index 5)
-              const cellE = sheet.getCell(i + 11, 4); // Corresponding cell in column E (index 4)
-
-              if (cellF.value) { // If F cell is not empty
-                if (!cellE.value) {
-                  // If E cell is empty, assign the next step number
-                  lastStepNumber++;
-                  cellE.value = lastStepNumber;
-                } else {
-                  // If E cell has a value, ensure it's in sequence
-                  const currentStep = cellE.value;
-                  if (currentStep !== lastStepNumber + 1) {
-                    cellE.value = lastStepNumber + 1;
-                  }
-                }
-              } else {
-                // If cell in F is empty, clear corresponding E cell
-                if (cellE.value) {
-                  cellE.value = ''; // Clear the E cell
-                }
-              }
-            }
-
-            await sheet.saveUpdatedCells(); // Save changes to the sheet
-          }
-
-          const sheetData = JSON.parse(process.env.INPUT_SHEET_DATA);
-          autoNumberSteps(sheetData);
+          INPUT_SHEET_DATA: ${{ github.event.inputs.sheet_data }} # Pass the input data to the script
+        run: node autoNumber.js
