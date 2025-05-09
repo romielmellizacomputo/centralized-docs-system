@@ -1,141 +1,102 @@
 import { google } from 'googleapis';
 
-// Your Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
-const G_MILESTONES = 'G-Milestones';
 const ALL_ISSUES_SHEET = 'ALL ISSUES';
-const G_ISSUES_SHEET = 'G-Issues';
+const MILESTONES_SHEET = 'G-Milestones';
+const ISSUES_SHEET = 'G-Issues';
 const DASHBOARD_SHEET = 'Dashboard';
 
-// This function loads the credentials from the environment variable
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
-
   const auth = new google.auth.GoogleAuth({
     credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-
   return auth;
 }
 
-async function getSelectedMilestones(sheets, sheetId) {
-  // Fetch selected milestones from G4:G of G-Milestones sheet
+async function getTeamSheetIds(sheets) {
   const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `${G_MILESTONES}!G4:G`, // Range for selected milestones
+    spreadsheetId: UTILS_SHEET_ID,
+    range: 'UTILS!B2:B',
   });
+  return data.values?.flat().filter(Boolean) || [];
+}
 
-  return data.values.flat().filter(Boolean); // Flatten and filter out any empty values
+async function getSelectedMilestones(sheets, teamSheetId) {
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: teamSheetId,
+    range: `${MILESTONES_SHEET}!G4:G`,
+  });
+  return data.values?.flat().filter(Boolean) || [];
 }
 
 async function getAllIssues(sheets) {
-  try {
-    const { data } = await sheets.spreadsheets.values.get({
-      spreadsheetId: UTILS_SHEET_ID,
-      range: `${ALL_ISSUES_SHEET}!C4:N`, // Adjust range to fetch C4:N data
-    });
-
-    if (!data.values || data.values.length === 0) {
-      throw new Error(`No data found in range ${ALL_ISSUES_SHEET}!C4:N`);
-    }
-
-    return data.values;
-  } catch (err) {
-    console.error(`❌ Error fetching ALL ISSUES: ${err.message}`);
-    throw err; // Rethrow the error to halt further execution
-  }
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: UTILS_SHEET_ID,
+    range: `${ALL_ISSUES_SHEET}!C4:N`,
+  });
+  return data.values || [];
 }
 
-async function clearSheet(sheets, sheetId) {
-  // Clear the existing sheet data
+async function filterIssuesByMilestones(issues, milestones) {
+  return issues.filter(row => milestones.includes(row[6])); // Index 6 = column I
+}
+
+async function clearIssuesSheet(sheets, teamSheetId) {
   await sheets.spreadsheets.values.clear({
-    spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4:N`, // Adjust as per your sheet structure
+    spreadsheetId: teamSheetId,
+    range: `${ISSUES_SHEET}!C4:N`,
   });
 }
 
-async function insertData(sheets, sheetId, data) {
-  // Insert the processed data
+async function insertIssues(sheets, teamSheetId, data) {
+  if (!data.length) return;
   await sheets.spreadsheets.values.update({
-    spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4`, // Adjust as per your sheet structure
+    spreadsheetId: teamSheetId,
+    range: `${ISSUES_SHEET}!C4`,
     valueInputOption: 'RAW',
-    requestBody: {
-      values: data,
-    },
+    requestBody: { values: data },
   });
 }
 
-async function updateTimestamp(sheets, sheetId) {
-  // Update the timestamp for when the sheet was processed
+async function updateTimestamp(sheets, teamSheetId) {
   const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
-    spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!A1`, // Adjust as per your sheet structure
+    spreadsheetId: teamSheetId,
+    range: `${DASHBOARD_SHEET}!A1`,
     valueInputOption: 'RAW',
-    requestBody: {
-      values: [[timestamp]],
-    },
+    requestBody: { values: [[timestamp]] },
   });
 }
 
 async function main() {
   try {
-    // Authenticate using the service account credentials
     const auth = await authenticate();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Check available sheets and ranges
-    const metadata = await sheets.spreadsheets.get({
-      spreadsheetId: UTILS_SHEET_ID,
-    });
-    console.log(metadata); // Log metadata to check sheet names
+    const teamSheetIds = await getTeamSheetIds(sheets);
+    const allIssues = await getAllIssues(sheets);
 
-    // Fetch list of spreadsheet IDs from UTILS sheet
-    const { data } = await sheets.spreadsheets.values.get({
-      spreadsheetId: UTILS_SHEET_ID,
-      range: `${UTILS_SHEET_ID}!B2:B`,
-    });
-
-    const sheetIds = data.values.flat().filter(Boolean);
-
-    for (const sheetId of sheetIds) {
+    for (const teamSheetId of teamSheetIds) {
       try {
-        // Fetch selected milestones and issues data
-        const [milestones, issuesData] = await Promise.all([
-          getSelectedMilestones(sheets, sheetId),
-          getAllIssues(sheets),
-        ]);
+        const milestones = await getSelectedMilestones(sheets, teamSheetId);
+        const filtered = await filterIssuesByMilestones(allIssues, milestones);
 
-        console.log('Selected Milestones:', milestones); // Debugging log
-        console.log('All Issues Data:', issuesData); // Debugging log
+        // Prepare only columns C to N (indexes 0 to 11)
+        const processed = filtered.map(row => row.slice(0, 12));
 
-        // Filter issues based on the selected milestones from column I
-        const filtered = issuesData.filter(row =>
-          milestones.includes(row[6]) // Column I (index 6) has the milestone name
-        );
+        await clearIssuesSheet(sheets, teamSheetId);
+        await insertIssues(sheets, teamSheetId, processed);
+        await updateTimestamp(sheets, teamSheetId);
 
-        console.log('Filtered Issues:', filtered); // Debugging log
-
-        // Process data for insertion into the sheet (columns C4:N)
-        const processedData = filtered.map(row => [
-          row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10]
-        ]);
-
-        console.log('Processed Data:', processedData); // Debugging log
-
-        // Clear the sheet, insert the processed data, and update the timestamp
-        await clearSheet(sheets, sheetId);
-        await insertData(sheets, sheetId, processedData);
-        await updateTimestamp(sheets, sheetId);
-        console.log(`✔ Processed sheet: ${sheetId}`);
+        console.log(`✔ Processed: ${teamSheetId}`);
       } catch (err) {
-        console.error(`❌ Failed to process ${sheetId}: ${err.message}`);
+        console.error(`❌ Error processing ${teamSheetId}: ${err.message}`);
       }
     }
   } catch (err) {
-    console.error(`❌ Main processing failed: ${err.message}`);
+    console.error(`❌ Main failure: ${err.message}`);
   }
 }
 
