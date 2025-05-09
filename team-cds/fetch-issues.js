@@ -8,6 +8,7 @@ const DASHBOARD_SHEET = 'Dashboard';
 
 const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
 const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
+const ALL_ISSUES_HYPERLINKS_RANGE = 'ALL ISSUES!E4:E'; // Range to pull hyperlinks from
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -51,14 +52,15 @@ async function getAllIssues(sheets) {
     throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
   }
 
-  // Process hyperlinks from column E
-  return data.values.map(row => {
-    const hyperlink = row[4]; // Assuming E is the 5th column (index 4)
-    const text = hyperlink && hyperlink.match(/<a[^>]*>(.*?)<\/a>/);
-    return {
-      row: row.slice(0, 11), // C to N → index 0 to 10
-      hyperlink: text ? text[1] : hyperlink // Extract text or use hyperlink as is
-    };
+  const hyperlinksData = await sheets.spreadsheets.values.get({
+    spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
+    range: ALL_ISSUES_HYPERLINKS_RANGE,
+  });
+
+  // Combine issues data with hyperlinks
+  return data.values.map((row, index) => {
+    const hyperlink = hyperlinksData.data.values[index] ? hyperlinksData.data.values[index][0] : '';
+    return [...row, hyperlink]; // Append hyperlink to the row
   });
 }
 
@@ -70,10 +72,16 @@ async function clearGIssues(sheets, sheetId) {
 }
 
 async function insertDataToGIssues(sheets, sheetId, data) {
-  const formattedData = data.map(item => {
-    const row = item.row;
-    const hyperlink = item.hyperlink ? [{ userEnteredValue: { stringValue: hyperlink }, userEnteredFormat: { textFormat: { foregroundColor: { red: 0, green: 0, blue: 1 }, underline: true } }, hyperlink: item.hyperlink }] : [];
-    return [...row, ...hyperlink];
+  const formattedData = data.map(row => {
+    const hyperlink = row.pop(); // Remove hyperlink from the end
+    if (hyperlink) {
+      row.push({
+        userEnteredValue: { stringValue: row[0] }, // Assuming the first column is the display text
+        userEnteredFormat: { textFormat: { foregroundColor: { red: 0, green: 0, blue: 1 }, underline: true } },
+        hyperlink: hyperlink // Add the hyperlink
+      });
+    }
+    return row;
   });
 
   await sheets.spreadsheets.values.update({
@@ -130,10 +138,11 @@ async function main() {
           getAllIssues(sheets),
         ]);
 
-        const filtered = issuesData.filter(item => milestones.includes(item.row[6])); // Column I (index 6)
-        
+        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
+        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
+
         await clearGIssues(sheets, sheetId);
-        await insertDataToGIssues(sheets, sheetId, filtered);
+        await insertDataToGIssues(sheets, sheetId, processedData);
         await updateTimestamp(sheets, sheetId);
 
         console.log(`✅ Finished: ${sheetId}`);
