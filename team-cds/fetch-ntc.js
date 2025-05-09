@@ -3,7 +3,7 @@ import { google } from 'googleapis';
 // Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const G_MILESTONES = 'G-Milestones';
-const NTC_SHEET = 'NTC';  // Change to target the NTC sheet
+const NTC_SHEET = 'NTC';  // Target NTC sheet
 const DASHBOARD_SHEET = 'Dashboard';
 
 const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
@@ -62,6 +62,10 @@ async function clearNTCSheet(sheets, sheetId) {
 }
 
 async function insertDataToNTCSheet(sheets, sheetId, data) {
+  if (data.length === 0) {
+    console.log("No data to insert.");
+    return; // Skip insertion if no data
+  }
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${NTC_SHEET}!C4`,
@@ -116,19 +120,28 @@ async function main() {
           getAllIssues(sheets),
         ]);
 
-        const filtered = issuesData.filter(row => 
-          milestones.includes(row[6]) && // Column G (index 6) for selected milestone
-          (row[7].includes("Needs Test Case") || row[7].includes("Needs Test Scenario") || row[7].includes("Test Case Needs Update"))
-        );
+        // Filter issues based on milestones and label conditions
+        const filtered = issuesData.filter(row => {
+          const milestoneMatches = milestones.includes(row[6]); // Column G (index 6) for selected milestone
+          const labels = row[7]?.split(',').map(label => label.trim()) || []; // Column H (index 7)
+          const labelsMatch = labels.some(label => 
+            ["Needs Test Case", "Needs Test Scenario", "Test Case Needs Update"].includes(label)
+          );
+          return milestoneMatches && labelsMatch;
+        });
 
-        // Map filtered data to C4:N (columns C to N)
-        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
+        if (filtered.length > 0) {
+          // Map filtered data to C4:N (columns C to N)
+          const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
 
-        await clearNTCSheet(sheets, sheetId);
-        await insertDataToNTCSheet(sheets, sheetId, processedData);
-        await updateTimestamp(sheets, sheetId);
+          await clearNTCSheet(sheets, sheetId);
+          await insertDataToNTCSheet(sheets, sheetId, processedData);
+          await updateTimestamp(sheets, sheetId);
 
-        console.log(`✅ Finished: ${sheetId}`);
+          console.log(`✅ Finished: ${sheetId}`);
+        } else {
+          console.log(`⚠️ No matching data for ${sheetId}`);
+        }
       } catch (err) {
         console.error(`❌ Error processing ${sheetId}: ${err.message}`);
       }
