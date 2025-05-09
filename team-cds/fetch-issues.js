@@ -41,45 +41,41 @@ async function getSelectedMilestones(sheets, sheetId) {
   return data.values?.flat().filter(Boolean) || [];
 }
 
+// 🔄 Get issue data with hyperlinks preserved
 async function getAllIssues(sheets) {
-  const { data } = await sheets.spreadsheets.get({
+  const res = await sheets.spreadsheets.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
     ranges: [ALL_ISSUES_RANGE],
     includeGridData: true,
+    fields: 'sheets.data.rowData.values(userEnteredValue,formattedValue,hyperlink)',
   });
 
-  const gridData = data.sheets?.[0]?.data?.[0]?.rowData || [];
-  if (gridData.length === 0) {
-    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
-  }
+  const rows = res.data.sheets?.[0]?.data?.[0]?.rowData || [];
 
-  // Extract values with hyperlinks preserved
-  const values = gridData.map(row => {
-    return (row.values || []).slice(0, 11).map(val => {
-      const link = val?.hyperlink;
-      const display = val?.formattedValue || '';
-
+  return rows.map(row =>
+    (row.values || []).map(cell => {
+      const val = cell?.userEnteredValue;
+      const link = cell?.hyperlink;
       if (link) {
-        return display.trim() !== link.trim()
-          ? `=HYPERLINK("${link}", "${display}")`
-          : link;
+        const display = val?.stringValue || link;
+        return `=HYPERLINK("${link}", "${display}")`;
       }
-
-      return display;
-    });
-  });
-
-  return values;
+      if (val?.stringValue) return val.stringValue;
+      if (val?.numberValue != null) return val.numberValue;
+      if (val?.boolValue != null) return val.boolValue;
+      return '';
+    })
+  );
 }
 
-async function clearGIssues(sheets, sheetId) {
+async function clearIssues(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4:N`,
   });
 }
 
-async function insertDataToGIssues(sheets, sheetId, data) {
+async function insertDataToIssues(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4`,
@@ -127,15 +123,16 @@ async function main() {
           continue;
         }
 
-        const [milestones, allIssues] = await Promise.all([
+        const [milestones, issuesData] = await Promise.all([
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
         ]);
 
-        const filtered = allIssues.filter(row => milestones.includes(row[6])); // Column I (index 6)
+        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
+        const processedData = filtered.map(row => row.slice(0, 11)); // C to N
 
-        await clearGIssues(sheets, sheetId);
-        await insertDataToGIssues(sheets, sheetId, filtered);
+        await clearIssues(sheets, sheetId);
+        await insertDataToIssues(sheets, sheetId, processedData);
         await updateTimestamp(sheets, sheetId);
 
         console.log(`✅ Finished: ${sheetId}`);
