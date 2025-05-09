@@ -5,6 +5,7 @@ const sheetData = JSON.parse(process.env.SHEET_DATA);
 async function main() {
   const spreadsheetUrl = sheetData.spreadsheetUrl;
   const spreadsheetId = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
+
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
   const auth = new google.auth.GoogleAuth({
@@ -25,6 +26,7 @@ async function main() {
 
       const sheetMeta = metadata.data.sheets.find(s => s.properties.title === name);
       const sheetId = sheetMeta.properties.sheetId;
+
       const range = `'${name}'!E12:F`;
       const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
       const rows = res.data.values || [];
@@ -33,66 +35,67 @@ async function main() {
       const mergedRanges = sheetMeta.merges || [];
       const requests = [];
 
-      const mergedMap = new Map();
+      // Track merged ranges in E-F to handle unmerge
       const toUnmerge = [];
+      const mergedMap = new Map();
 
-      // 1. Identify merged ranges in F column and determine which to unmerge or preserve
       for (const merge of mergedRanges) {
         const { startRowIndex, endRowIndex, startColumnIndex, endColumnIndex } = merge;
-        if (startColumnIndex === 5 && endColumnIndex === 6 && startRowIndex >= 11) {
-          const isEmpty = [...Array(endRowIndex - startRowIndex)].every((_, i) => {
-            const row = rows[startRowIndex - 12 + i];
-            return !(row && row[1] && row[1].trim());
-          });
+        if (startRowIndex >= 11 && startColumnIndex === 4 && endColumnIndex >= 6) {
+          const mergeStart = startRowIndex;
+          const mergeEnd = endRowIndex;
+          let isEmpty = true;
+
+          for (let r = mergeStart - 12; r < mergeEnd - 12; r++) {
+            if (rows[r] && rows[r][1] && rows[r][1].trim()) {
+              isEmpty = false;
+              break;
+            }
+          }
 
           if (isEmpty) {
-            toUnmerge.push({ ...merge, sheetId });
+            toUnmerge.push(merge);
           } else {
-            mergedMap.set(startRowIndex, endRowIndex);
+            mergedMap.set(mergeStart, mergeEnd);
           }
         }
       }
 
-      // 2. Unmerge the empty ranges in column F and apply borders to E
+      // Unmerge only empty merged cells
       for (const merge of toUnmerge) {
-        requests.push({ unmergeCells: { range: merge } });
-        for (let r = merge.startRowIndex; r < merge.endRowIndex; r++) {
-          requests.push({
-            updateBorders: {
-              range: {
-                sheetId,
-                startRowIndex: r,
-                endRowIndex: r + 1,
-                startColumnIndex: 4,
-                endColumnIndex: 5
-              },
-              top:    { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-              bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-              left:   { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-              right:  { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
-            }
-          });
-        }
+        requests.push({
+          unmergeCells: { range: { ...merge, sheetId } }
+        });
+
+        // Add black border to newly unmerged empty merged ranges
+        requests.push({
+          updateBorders: {
+            range: { ...merge, sheetId },
+            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+          }
+        });
       }
 
-      // 3. Write numbering to column E and prepare new merge requests if F is merged
-      const values = [];
+      // Prepare numbering and merges
+      const values = Array(rows.length).fill(['']);
       let row = 0;
       let number = 1;
 
       while (row < rows.length) {
-        const absRow = startRow + row;
+        const absRow = row + startRow;
         const fCell = (rows[row] && rows[row][1] || '').trim();
         const isMerged = mergedMap.has(absRow);
         const mergeEnd = isMerged ? mergedMap.get(absRow) : absRow + 1;
         const mergeLength = mergeEnd - absRow;
 
         if (fCell) {
-          // Write number in top of merged block
-          values[absRow - startRow] = [number.toString()];
-
-          // Merge E-cell block to match F-cell merge if needed
-          if (mergeLength > 1) {
+          values[row] = [number.toString()];
+          if (isMerged) {
+            // Already merged, skip re-merging
+          } else if (mergeLength > 1) {
             requests.push({
               mergeCells: {
                 range: {
@@ -100,25 +103,19 @@ async function main() {
                   startRowIndex: absRow,
                   endRowIndex: mergeEnd,
                   startColumnIndex: 4,
-                  endColumnIndex: 5
+                  endColumnIndex: 5,
                 },
                 mergeType: 'MERGE_ALL'
               }
             });
           }
-
           number++;
         }
 
         row += mergeLength;
       }
 
-      // 4. Fill in empty values in between (with empty strings)
-      for (let i = 0; i < rows.length; i++) {
-        if (!values[i]) values[i] = [''];
-      }
-
-      // 5. Update sheet values
+      // Write numbers to E12:E
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: `'${name}'!E12:E${startRow + values.length - 1}`,
@@ -126,7 +123,6 @@ async function main() {
         requestBody: { values },
       });
 
-      // 6. Apply all requests (unmerge, border, merge)
       if (requests.length > 0) {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
@@ -137,7 +133,7 @@ async function main() {
       console.log(`✅ Updated: ${name}`);
     }
   } catch (err) {
-    console.error('❌ ERROR:', err.message || err);
+    console.error('❌ ERROR:', err);
     process.exit(1);
   }
 }
