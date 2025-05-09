@@ -48,19 +48,20 @@ async function main() {
       let row = 0;
       while (row < rows.length) {
         const cellF = (rows[row][1] || '').trim();
-        const absRow = row + startRow;
-        const mergeEnd = mergedMap.get(absRow);
 
         if (cellF) {
+          const absRow = row + startRow;
+          const mergeEnd = mergedMap.get(absRow);
+
           if (mergeEnd) {
-            const mergeLength = mergeEnd - absRow + 1; // Include end row
+            const mergeLength = mergeEnd - absRow;
             values[row] = [number.toString()];
             requests.push({
               mergeCells: {
                 range: {
                   sheetId: sheetMeta.properties.sheetId,
                   startRowIndex: absRow,
-                  endRowIndex: mergeEnd + 1,
+                  endRowIndex: mergeEnd,
                   startColumnIndex: 4,
                   endColumnIndex: 5
                 },
@@ -72,43 +73,10 @@ async function main() {
             values[row] = [number.toString()];
             row += 1;
           }
+
           number++;
         } else {
-          if (mergeEnd) {
-            // Unmerge if F is empty but was previously merged
-            requests.push({
-              unmergeCells: {
-                range: {
-                  sheetId: sheetMeta.properties.sheetId,
-                  startRowIndex: absRow,
-                  endRowIndex: mergeEnd + 1,
-                  startColumnIndex: 5,
-                  endColumnIndex: 6
-                }
-              }
-            });
-            // Apply borders to the unmerged cells
-            for (let i = absRow; i <= mergeEnd; i++) {
-              requests.push({
-                updateBorders: {
-                  range: {
-                    sheetId: sheetMeta.properties.sheetId,
-                    startRowIndex: i,
-                    endRowIndex: i + 1,
-                    startColumnIndex: 5,
-                    endColumnIndex: 6
-                  },
-                  top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-                  bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-                  left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-                  right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-                }
-              });
-            }
-            row = mergeEnd - absRow + 1; // Move to the end of the merged cells
-          } else {
-            row += 1;
-          }
+          row += 1;
         }
       }
 
