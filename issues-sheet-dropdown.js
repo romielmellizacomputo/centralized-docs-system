@@ -1,12 +1,9 @@
-// issues-sheet-dropdown.js
-
 const { google } = require('googleapis');
 const fetch = require('node-fetch'); // Use global fetch if on Node 18+
 
 const skipSheets = ['ToC', 'Issues', 'Roster'];
 const ISSUES_SHEET = 'Issues';
 const DROPDOWN_RANGE = 'K3:K';
-const webAppUrl = 'https://script.google.com/macros/s/AKfycbzR3hWvfItvEOKjadlrVRx5vNTz4QH04WZbz2ufL8fAdbiZVsJbkzueKfmMCfGsAO62/exec';
 
 async function refreshDropdown() {
   const sheetData = JSON.parse(process.env.SHEET_DATA);
@@ -104,16 +101,6 @@ async function refreshDropdown() {
     });
 
     console.log('Hyperlinks added successfully.');
-
-    // 4. Notify web app
-    const postRes = await fetch(webAppUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sheetUrl: sheetData.spreadsheetUrl })
-    });
-
-    if (!postRes.ok) throw new Error(`Web app POST failed: ${postRes.statusText}`);
-    console.log('Posted to web app successfully.');
 
   } catch (err) {
     console.error('Error refreshing dropdown:', err.message);
