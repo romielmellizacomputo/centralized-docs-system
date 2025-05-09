@@ -1,7 +1,6 @@
 import { google } from 'googleapis';
 
 const TEAM_CDS_SERVICE_ACCOUNT_JSON = process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON;
-
 const GITLAB_ROOT_URL = 'https://forge.bposeats.com/';
 const PROJECT_URLS_MAP = {
   155: `${GITLAB_ROOT_URL}bposeats/hqzen.com`,
@@ -25,7 +24,6 @@ const PROJECT_NAME_ID_MAP = {
   'BPOSeats.com': 89
 };
 
-// List of sheets to process
 const sheetsToProcess = [
   { name: 'NTC', projectColumn: 'N', iidColumn: 'D', titleColumn: 'E', urlType: 'issues' },
   { name: 'G-Issues', projectColumn: 'N', iidColumn: 'D', titleColumn: 'E', urlType: 'issues' },
@@ -48,7 +46,7 @@ async function convertTitlesToHyperlinks() {
   const sheets = google.sheets({ version: 'v4', auth });
 
   try {
-    const masterSheetId = masterSheetUrl.split('/d/')[1]?.split('/')[0]; // Safe splitting
+    const masterSheetId = masterSheetUrl.split('/d/')[1]?.split('/')[0];
     if (!masterSheetId) {
       console.error('Invalid master sheet URL.');
       return;
@@ -58,15 +56,13 @@ async function convertTitlesToHyperlinks() {
       range: 'UTILS!B2:B', // Replace with actual range if needed
     });
 
-    const urls = res.data.values?.flat()?.filter(url => url); // Ensure no empty URLs
+    const urls = res.data.values?.flat()?.filter(url => url);
 
-    // Check if the URLs array is valid and contains data
     if (!urls || urls.length === 0) {
       console.error('No valid URLs found.');
       return;
     }
 
-    // Process each sheet ID in the list
     for (let sheetId of urls) {
       if (!sheetId) {
         console.log('Skipping invalid or empty sheet ID');
@@ -74,13 +70,12 @@ async function convertTitlesToHyperlinks() {
       }
 
       try {
-        const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`; // Create full URL
+        const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
         const doc = await sheets.spreadsheets.values.get({
           spreadsheetId: sheetId,
-          range: 'Sheet1!A1:Z1000', // Adjust range if necessary
+          range: 'Sheet1', // Fetch the entire sheet
         });
 
-        // If no data returned, log the issue
         if (!doc.data.values || doc.data.values.length === 0) {
           console.error(`No data found for sheet ID ${sheetId}`);
           continue;
@@ -113,36 +108,32 @@ function convertSheetTitlesToHyperlinks(sheet, lastRow, projectColumn, iidColumn
   const iidColumnIndex = iidColumn.charCodeAt(0) - 65;
   const titleColumnIndex = titleColumn.charCodeAt(0) - 65;
 
-  const titles = sheet.slice(3, lastRow).map(row => row[titleColumnIndex]); // Get titles
-  const projectNames = sheet.slice(3, lastRow).map(row => row[projectColumnIndex]); // Get project names
-  const iids = sheet.slice(3, lastRow).map(row => row[iidColumnIndex]); // Get iids
-
   const hyperlinks = [];
 
-  for (let i = 0; i < titles.length; i++) {
-    const title = titles[i];
-    const projectName = projectNames[i];
-    const iid = iids[i];
+  // Start from row 4 (index 3) and process only non-empty column E
+  for (let i = 3; i < lastRow; i++) {
+    const title = sheet[i][titleColumnIndex];
+    const projectName = sheet[i][projectColumnIndex];
+    const iid = sheet[i][iidColumnIndex];
 
     if (title && iid && !title.includes("http")) {
       const projectId = PROJECT_NAME_ID_MAP[projectName];
       if (projectId && PROJECT_URLS_MAP[projectId]) {
         const hyperlink = `${PROJECT_URLS_MAP[projectId]}/-/${urlType}/${iid}`;
-        const escapedTitle = title.replace(/"/g, '""'); // Escape double quotes in title
-        hyperlinks.push([`=HYPERLINK("${hyperlink}", "${escapedTitle}")`]); // Create hyperlink
+        const escapedTitle = title.replace(/"/g, '""');
+        hyperlinks.push([`=HYPERLINK("${hyperlink}", "${escapedTitle}")`]);
       } else {
-        hyperlinks.push([title]); // If no matching project URL, keep the title as plain text
+        hyperlinks.push([title]); 
       }
     } else {
-      hyperlinks.push([title]); // If no title or URL, keep the title as plain text
+      hyperlinks.push([title]);
     }
   }
 
-  // Log the hyperlinks for the specified sheetId
   console.log(`Processing sheet ID ${sheetId} with hyperlinks:`, hyperlinks);
 
-  // Update sheet with hyperlinks in the relevant column (adjust as per your sheet's setup)
-  // For example: sheet.getRange(4, 5, hyperlinks.length, 1).setValues(hyperlinks); 
+  // Update sheet with hyperlinks (adjust per sheet setup)
+  // e.g., sheet.getRange(4, 5, hyperlinks.length, 1).setValues(hyperlinks); 
 }
 
 convertTitlesToHyperlinks();
