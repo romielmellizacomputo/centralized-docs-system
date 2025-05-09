@@ -14,18 +14,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
           node-version: '14'
 
+      - name: Install Dependencies
+        run: npm install google-spreadsheet
+
       - name: Run Auto Number Script
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }} # Use the new secret for credentials
         run: |
           const { GoogleSpreadsheet } = require('google-spreadsheet');
 
           async function autoNumberSteps(sheetData) {
-            const doc = new GoogleSpreadsheet('YOUR_SHEET_ID'); // Replace with your sheet ID
-            await doc.useServiceAccountAuth(require('./path/to/your/credentials.json')); // Set up Google API credentials
+            const doc = new GoogleSpreadsheet(sheetData.sheetId); // Access the spreadsheet by ID
+            await doc.useServiceAccountAuth(JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON)); // Authenticate using the new credentials
 
             await doc.loadInfo(); // Load document properties and worksheets
             const sheet = doc.sheetsByTitle[sheetData.sheetName]; // Get the sheet by name
