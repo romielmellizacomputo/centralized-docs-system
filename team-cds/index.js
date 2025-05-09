@@ -22,10 +22,10 @@ async function getSheetTitles(sheets, spreadsheetId) {
   return titles;
 }
 
-async function getAllTeamCDSUrls(sheets) {
+async function getAllTeamCDSSheetIds(sheets) {
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: UTILS_SHEET_ID,
-    range: 'B2:B',
+    range: 'UTILS!B2:B',
   });
   return data.values?.flat().filter(Boolean) || [];
 }
@@ -39,7 +39,7 @@ async function getSelectedMilestones(sheets, sheetId) {
 }
 
 async function getAllIssues(sheets) {
-  const range = `'ALL ISSUES'!C4:N`; // Wrap name in quotes to be safe
+  const range = `'ALL TICKETS'!C4:N`;
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: UTILS_SHEET_ID,
     range,
@@ -83,17 +83,16 @@ async function main() {
     const auth = await authenticate();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // List available sheets in UTILS
+    // Confirm correct sheet titles
     await getSheetTitles(sheets, UTILS_SHEET_ID);
 
-    // Get list of all Team CDS URLs
-    const sheetIds = await getAllTeamCDSUrls(sheets);
+    // Get list of Google Sheet IDs from UTILS!B2:B
+    const sheetIds = await getAllTeamCDSSheetIds(sheets);
     if (!sheetIds.length) {
-      console.error('❌ No Team CDS sheet URLs found in UTILS B2:B');
+      console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
       return;
     }
 
-    // Process each sheet ID
     for (const sheetId of sheetIds) {
       try {
         console.log(`🔄 Processing: ${sheetId}`);
@@ -104,9 +103,7 @@ async function main() {
 
         const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
 
-        const processedData = filtered.map(row =>
-          row.slice(0, 11) // C to N → index 0 to 10
-        );
+        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
