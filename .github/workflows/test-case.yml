@@ -26,5 +26,5 @@ jobs:
         run: node autonumber.js
         env:
           SHEET_URL: ${{ github.event.inputs.spreadsheetUrl }}
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
 
