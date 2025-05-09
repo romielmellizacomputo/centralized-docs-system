@@ -6,19 +6,19 @@ const sheetData = JSON.parse(process.env.SHEET_DATA);
 async function main() {
   const spreadsheetUrl = sheetData.spreadsheetUrl;
   const spreadsheetId = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
-
+  
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
   const auth = new google.auth.GoogleAuth({
     credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
   });
 
   const sheets = google.sheets({ version: 'v4', auth });
 
   try {
     const metadata = await sheets.spreadsheets.get({ spreadsheetId });
-    const sheetNames = metadata.data.sheets.map((s) => s.properties.title);
+    const sheetNames = metadata.data.sheets.map(s => s.properties.title);
     const skip = ['ToC', 'Roster', 'Issues'];
 
     const requests = [];
@@ -31,51 +31,49 @@ async function main() {
       const rows = res.data.values || [];
 
       let num = 1;
-      const values = rows.map(([_, f]) => [(f || '').trim() ? num++ : '']);
 
-      // Request for updating values in the E column
-      requests.push({
-        updateCells: {
-          range: {
-            sheetId: metadata.data.sheets.find((s) => s.properties.title === name).properties.sheetId,
-            startRowIndex: 11,
-            endRowIndex: 11 + values.length,
-            startColumnIndex: 4,
-            endColumnIndex: 5,
-          },
-          rows: values.map((value) => ({
-            values: [
-              {
-                userEnteredValue: {
-                  stringValue: value[0].toString(),
-                },
-              },
-            ],
-          })),
-          fields: 'userEnteredValue',
-        },
-      });
-
-      // Logic to unmerge cells in the E and F columns if necessary
       for (let i = 0; i < rows.length; i++) {
         const eCell = rows[i][0];
         const fCell = rows[i][1];
 
-        if (!fCell || !fCell.trim()) {
-          // If F column is empty, unmerge E column cells
+        // Ensure the cells are not undefined or null before using trim
+        const eCellTrimmed = eCell ? eCell.trim() : '';
+        const fCellTrimmed = fCell ? fCell.trim() : '';
+
+        // Auto number logic
+        const updatedValue = (fCellTrimmed || '') ? num++ : '';
+
+        // Update the E column with auto-numbering or empty if no data in F
+        requests.push({
+          updateCells: {
+            rows: [{
+              values: [{
+                userEnteredValue: { stringValue: updatedValue.toString() }
+              }]
+            }],
+            fields: "userEnteredValue",
+            start: {
+              sheetId: metadata.data.sheets.find((s) => s.properties.title === name).properties.sheetId,
+              rowIndex: 11 + i,
+              columnIndex: 4
+            }
+          }
+        });
+
+        // If F column is empty, unmerge E column cells
+        if (!fCellTrimmed) {
           requests.push({
-            mergeCells: {
+            unmergeCells: {
               range: {
                 sheetId: metadata.data.sheets.find((s) => s.properties.title === name).properties.sheetId,
                 startRowIndex: 11 + i,
                 endRowIndex: 12 + i,
                 startColumnIndex: 4,
                 endColumnIndex: 5,
-              },
-              mergeType: 'MERGE_UNDEFINED', // Unmerge cells
-            },
+              }
+            }
           });
-        } else if (eCell.trim() && fCell.trim()) {
+        } else if (eCellTrimmed && fCellTrimmed) {
           // If F column has data, ensure E column is merged appropriately
           if (i + 1 < rows.length && rows[i + 1][1].trim()) {
             requests.push({
@@ -87,21 +85,22 @@ async function main() {
                   startColumnIndex: 4,
                   endColumnIndex: 5,
                 },
-                mergeType: 'MERGE_ALL', // Merge the E cells when F has data
-              },
+                mergeType: 'MERGE_ALL' // Merge the E cells when F has data
+              }
             });
           }
         }
       }
 
-      console.log(`Updated sheet: ${name}`);
-    }
+      // Execute batch update requests
+      if (requests.length) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: { requests }
+        });
 
-    if (requests.length) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests },
-      });
+        console.log(`Updated sheet: ${name}`);
+      }
     }
   } catch (err) {
     console.error('ERROR:', err);
