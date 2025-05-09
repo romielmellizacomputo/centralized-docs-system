@@ -17,7 +17,14 @@ const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
 const PROJECT_CONFIG = {
+  155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
+  88: { name: 'ApplyBPO', sheet: 'APPLYBPO', path: 'bposeats/applybpo.com' },
+  23: { name: 'Backend', sheet: 'BACKEND', path: 'bposeats/bposeats' },
+  123: { name: 'Desktop', sheet: 'DESKTOP', path: 'bposeats/bposeats-desktop' },
+  141: { name: 'Ministry', sheet: 'MINISTRY', path: 'bposeats/ministry-vuejs' },
   147: { name: 'Scalema', sheet: 'SCALEMA', path: 'bposeats/scalema.com' },
+  89: { name: 'BPOSeats.com', sheet: 'BPOSEATS', path: 'bposeats/bposeats.com' },
+  124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
 };
 
 // Function to load service account from GitHub secret
