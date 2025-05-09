@@ -1,4 +1,6 @@
-const { google } = require('googleapis'); // Add this import for google APIs
+import { google } from 'googleapis';
+import 'dotenv/config';
+
 const GITLAB_ROOT_URL = 'https://forge.bposeats.com/';
 const PROJECT_URLS_MAP = {
   155: `${GITLAB_ROOT_URL}bposeats/hqzen.com`,
@@ -26,70 +28,73 @@ async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
   const auth = new google.auth.GoogleAuth({
     credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
   });
   return auth;
-}
-
-async function getSheetTitles(sheets, spreadsheetId) {
-  const res = await sheets.spreadsheets.get({ spreadsheetId });
-  const titles = res.data.sheets.map(sheet => sheet.properties.title);
-  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
-  return titles;
 }
 
 async function getSheetData(sheets, sheetId, range) {
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    range: range,
+    range: range
   });
   return data.values;
 }
 
-async function convertToHyperlinks(sheet, lastRow, titleColumn, projectColumn, iidColumn) {
-  const titles = sheet.getRange(`${titleColumn}4:${titleColumn}${lastRow}`).getValues();
-  const projectNames = sheet.getRange(`${projectColumn}4:${projectColumn}${lastRow}`).getValues();
-  const iids = sheet.getRange(`${iidColumn}4:${iidColumn}${lastRow}`).getValues();
+async function getSheetTitles(sheets, spreadsheetId) {
+  const res = await sheets.spreadsheets.get({ spreadsheetId });
+  return res.data.sheets.map(sheet => sheet.properties.title);
+}
 
-  const hyperlinks = [];
-
-  for (let i = 0; i < titles.length; i++) {
-    const title = titles[i][0];
-    const projectName = projectNames[i][0];
-    const iid = iids[i][0];
-
-    if (title && iid && !title.includes("http")) { // Check if title already contains a hyperlink
-      const projectId = PROJECT_NAME_ID_MAP[projectName];
-      if (projectId && PROJECT_URLS_MAP[projectId]) {
-        const hyperlink = `${PROJECT_URLS_MAP[projectId]}/-/issues/${iid}`; // Updated URL structure
-        // Escape double quotes in the title to avoid formula parse errors
-        const escapedTitle = title.replace(/"/g, '""');
-        hyperlinks.push([`=HYPERLINK("${hyperlink}", "${escapedTitle}")`]);
-      } else {
-        hyperlinks.push([title]); // Add title as is if no URL
-      }
-    } else {
-      hyperlinks.push([title]); // Skip rows with no title or IID, or already linked
-    }
+function buildHyperlink(title, projectName, iid) {
+  const projectId = PROJECT_NAME_ID_MAP[projectName];
+  const baseUrl = PROJECT_URLS_MAP[projectId];
+  if (title && iid && projectId && baseUrl && !title.includes('http')) {
+    const hyperlink = `${baseUrl}/-/merge_requests/${iid}`;
+    const escapedTitle = title.replace(/"/g, '""');
+    return `=HYPERLINK("${hyperlink}", "${escapedTitle}")`;
   }
+  return title;
+}
+
+async function convertTitlesToHyperlinks(sheetsApi, sheetId, sheetName) {
+  const titleRange = `${sheetName}!E4:E`;
+  const idRange = `${sheetName}!C4:C`;
+  const projectRange = `${sheetName}!N4:N`;
+
+  const [titles = [], ids = [], projects = []] = await Promise.all([
+    getSheetData(sheetsApi, sheetId, titleRange),
+    getSheetData(sheetsApi, sheetId, idRange),
+    getSheetData(sheetsApi, sheetId, projectRange)
+  ]);
+
+  const hyperlinks = titles.map((row, i) => {
+    const title = row[0];
+    const iid = ids[i]?.[0];
+    const project = projects[i]?.[0];
+    return [buildHyperlink(title, project, iid)];
+  });
 
   if (hyperlinks.length > 0) {
-    sheet.getRange(4, sheet.getRange(`${titleColumn}1`).getColumn(), hyperlinks.length, 1).setValues(hyperlinks);
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: titleRange,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: hyperlinks }
+    });
+    console.log(`🔗 Updated hyperlinks in ${sheetName}`);
   }
 }
 
-async function processSheets(sheets) {
-  // Define the sheets we want to process
-  const sheetsToProcess = ['NTC', 'G-Issues', 'G-MR'];
-  
-  for (const sheetName of sheetsToProcess) {
-    const sheet = sheets.getSheetByName(sheetName);
-    if (sheet) {
-      const lastRow = sheet.getLastRow();
-      if (lastRow >= 4) {
-        // Process column E4:E (hyperlinking based on project and iid)
-        await convertToHyperlinks(sheet, lastRow, 'E', 'N', 'C');
-      }
+async function processSheets(sheetsApi, sheetId) {
+  const sheetTitles = await getSheetTitles(sheetsApi, sheetId);
+  const relevantSheets = ['NTC', 'G-Issues', 'G-MR'];
+
+  for (const sheetName of relevantSheets) {
+    if (sheetTitles.includes(sheetName)) {
+      await convertTitlesToHyperlinks(sheetsApi, sheetId, sheetName);
+    } else {
+      console.warn(`⚠️ Sheet "${sheetName}" not found in ${sheetId}`);
     }
   }
 }
@@ -97,29 +102,21 @@ async function processSheets(sheets) {
 async function main() {
   try {
     const auth = await authenticate();
-    const sheets = google.sheets({ version: 'v4', auth });
+    const sheetsApi = google.sheets({ version: 'v4', auth });
 
-    // Get list of Google Sheet IDs from UTILS!B2:B
-    const sheetIds = await getSheetData(sheets, 'UTILS_SHEET_ID', 'UTILS!B2:B');
+    const utilsSheetId = process.env.UTILS_SHEET_ID;
+    const sheetIds = await getSheetData(sheetsApi, utilsSheetId, 'UTILS!B2:B');
+
     if (!sheetIds.length) {
-      console.error('❌ No Google Sheets found in UTILS!B2:B');
+      console.error('❌ No sheet IDs found in UTILS!B2:B');
       return;
     }
 
-    // Iterate over each sheet ID, process the relevant sheets (NTC, G-Issues, G-MR)
-    for (const sheetId of sheetIds) {
-      console.log(`🔄 Processing: ${sheetId}`);
-      
-      // Get sheet titles for this sheet ID
-      const sheetTitles = await getSheetTitles(sheets, sheetId);
-
-      // Check if the required sheets exist
-      if (sheetTitles.includes('NTC') && sheetTitles.includes('G-Issues') && sheetTitles.includes('G-MR')) {
-        await processSheets(sheets, sheetId);
-        console.log(`✅ Finished processing sheets for ${sheetId}`);
-      } else {
-        console.warn(`⚠️ Skipping ${sheetId} — missing one or more required sheets.`);
-      }
+    for (const [sheetId] of sheetIds) {
+      if (!sheetId) continue;
+      console.log(`📄 Processing: ${sheetId}`);
+      await processSheets(sheetsApi, sheetId);
+      console.log(`✅ Finished processing: ${sheetId}`);
     }
   } catch (err) {
     console.error(`❌ Main failure: ${err.message}`);
