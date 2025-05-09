@@ -1,42 +1,44 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 
 async function autoNumberSteps(sheetData) {
-  const doc = new GoogleSpreadsheet(sheetData.sheetId); // Access the spreadsheet by ID
-  await doc.useServiceAccountAuth(JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON)); // Authenticate using the new credentials
-
-  await doc.loadInfo(); // Load document properties and worksheets
-  const sheet = doc.sheetsByTitle[sheetData.sheetName]; // Get the sheet by name
+  const doc = new GoogleSpreadsheet(sheetData.sheetId);
+  await doc.useServiceAccountAuth(JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON));
+  
+  await doc.loadInfo();
+  const sheet = doc.sheetsByTitle[sheetData.sheetName];
 
   const rangeF = sheet.getRange("F12:F");
   const valuesF = await rangeF.getValues();
   const numRows = valuesF.length;
 
-  let lastStepNumber = 0; // Track the last assigned step number
-  for (let i = 0; i < numRows; i++) {
-    const cellF = sheet.getCell(i + 11, 5); // Column F is the 6th column (index 5)
-    const cellE = sheet.getCell(i + 11, 4); // Corresponding cell in column E (index 4)
+  let lastStepNumber = 0;
+  let currentRow = 12;
 
-    if (cellF.value) { // If F cell is not empty
+  for (let i = 0; i < numRows; i++) {
+    const cellF = sheet.getCell(currentRow - 1, 5); // Column F
+    const cellE = sheet.getCell(currentRow - 1, 4); // Column E
+
+    if (cellF.value) {
       if (!cellE.value) {
-        // If E cell is empty, assign the next step number
         lastStepNumber++;
         cellE.value = lastStepNumber;
       } else {
-        // If E cell has a value, ensure it's in sequence
         const currentStep = cellE.value;
         if (currentStep !== lastStepNumber + 1) {
           cellE.value = lastStepNumber + 1;
         }
       }
+      lastStepNumber = cellE.value;
+      currentRow++;
     } else {
-      // If cell in F is empty, clear corresponding E cell
       if (cellE.value) {
-        cellE.value = ''; // Clear the E cell
+        cellE.value = ''; // Clear E cell
       }
+      currentRow++;
     }
   }
 
-  await sheet.saveUpdatedCells(); // Save changes to the sheet
+  await sheet.saveUpdatedCells();
 }
 
 const sheetData = JSON.parse(process.env.INPUT_SHEET_DATA);
