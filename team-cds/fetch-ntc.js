@@ -123,8 +123,8 @@ async function main() {
         // Filter issues based on milestones and label conditions
         const filtered = issuesData.filter(row => {
           const milestoneMatches = milestones.includes(row[6]); // Column G (index 6) for selected milestone
-          
-          const labelsRaw = row[7] || '';  // Column H (index 7)
+
+          const labelsRaw = row[5] || '';  // Column H (index 5) for labels (H4:H)
           const labels = labelsRaw.split(',').map(label => label.trim().toLowerCase());  // Split and trim
 
           // Log to debug the raw and processed labels
