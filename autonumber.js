@@ -76,6 +76,7 @@ async function main() {
 
           number++;
         } else {
+          values[row] = ['']; // Set the value in column E to be blank when there is no data in F
           row += 1;
         }
       }
