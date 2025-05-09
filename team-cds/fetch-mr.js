@@ -7,7 +7,7 @@ const G_MR_SHEET = 'G-MR';  // Updated target sheet
 const DASHBOARD_SHEET = 'Dashboard';
 
 const CENTRAL_MR_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
-const ALL_MRS_RANGE = 'ALL MRs!C4:N'; // Updated range for MRs
+const ALL_MRS_RANGE = 'ALL MRs!C4:O'; // Updated range for MRs
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -57,7 +57,7 @@ async function getAllMRs(sheets) {
 async function clearGMR(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${G_MR_SHEET}!C4:N`,
+    range: `${G_MR_SHEET}!C4:O`,
   });
 }
 
@@ -117,7 +117,7 @@ async function main() {
         ]);
 
         const filtered = mrData.filter(row => milestones.includes(row[6])); // Column I (index 6)
-        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
+        const processedData = filtered.map(row => row.slice(0, 12)); // C to O
 
         await clearGMR(sheets, sheetId);
         await insertDataToGMR(sheets, sheetId, processedData);
