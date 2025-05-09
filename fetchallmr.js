@@ -113,7 +113,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
 
     while (true) {
       const response = await axios.get(
-        `${GITLAB_URL}api/v4/projects/${projectId}/issues?state=all&per_page=100&page=${page}`,
+        `${GITLAB_URL}api/v4/projects/${projectId}/merge_requests?state=all&per_page=100&page=${page}`,
         {
           headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
         }
