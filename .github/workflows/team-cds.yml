@@ -20,10 +20,6 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    - name: Run script
-      run: node team-cds/auto-hyperlink.js
-      env:
-        TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
 
     - name: Run script
       run: node team-cds/fetch-issues.js
