@@ -24,6 +24,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run auto unmerge script
+        run: |
+          echo "Sheet Data: ${{ github.event.inputs.sheet_data }}"
+          node unmerging-cells.js
+        env:
+          SHEET_DATA: ${{ github.event.inputs.sheet_data }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
       - name: Run autonumber script
         run: |
           echo "Sheet Data: ${{ github.event.inputs.sheet_data }}"
