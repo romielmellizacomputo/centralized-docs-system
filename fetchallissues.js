@@ -1,12 +1,13 @@
 const { google } = require('googleapis');
-const fs = require('fs');
 const axios = require('axios');
-const path = require('path');
 
-const keyFile = './service-account.json';
+// Remove fs and path since no longer required
 const GITLAB_URL = 'https://forge.bposeats.com/';
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+
+// The service account credentials are now loaded directly from GitHub Secrets
+const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
 
 const PROJECT_CONFIG = {
   155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
@@ -18,22 +19,6 @@ const PROJECT_CONFIG = {
   89: { name: 'BPOSeats.com', sheet: 'BPOSEATS', path: 'bposeats/bposeats.com' },
   124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
 };
-
-function loadServiceAccount() {
-  try {
-    const keyFilePath = path.resolve(keyFile);
-    const serviceAccount = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
-    if (serviceAccount.private_key) {
-      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-    }
-    return serviceAccount;
-  } catch (error) {
-    console.error('❌ Error loading service account:', error.message);
-    throw error;
-  }
-}
-
-const serviceAccount = loadServiceAccount();
 
 const auth = new google.auth.GoogleAuth({
   credentials: serviceAccount,
