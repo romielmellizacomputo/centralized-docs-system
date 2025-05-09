@@ -22,9 +22,9 @@ async function authenticate() {
 async function getSheetTitles(sheets, spreadsheetId) {
   try {
     const res = await sheets.spreadsheets.get({ spreadsheetId });
-    const titles = res.data.sheets.map(sheet => sheet.properties.title);
+    const titles = res.data.sheets ? res.data.sheets.map(sheet => sheet.properties.title) : [];
     console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
-    return titles || []; // Return empty array if titles are undefined
+    return titles;
   } catch (error) {
     console.error(`Error fetching sheet titles for ${spreadsheetId}:`, error);
     return []; // Return empty array in case of error
@@ -105,7 +105,11 @@ async function main() {
     const sheets = google.sheets({ version: 'v4', auth });
 
     // Confirm correct sheet titles
-    await getSheetTitles(sheets, UTILS_SHEET_ID);
+    const sheetTitles = await getSheetTitles(sheets, UTILS_SHEET_ID);
+    if (!Array.isArray(sheetTitles) || sheetTitles.length === 0) {
+      console.error('❌ No sheet titles found in UTILS sheet.');
+      return;
+    }
 
     // Get list of Google Sheet IDs from UTILS!B2:B
     const sheetIds = await getAllTeamCDSSheetIds(sheets);
@@ -120,19 +124,19 @@ async function main() {
 
         const sheetTitles = await getSheetTitles(sheets, sheetId);
 
-        // Ensure that sheetTitles is an array and contains the necessary sheets
-        if (!Array.isArray(sheetTitles) || sheetTitles.length === 0) {
-          console.warn(`⚠️ Skipping ${sheetId} — no sheet titles found`);
+        // Ensure sheetTitles is an array and contains the necessary sheets
+        if (!sheetTitles || !Array.isArray(sheetTitles) || sheetTitles.length === 0) {
+          console.warn(`⚠️ Skipping ${sheetId} — No sheet titles found.`);
           continue;
         }
 
         if (!sheetTitles.includes(G_MILESTONES)) {
-          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MILESTONES}' sheet`);
+          console.warn(`⚠️ Skipping ${sheetId} — Missing '${G_MILESTONES}' sheet.`);
           continue;
         }
 
         if (!sheetTitles.includes(NTC_SHEET)) {
-          console.warn(`⚠️ Skipping ${sheetId} — missing '${NTC_SHEET}' sheet`);
+          console.warn(`⚠️ Skipping ${sheetId} — Missing '${NTC_SHEET}' sheet.`);
           continue;
         }
 
@@ -141,6 +145,12 @@ async function main() {
           getAllIssues(sheets),
           getIssueStatuses(sheets),
         ]);
+
+        // Ensure the data arrays are defined
+        if (!Array.isArray(milestones) || !Array.isArray(issuesData) || !Array.isArray(issueStatuses)) {
+          console.error(`❌ Invalid data in one of the arrays for sheet ${sheetId}`);
+          continue;
+        }
 
         // Filter issues that match both the selected milestones and the issue statuses
         const filtered = issuesData.filter((row, index) => {
