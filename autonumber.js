@@ -1,22 +1,13 @@
 const { google } = require('googleapis');
 
+// Retrieve sheet data from environment variable
+const sheetData = JSON.parse(process.env.SHEET_DATA);
+
 async function main() {
+  const spreadsheetUrl = sheetData.spreadsheetUrl;
+  const spreadsheetId = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
+  
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-  const spreadsheetUrl = process.env.SHEET_URL;
-
-  console.log("Received Spreadsheet URL:", spreadsheetUrl);
-  if (!spreadsheetUrl) {
-    console.error("Spreadsheet URL is not defined!");
-    process.exit(1);
-  }
-
-  const match = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-  if (!match) {
-    console.error("Invalid Spreadsheet URL format.");
-    process.exit(1);
-  }
-
-  const spreadsheetId = match[1];
 
   const auth = new google.auth.GoogleAuth({
     credentials,
