@@ -9,6 +9,7 @@ const PROJECT_URLS_MAP = {
   147: `${GITLAB_ROOT_URL}bposeats/scalema.com`,
   89: `${GITLAB_ROOT_URL}bposeats/bposeats.com`
 };
+
 const PROJECT_NAME_ID_MAP = {
   'HQZen': 155,
   'Backend': 23,
@@ -59,7 +60,7 @@ async function convertTitlesToHyperlinks(sheet, lastRow, titleColumn, projectCol
     if (title && iid && !title.includes("http")) { // Check if title already contains a hyperlink
       const projectId = PROJECT_NAME_ID_MAP[projectName];
       if (projectId && PROJECT_URLS_MAP[projectId]) {
-        const hyperlink = `${PROJECT_URLS_MAP[projectId]}/-/${urlType}/${iid}`;
+        const hyperlink = `${PROJECT_URLS_MAP[projectId]}/-/issues/${iid}`; // Updated the URL structure
         // Escape double quotes in the title to avoid formula parse errors
         const escapedTitle = title.replace(/"/g, '""');
         hyperlinks.push([`=HYPERLINK("${hyperlink}", "${escapedTitle}")`]);
@@ -86,7 +87,7 @@ async function processSheets(sheets) {
       const lastRow = sheet.getLastRow();
       if (lastRow >= 4) {
         // For each of the sheets, process column E4:E (hyperlinking based on project and iid)
-        await convertTitlesToHyperlinks(sheet, lastRow, 'E', 'A', 'B', 'MR'); // Update column range and other parameters accordingly
+        await convertTitlesToHyperlinks(sheet, lastRow, 'E', 'N', 'C', 'MR'); // Update column range and other parameters accordingly
       }
     }
   }
