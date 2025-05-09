@@ -1,35 +1,8 @@
-import { google } from 'googleapis'; // Import googleapis
+import { google } from 'googleapis';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
-import * as dotenv from 'dotenv';
 
-// Load environment variables from .env file (if you use it)
-dotenv.config();
-
-// Get the directory name equivalent of __dirname in ES module
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Save the secret service account JSON to a file
-const serviceAccountJson = process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON;
-if (!serviceAccountJson) {
-  console.error('SERVICE_ACCOUNT_JSON secret not found!');
-  process.exit(1);
-}
-
-const serviceAccountPath = path.join(__dirname, 'service-account.json');
-fs.writeFileSync(serviceAccountPath, serviceAccountJson);
-
-// Google Sheets API authentication using the service account
-async function getAuthClient() {
-  const auth = new google.auth.GoogleAuth({
-    keyFile: serviceAccountPath, // Path to the service account JSON file
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-
-  return auth.getClient();
-}
+const TEAM_CDS_SERVICE_ACCOUNT_JSON = process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON; // Assumes you're setting the secret as an environment variable
 
 // URLs of the projects in GitLab
 const GITLAB_ROOT_URL = 'https://forge.bposeats.com/';
@@ -63,11 +36,20 @@ const sheetsToProcess = [
   { name: 'G-MR', projectColumn: 'O', iidColumn: 'D', titleColumn: 'E', urlType: 'merge_requests' }
 ];
 
+// Function to authenticate using the service account
+async function getAuthClient() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: JSON.parse(TEAM_CDS_SERVICE_ACCOUNT_JSON),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  });
+  const authClient = await auth.getClient();
+  return authClient;
+}
+
 // Function to convert titles to hyperlinks across sheets
 async function convertTitlesToHyperlinks() {
-  // Replace with the actual URL of the master sheet
   const masterSheetUrl = 'https://docs.google.com/spreadsheets/d/1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k/edit?gid=1536197668#gid=1536197668';
-  
+
   const auth = await getAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
 
@@ -90,27 +72,22 @@ async function convertTitlesToHyperlinks() {
       return;
     }
 
-    // Process each URL in the sheet
-    for (let url of urls) {
-      if (!url) {
-        console.log('Skipping invalid or empty URL');
+    // Process each sheet ID in the list
+    for (let sheetId of urls) {
+      if (!sheetId) {
+        console.log('Skipping invalid or empty sheet ID');
         continue;
       }
 
       try {
-        const spreadsheetId = url.split('/d/')[1]?.split('/')[0]; // Safe splitting
-        if (!spreadsheetId) {
-          console.log(`Invalid URL format: ${url}`);
-          continue;
-        }
-
+        const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`; // Create full URL
         const doc = await sheets.spreadsheets.values.get({
-          spreadsheetId,
+          spreadsheetId: sheetId,
           range: 'Sheet1!A1:Z1000', // Adjust this range to process your sheet
         });
         processSpreadsheet(doc.data.values);
       } catch (e) {
-        console.log(`Failed to open or process: ${url}, error: ${e}`);
+        console.log(`Failed to open or process sheet with ID: ${sheetId}, error: ${e}`);
       }
     }
   } catch (e) {
@@ -118,50 +95,50 @@ async function convertTitlesToHyperlinks() {
   }
 }
 
-
 // Process each spreadsheet
-function processSpreadsheet(spreadsheetData) {
+function processSpreadsheet(sheetData) {
   sheetsToProcess.forEach(sheetInfo => {
-    // You would likely want to pass in the sheet data you retrieve from each URL to process further
-    convertSheetTitlesToHyperlinks(spreadsheetData, sheetInfo);
+    const sheet = sheetData.find(sheet => sheet[0] === sheetInfo.name);
+    if (sheet) {
+      const lastRow = sheet.length;
+      if (lastRow >= 4) {
+        convertSheetTitlesToHyperlinks(sheet, lastRow, sheetInfo.projectColumn, sheetInfo.iidColumn, sheetInfo.titleColumn, sheetInfo.urlType);
+      }
+    }
   });
 }
 
 // Convert sheet titles to hyperlinks
-function convertSheetTitlesToHyperlinks(sheetData, sheetInfo) {
-  const { projectColumn, iidColumn, titleColumn, urlType } = sheetInfo;
-  
-  const hyperlinks = sheetData.map((row, index) => {
-    const title = row[titleColumn];
-    const projectName = row[projectColumn];
-    const iid = row[iidColumn];
+function convertSheetTitlesToHyperlinks(sheet, lastRow, projectColumn, iidColumn, titleColumn, urlType) {
+  const titles = sheet.slice(3, lastRow).map(row => row[titleColumn.charCodeAt(0) - 65]); // Get column based on titleColumn
+  const projectNames = sheet.slice(3, lastRow).map(row => row[projectColumn.charCodeAt(0) - 65]);
+  const iids = sheet.slice(3, lastRow).map(row => row[iidColumn.charCodeAt(0) - 65]);
+
+  const hyperlinks = [];
+
+  for (let i = 0; i < titles.length; i++) {
+    const title = titles[i];
+    const projectName = projectNames[i];
+    const iid = iids[i];
 
     if (title && iid && !title.includes("http")) {
       const projectId = PROJECT_NAME_ID_MAP[projectName];
       if (projectId && PROJECT_URLS_MAP[projectId]) {
         const hyperlink = `${PROJECT_URLS_MAP[projectId]}/-/${urlType}/${iid}`;
         const escapedTitle = title.replace(/"/g, '""'); // Escape double quotes in title
-        return [`=HYPERLINK("${hyperlink}", "${escapedTitle}")`]; // Create hyperlink
+        hyperlinks.push([`=HYPERLINK("${hyperlink}", "${escapedTitle}")`]); // Create hyperlink
       } else {
-        return [title]; // If no matching project URL, keep the title as plain text
+        hyperlinks.push([title]); // If no matching project URL, keep the title as plain text
       }
+    } else {
+      hyperlinks.push([title]); // If no title or URL, keep the title as plain text
     }
-    return [title]; // If no title or URL, keep the title as plain text
-  });
+  }
 
-  // Log the hyperlinks for now (you can use the Sheets API to update the sheet as needed)
-  console.log(hyperlinks); // Replace this with a call to update the sheet using the Sheets API
-
-  // Example: Update the sheet with hyperlinks (adjust this part to your actual sheet update logic)
-  // const updateRange = `E4:E${sheetData.length}`;
-  // await sheets.spreadsheets.values.update({
-  //   spreadsheetId: YOUR_SPREADSHEET_ID,
-  //   range: updateRange,
-  //   valueInputOption: 'RAW',
-  //   requestBody: {
-  //     values: hyperlinks,
-  //   },
-  // });
+  if (hyperlinks.length > 0) {
+    // Update sheet with hyperlinks in column E (for titles)
+    sheet.getRange(4, 5, hyperlinks.length, 1).setValues(hyperlinks); // Adjust as per your sheet's setup
+  }
 }
 
 // Call the main function to process everything
