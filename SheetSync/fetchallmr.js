@@ -77,7 +77,7 @@ async function fetchExistingMergeRequestKeys(sheets) {
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'ALL MRs!C4:N',
+      range: 'ALL MRs!C4:O',
     });
 
     const rows = res.data.values || [];
@@ -131,6 +131,8 @@ async function fetchAndUpdateMRsForAllProjects() {
         const key = `${mr.id}_${mr.iid}`;
         const existingMR = existingMRs.get(key);
 
+        const reviewers = (mr.reviewers || []).map(r => r.name).join(', ') || 'Unassigned';
+
         const mrData = [
           mr.id ?? '',
           mr.iid ?? '',
@@ -139,12 +141,13 @@ async function fetchAndUpdateMRsForAllProjects() {
             : 'No Title',
           mr.author?.name ?? 'Unknown Author',
           mr.assignee?.name ?? 'Unassigned',
+          reviewers,
           (mr.labels || []).join(', '),
           mr.milestone?.title ?? 'No Milestone',
           capitalize(mr.state ?? ''),
           mr.created_at ? formatDate(mr.created_at) : '',
+          mr.closed_at ? formatDate(mr.closed_at) : '',
           mr.merged_at ? formatDate(mr.merged_at) : '',
-          mr.merged_by?.name ?? '',
           config.name,
         ];
 
