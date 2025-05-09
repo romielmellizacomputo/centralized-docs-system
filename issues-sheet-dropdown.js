@@ -7,7 +7,7 @@ const DROPDOWN_RANGE = 'K3:K';
 
 async function refreshDropdown() {
   const sheetData = JSON.parse(process.env.SHEET_DATA);
-  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
 
   const auth = new google.auth.GoogleAuth({
     credentials,
