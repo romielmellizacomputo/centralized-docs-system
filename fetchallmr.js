@@ -4,13 +4,19 @@ const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 
-// Load env variables
-const {
-  GITLAB_URL,
-  GITLAB_TOKEN,
-  SPREADSHEET_ID,
-  GOOGLE_SERVICE_ACCOUNT_KEY_PATH,
-} = process.env;
+// Validate required env variables
+const requiredEnv = ['SERVICE_ACCOUNT_KEY_PATH', 'GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID'];
+requiredEnv.forEach((key) => {
+  if (!process.env[key]) {
+    console.error(`❌ Missing required environment variable: ${key}`);
+    process.exit(1);
+  }
+});
+
+const keyFile = process.env.SERVICE_ACCOUNT_KEY_PATH;
+const GITLAB_URL = process.env.GITLAB_URL;
+const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
 const PROJECT_CONFIG = {
   155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
@@ -25,7 +31,7 @@ const PROJECT_CONFIG = {
 
 function loadServiceAccount() {
   try {
-    const keyFilePath = path.resolve(GOOGLE_SERVICE_ACCOUNT_KEY_PATH);
+    const keyFilePath = path.resolve(keyFile);  // Corrected to use 'keyFile'
     const serviceAccount = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
     if (serviceAccount.private_key) {
       serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
