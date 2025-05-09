@@ -25,12 +25,16 @@ const PROJECT_NAME_ID_MAP = {
 };
 
 async function authenticate() {
-  const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets']
-  });
-  return auth;
+  try {
+    const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON || '');
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+    });
+    return auth;
+  } catch (err) {
+    throw new Error('❌ Failed to parse TEAM_CDS_SERVICE_ACCOUNT_JSON: ' + err.message);
+  }
 }
 
 async function getSheetData(sheets, sheetId, range) {
