@@ -35,51 +35,53 @@ async function main() {
       const mergedRanges = sheetMeta.merges || [];
       const requests = [];
 
-      // Track merged ranges in E-F to handle unmerge
-      const toUnmerge = [];
       const mergedMap = new Map();
 
+      // Handle merged cells in F column
       for (const merge of mergedRanges) {
         const { startRowIndex, endRowIndex, startColumnIndex, endColumnIndex } = merge;
-        if (startRowIndex >= 11 && startColumnIndex === 4 && endColumnIndex >= 6) {
-          const mergeStart = startRowIndex;
-          const mergeEnd = endRowIndex;
-          let isEmpty = true;
 
-          for (let r = mergeStart - 12; r < mergeEnd - 12; r++) {
-            if (rows[r] && rows[r][1] && rows[r][1].trim()) {
-              isEmpty = false;
-              break;
+        // F column index is 5, E is 4
+        if (startRowIndex >= 11 && startColumnIndex === 5 && endColumnIndex === 6) {
+          mergedMap.set(startRowIndex, endRowIndex);
+
+          // Also merge E column to match
+          requests.push({
+            mergeCells: {
+              range: {
+                sheetId,
+                startRowIndex,
+                endRowIndex,
+                startColumnIndex: 4,
+                endColumnIndex: 5,
+              },
+              mergeType: 'MERGE_ALL',
             }
-          }
+          });
 
-          if (isEmpty) {
-            toUnmerge.push(merge);
-          } else {
-            mergedMap.set(mergeStart, mergeEnd);
-          }
+          // Center alignment for E column merged cell
+          requests.push({
+            repeatCell: {
+              range: {
+                sheetId,
+                startRowIndex,
+                endRowIndex,
+                startColumnIndex: 4,
+                endColumnIndex: 5,
+              },
+              cell: {
+                userEnteredFormat: {
+                  horizontalAlignment: 'CENTER',
+                  verticalAlignment: 'MIDDLE'
+                }
+              },
+              fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment)',
+            }
+          });
         }
       }
 
-      // Unmerge only empty merged cells
-      for (const merge of toUnmerge) {
-        requests.push({
-          unmergeCells: { range: { ...merge, sheetId } }
-        });
-
-        // Add black border to newly unmerged empty merged ranges
-        requests.push({
-          updateBorders: {
-            range: { ...merge, sheetId },
-            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-            bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-          }
-        });
-      }
-
-      // Prepare numbering and merges
+      // Prepare values
       const values = Array(rows.length).fill(['']);
       let row = 0;
       let number = 1;
@@ -93,29 +95,13 @@ async function main() {
 
         if (fCell) {
           values[row] = [number.toString()];
-          if (isMerged) {
-            // Already merged, skip re-merging
-          } else if (mergeLength > 1) {
-            requests.push({
-              mergeCells: {
-                range: {
-                  sheetId,
-                  startRowIndex: absRow,
-                  endRowIndex: mergeEnd,
-                  startColumnIndex: 4,
-                  endColumnIndex: 5,
-                },
-                mergeType: 'MERGE_ALL'
-              }
-            });
-          }
           number++;
         }
 
         row += mergeLength;
       }
 
-      // Write numbers to E12:E
+      // Write values to E12:E
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: `'${name}'!E12:E${startRow + values.length - 1}`,
@@ -123,10 +109,11 @@ async function main() {
         requestBody: { values },
       });
 
+      // Apply all formatting and merging updates
       if (requests.length > 0) {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
-          requestBody: { requests }
+          requestBody: { requests },
         });
       }
 
