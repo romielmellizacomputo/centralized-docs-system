@@ -1,9 +1,7 @@
 const { google } = require('googleapis');
-const fs = require('fs');
 const axios = require('axios');
 const path = require('path');
 
-const keyFile = './service-account.json';
 const GITLAB_URL = 'https://forge.bposeats.com/';
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
@@ -19,21 +17,21 @@ const PROJECT_CONFIG = {
   124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
 };
 
-function loadServiceAccount() {
+function getServiceAccountFromGitHubSecrets() {
   try {
-    const keyFilePath = path.resolve(keyFile);
-    const serviceAccount = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
-    if (serviceAccount.private_key) {
-      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    if (!serviceAccountKey) {
+      throw new Error("Service account key not found in environment variables");
     }
+    const serviceAccount = JSON.parse(serviceAccountKey);
     return serviceAccount;
   } catch (error) {
-    console.error('❌ Error loading service account:', error.message);
+    console.error('❌ Error loading service account from GitHub secrets:', error.message);
     throw error;
   }
 }
 
-const serviceAccount = loadServiceAccount();
+const serviceAccount = getServiceAccountFromGitHubSecrets();
 
 const auth = new google.auth.GoogleAuth({
   credentials: serviceAccount,
@@ -45,17 +43,17 @@ function capitalize(str) {
 }
 
 function formatDate(dateString) {
-    if (!dateString) return '';
-    
-    const date = new Date(dateString);
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-    
-    return formatter.format(date);
+  if (!dateString) return '';
+
+  const date = new Date(dateString);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  return formatter.format(date);
 }
 
 async function fetchExistingMergeRequestKeys(sheets) {
@@ -199,6 +197,11 @@ async function fetchAndUpdateMRsForAllProjects() {
   } else {
     console.log('ℹ️ No new merge requests to insert.');
   }
+}
+
+// Run the function
+fetchAndUpdateMRsForAllProjects();
+
 }
 
 // Run the function
