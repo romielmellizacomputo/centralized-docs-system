@@ -19,14 +19,14 @@ async function main() {
   try {
     const metadata = await sheets.spreadsheets.get({ spreadsheetId });
     const sheetNames = metadata.data.sheets.map(s => s.properties.title);
-    const skip = ['ToC', 'Roster', 'Issues'];
+    const skip = ['ToC', 'Roster', 'Issues']; // Sheets to skip
 
     const requests = [];
 
     for (const name of sheetNames) {
-      if (skip.includes(name)) continue;
+      if (skip.includes(name)) continue; // Skip certain sheets
 
-      const range = `'${name}'!E12:F`;
+      const range = `'${name}'!E12:F`; // Range to fetch data from column E to F
       const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
       const rows = res.data.values || [];
 
@@ -40,10 +40,10 @@ async function main() {
         const eCellTrimmed = (eCell && eCell.trim()) || '';
         const fCellTrimmed = (fCell && fCell.trim()) || '';
 
-        // Auto number logic
+        // Auto number logic: Only increment if F cell has data
         const updatedValue = (fCellTrimmed || '') ? num++ : '';
 
-        // Update the E column with auto-numbering or empty if no data in F
+        // Prepare request to update the E column with auto-numbering or empty
         requests.push({
           updateCells: {
             rows: [{
@@ -92,7 +92,7 @@ async function main() {
         }
       }
 
-      // Execute batch update requests
+      // Execute batch update requests if there are any changes
       if (requests.length) {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
@@ -104,7 +104,7 @@ async function main() {
     }
   } catch (err) {
     console.error('ERROR:', err);
-    process.exit(1);
+    process.exit(1); // Exit with an error code if something goes wrong
   }
 }
 
