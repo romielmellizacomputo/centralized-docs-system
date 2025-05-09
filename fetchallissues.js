@@ -5,7 +5,7 @@ const axios = require('axios');
 const path = require('path');
 
 // Validate required env variables
-const requiredEnv = ['SERVICE_ACCOUNT_KEY_PATH', 'GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID'];
+const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID'];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
     console.error(`❌ Missing required environment variable: ${key}`);
@@ -13,7 +13,6 @@ requiredEnv.forEach((key) => {
   }
 });
 
-const keyFile = process.env.SERVICE_ACCOUNT_KEY_PATH;
 const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
@@ -22,18 +21,43 @@ const PROJECT_CONFIG = {
   147: { name: 'Scalema', sheet: 'SCALEMA', path: 'bposeats/scalema.com' },
 };
 
+// Function to load service account either from local file or GitHub secret
 function loadServiceAccount() {
-  try {
-    const keyFilePath = path.resolve(keyFile);
-    const serviceAccount = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
-    if (serviceAccount.private_key) {
-      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+  let serviceAccount;
+  if (process.env.GITHUB_ACTIONS) {
+    // GitHub Actions: Load from GitHub secret (GOOGLE_SERVICE_ACCOUNT_JSON)
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      try {
+        serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      } catch (error) {
+        console.error('❌ Error parsing service account JSON from GitHub secrets:', error.message);
+        throw error;
+      }
+    } else {
+      console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON GitHub secret is missing.');
+      process.exit(1);
     }
-    return serviceAccount;
-  } catch (error) {
-    console.error('❌ Error loading service account:', error.message);
-    throw error;
+  } else {
+    // Local Environment: Load from .env and service-account.json
+    const keyFile = process.env.SERVICE_ACCOUNT_KEY_PATH;
+    if (!keyFile) {
+      console.error('❌ Missing SERVICE_ACCOUNT_KEY_PATH in .env');
+      process.exit(1);
+    }
+
+    try {
+      const keyFilePath = path.resolve(keyFile);
+      serviceAccount = JSON.parse(fs.readFileSync(keyFilePath, 'utf8'));
+      if (serviceAccount.private_key) {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      }
+    } catch (error) {
+      console.error('❌ Error loading service account from service-account.json:', error.message);
+      throw error;
+    }
   }
+
+  return serviceAccount;
 }
 
 const serviceAccount = loadServiceAccount();
@@ -42,12 +66,6 @@ const auth = new google.auth.GoogleAuth({
   credentials: serviceAccount,
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
-
-// Alternative approach using environment variable for Google credentials path
-// const auth = new google.auth.GoogleAuth({
-//   keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-//   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-// });
 
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
