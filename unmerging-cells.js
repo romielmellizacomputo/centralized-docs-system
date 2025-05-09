@@ -45,13 +45,15 @@ async function main() {
       for (const merge of mergedRanges) {
         const { startRowIndex, endRowIndex, startColumnIndex, endColumnIndex } = merge;
 
-        if (startRowIndex >= 11 && startColumnIndex === 4 && endColumnIndex >= 5) {
+        // Unmerge empty merged cells in E12:E (Column 4)
+        if (startRowIndex >= 11 && startColumnIndex === 4 && endColumnIndex === 5) {
           const mergeStart = startRowIndex;
           const mergeEnd = endRowIndex;
           let isEmpty = true;
 
-          for (let r = mergeStart - 12; r < mergeEnd - 12; r++) {
-            if (rowsE[r] && rowsE[r][0] && rowsE[r][0].trim()) {
+          // Check if all cells in the merged range are empty in column E
+          for (let r = mergeStart; r < mergeEnd; r++) {
+            if (rowsE[r - 12] && rowsE[r - 12][0] && rowsE[r - 12][0].trim()) {
               isEmpty = false;
               break;
             }
@@ -62,13 +64,15 @@ async function main() {
           }
         }
 
-        if (startRowIndex >= 11 && startColumnIndex === 5 && endColumnIndex >= 6) {
+        // Unmerge empty merged cells in F12:F (Column 5)
+        if (startRowIndex >= 11 && startColumnIndex === 5 && endColumnIndex === 6) {
           const mergeStart = startRowIndex;
           const mergeEnd = endRowIndex;
           let isEmpty = true;
 
-          for (let r = mergeStart - 12; r < mergeEnd - 12; r++) {
-            if (rowsF[r] && rowsF[r][0] && rowsF[r][0].trim()) {
+          // Check if all cells in the merged range are empty in column F
+          for (let r = mergeStart; r < mergeEnd; r++) {
+            if (rowsF[r - 12] && rowsF[r - 12][0] && rowsF[r - 12][0].trim()) {
               isEmpty = false;
               break;
             }
