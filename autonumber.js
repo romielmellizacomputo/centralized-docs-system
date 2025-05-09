@@ -26,59 +26,81 @@ async function main() {
 
       const sheetMeta = metadata.data.sheets.find(s => s.properties.title === name);
       const sheetId = sheetMeta.properties.sheetId;
+      const merges = sheetMeta.merges || [];
 
       const range = `'${name}'!E12:F`;
       const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
       const rows = res.data.values || [];
       const startRow = 12;
 
-      const mergedRanges = sheetMeta.merges || [];
       const requests = [];
-
-      // Track F column merged ranges
-      const fMergedMap = new Map();
-      for (const merge of mergedRanges) {
-        const { startRowIndex, endRowIndex, startColumnIndex, endColumnIndex } = merge;
-        if (startColumnIndex === 5 && endColumnIndex === 6 && startRowIndex >= 11) {
-          fMergedMap.set(startRowIndex, endRowIndex);
-        }
-      }
-
-      // Track E column merged ranges for correction
-      const eMergedRanges = mergedRanges.filter(m =>
-        m.startColumnIndex === 4 && m.endColumnIndex === 5 && m.startRowIndex >= 11
-      );
-
       const values = Array(rows.length).fill(['']);
       let number = 1;
       let row = 0;
 
       while (row < rows.length) {
         const absRow = row + startRow;
-        const fCell = (rows[row] && rows[row][1] || '').trim();
-        const fMergeEnd = fMergedMap.get(absRow) || absRow + 1;
-        const fMergeLen = fMergeEnd - absRow;
 
-        // Check if E is wrongly merged but F isn't
-        const eMerge = eMergedRanges.find(m => absRow >= m.startRowIndex && absRow < m.endRowIndex);
-        const eMergeStart = eMerge?.startRowIndex;
-        const eMergeEnd = eMerge?.endRowIndex;
+        // Check for merge in column F
+        const fMerge = merges.find(m =>
+          m.startRowIndex === absRow - 1 &&
+          m.startColumnIndex === 5 &&
+          m.endColumnIndex === 6
+        );
 
-        if (fCell) {
+        let mergeStart = absRow;
+        let mergeEnd = absRow + 1;
+
+        if (fMerge) {
+          mergeStart = fMerge.startRowIndex + 1;
+          mergeEnd = fMerge.endRowIndex + 1;
+        }
+
+        const isMergedInF = mergeEnd > mergeStart;
+        const mergeLength = mergeEnd - mergeStart;
+
+        const fValue = (rows[row] && rows[row][1])?.trim();
+        const eValue = (rows[row] && rows[row][0])?.trim();
+
+        // Check if E is incorrectly merged or needs merging
+        const eMerge = merges.find(m =>
+          m.startRowIndex === mergeStart - 1 &&
+          m.endRowIndex === mergeEnd - 1 &&
+          m.startColumnIndex === 4 &&
+          m.endColumnIndex === 5
+        );
+
+        if (fValue) {
+          // Fill number
           values[row] = [number.toString()];
 
-          if (fMergeLen > 1) {
-            // F is merged: ensure E is merged similarly
+          // Merge E if F is merged and E isn't
+          if (isMergedInF && !eMerge) {
             requests.push({
               mergeCells: {
                 range: {
                   sheetId,
-                  startRowIndex: absRow,
-                  endRowIndex: fMergeEnd,
+                  startRowIndex: mergeStart - 1,
+                  endRowIndex: mergeEnd - 1,
                   startColumnIndex: 4,
                   endColumnIndex: 5,
                 },
-                mergeType: 'MERGE_ALL'
+                mergeType: 'MERGE_ALL',
+              },
+            });
+          }
+
+          // Unmerge E if F is not merged but E is
+          if (!isMergedInF && eMerge) {
+            requests.push({
+              unmergeCells: {
+                range: {
+                  sheetId,
+                  startRowIndex: eMerge.startRowIndex,
+                  endRowIndex: eMerge.endRowIndex,
+                  startColumnIndex: 4,
+                  endColumnIndex: 5,
+                }
               }
             });
           }
@@ -86,40 +108,10 @@ async function main() {
           number++;
         }
 
-        if (!fMergedMap.has(absRow) && eMergeStart !== undefined) {
-          // F is NOT merged but E IS => unmerge
-          requests.push({
-            unmergeCells: {
-              range: {
-                sheetId,
-                startRowIndex: eMergeStart,
-                endRowIndex: eMergeEnd,
-                startColumnIndex: 4,
-                endColumnIndex: 5,
-              }
-            }
-          });
-
-          requests.push({
-            updateBorders: {
-              range: {
-                sheetId,
-                startRowIndex: eMergeStart,
-                endRowIndex: eMergeEnd,
-                startColumnIndex: 4,
-                endColumnIndex: 5,
-              },
-              top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-              bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-              left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-              right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-            }
-          });
-        }
-
-        row += fMergeLen;
+        row += mergeLength;
       }
 
+      // Update values in column E
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: `'${name}'!E12:E${startRow + values.length - 1}`,
@@ -127,10 +119,11 @@ async function main() {
         requestBody: { values },
       });
 
+      // Apply merge/unmerge requests
       if (requests.length > 0) {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
-          requestBody: { requests }
+          requestBody: { requests },
         });
       }
 
