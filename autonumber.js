@@ -1,7 +1,7 @@
 const { google } = require('googleapis');
 
 async function main() {
-  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
   const spreadsheetUrl = process.env.SHEET_URL;
   const spreadsheetId = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
 
