@@ -20,10 +20,15 @@ async function authenticate() {
 }
 
 async function getSheetTitles(sheets, spreadsheetId) {
-  const res = await sheets.spreadsheets.get({ spreadsheetId });
-  const titles = res.data.sheets.map(sheet => sheet.properties.title);
-  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
-  return titles;
+  try {
+    const res = await sheets.spreadsheets.get({ spreadsheetId });
+    const titles = res.data.sheets.map(sheet => sheet.properties.title);
+    console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
+    return titles || []; // Return empty array if titles are undefined
+  } catch (error) {
+    console.error(`Error fetching sheet titles for ${spreadsheetId}:`, error);
+    return []; // Return empty array in case of error
+  }
 }
 
 async function getAllTeamCDSSheetIds(sheets) {
@@ -115,6 +120,12 @@ async function main() {
 
         const sheetTitles = await getSheetTitles(sheets, sheetId);
 
+        // Ensure that sheetTitles is an array and contains the necessary sheets
+        if (!Array.isArray(sheetTitles) || sheetTitles.length === 0) {
+          console.warn(`⚠️ Skipping ${sheetId} — no sheet titles found`);
+          continue;
+        }
+
         if (!sheetTitles.includes(G_MILESTONES)) {
           console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MILESTONES}' sheet`);
           continue;
@@ -125,24 +136,20 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData, issueStatuses] = await Promise.all([
+        const [milestones, issuesData, issueStatuses] = await Promise.all([ 
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
           getIssueStatuses(sheets),
         ]);
 
-        // Create a set of issue statuses that need to be tested
-        const statusesToCheck = [
-          'Needs Test Case', 'Needs Test Scenario', 'Test Case Needs Update',
-        ];
-
-        // Filter issues based on milestones and issue status
+        // Filter issues that match both the selected milestones and the issue statuses
         const filtered = issuesData.filter((row, index) => {
-          const status = issueStatuses[index][0];  // The status column in H4:H
-          const matchesStatus = statusesToCheck.some(statusText => 
+          const matchesMilestone = milestones.includes(row[6]); // Column I (index 6)
+          const status = issueStatuses[index] ? issueStatuses[index][0] : '';
+          const matchesStatus = ['Needs Test Case', 'Needs Test Scenario', 'Test Case Needs Update'].some(statusText =>
             status.includes(statusText)
           );
-          return milestones.includes(row[6]) && matchesStatus;
+          return matchesMilestone && matchesStatus;
         });
 
         const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
