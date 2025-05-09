@@ -18,7 +18,9 @@ jobs:
           node-version: '14'  # Replace with your desired Node.js version
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          cd SheetSync  # Navigate to the SheetSync folder
+          npm install   # Install dependencies within the SheetSync folder
 
       - name: Run fetchallissues.js
         env:
@@ -26,12 +28,16 @@ jobs:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GITLAB_URL: ${{ secrets.GITLAB_URL }}  # Add GITLAB_URL secret
-        run: node fetchallissues.js
-        
+        run: |
+          cd SheetSync  # Navigate to the SheetSync folder
+          node fetchallissues.js  # Run the script
+
       - name: Run fetchallmr.js
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GITLAB_URL: ${{ secrets.GITLAB_URL }}  # Add GITLAB_URL secret
-        run: node fetchallmr.js
+        run: |
+          cd SheetSync  # Navigate to the SheetSync folder
+          node fetchallmr.js  # Run the script
