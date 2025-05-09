@@ -20,15 +20,18 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Set environment variables from GitHub secrets
-        run: |
-          echo "GITLAB_TOKEN=${{ secrets.GITLAB_TOKEN }}" >> $GITHUB_ENV
-          echo "SPREADSHEET_ID=${{ secrets.SPREADSHEET_ID }}" >> $GITHUB_ENV
-          echo "GOOGLE_SERVICE_ACCOUNT_JSON=${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}" >> $GITHUB_ENV
-          echo "GITLAB_URL=${{ secrets.GITLAB_URL }}" >> $GITHUB_ENV  # Add GITLAB_URL secret
-
       - name: Run fetchallissues.js
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}  # Add GITLAB_URL secret
         run: node fetchallissues.js
         
       - name: Run fetchallmr.js
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}  # Add GITLAB_URL secret
         run: node fetchallmr.js
