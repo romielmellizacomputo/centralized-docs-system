@@ -41,34 +41,25 @@ async function getSelectedMilestones(sheets, sheetId) {
   return data.values?.flat().filter(Boolean) || [];
 }
 
-// Updated function to preserve hyperlinks from column E
 async function getAllIssues(sheets) {
-  const res = await sheets.spreadsheets.get({
+  const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
-    ranges: [ALL_ISSUES_RANGE],
-    includeGridData: true,
+    range: ALL_ISSUES_RANGE,
   });
 
-  const rows = res.data.sheets[0].data[0].rowData;
-
-  if (!rows || rows.length === 0) {
+  if (!data.values || data.values.length === 0) {
     throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
   }
 
-  const values = rows.map(row => {
-    const cells = row.values || [];
-
-    return cells.slice(0, 11).map((cell, colIndex) => {
-      // Column E is the third column (index 2 in slice(0, 11))
-      if (colIndex === 2 && cell.hyperlink) {
-        const text = cell.formattedValue || cell.hyperlink;
-        return `=HYPERLINK("${cell.hyperlink}", "${text}")`;
-      }
-      return cell.formattedValue || '';
-    });
+  // Process hyperlinks from column E
+  return data.values.map(row => {
+    const hyperlink = row[4]; // Assuming E is the 5th column (index 4)
+    const text = hyperlink && hyperlink.match(/<a[^>]*>(.*?)<\/a>/);
+    return {
+      row: row.slice(0, 11), // C to N → index 0 to 10
+      hyperlink: text ? text[1] : hyperlink // Extract text or use hyperlink as is
+    };
   });
-
-  return values;
 }
 
 async function clearGIssues(sheets, sheetId) {
@@ -79,11 +70,17 @@ async function clearGIssues(sheets, sheetId) {
 }
 
 async function insertDataToGIssues(sheets, sheetId, data) {
+  const formattedData = data.map(item => {
+    const row = item.row;
+    const hyperlink = item.hyperlink ? [{ userEnteredValue: { stringValue: hyperlink }, userEnteredFormat: { textFormat: { foregroundColor: { red: 0, green: 0, blue: 1 }, underline: true } }, hyperlink: item.hyperlink }] : [];
+    return [...row, ...hyperlink];
+  });
+
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4`,
     valueInputOption: 'USER_ENTERED',
-    requestBody: { values: data },
+    requestBody: { values: formattedData },
   });
 }
 
@@ -128,16 +125,15 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([
+        const [milestones, issuesData] = await Promise.all([ 
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
         ]);
 
-        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6 in slice)
-        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
-
+        const filtered = issuesData.filter(item => milestones.includes(item.row[6])); // Column I (index 6)
+        
         await clearGIssues(sheets, sheetId);
-        await insertDataToGIssues(sheets, sheetId, processedData);
+        await insertDataToGIssues(sheets, sheetId, filtered);
         await updateTimestamp(sheets, sheetId);
 
         console.log(`✅ Finished: ${sheetId}`);
