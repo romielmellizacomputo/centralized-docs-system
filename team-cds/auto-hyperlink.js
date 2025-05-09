@@ -1,10 +1,7 @@
 import { google } from 'googleapis';
-import path from 'path';
-import fs from 'fs';
 
-const TEAM_CDS_SERVICE_ACCOUNT_JSON = process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON; // Assumes you're setting the secret as an environment variable
+const TEAM_CDS_SERVICE_ACCOUNT_JSON = process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON;
 
-// URLs of the projects in GitLab
 const GITLAB_ROOT_URL = 'https://forge.bposeats.com/';
 const PROJECT_URLS_MAP = {
   155: `${GITLAB_ROOT_URL}bposeats/hqzen.com`,
@@ -17,7 +14,6 @@ const PROJECT_URLS_MAP = {
   89: `${GITLAB_ROOT_URL}bposeats/bposeats.com`
 };
 
-// Mapping project names to their respective IDs
 const PROJECT_NAME_ID_MAP = {
   'HQZen': 155,
   'Backend': 23,
@@ -36,7 +32,6 @@ const sheetsToProcess = [
   { name: 'G-MR', projectColumn: 'O', iidColumn: 'D', titleColumn: 'E', urlType: 'merge_requests' }
 ];
 
-// Function to authenticate using the service account
 async function getAuthClient() {
   const auth = new google.auth.GoogleAuth({
     credentials: JSON.parse(TEAM_CDS_SERVICE_ACCOUNT_JSON),
@@ -46,7 +41,6 @@ async function getAuthClient() {
   return authClient;
 }
 
-// Function to convert titles to hyperlinks across sheets
 async function convertTitlesToHyperlinks() {
   const masterSheetUrl = 'https://docs.google.com/spreadsheets/d/1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k/edit?gid=1536197668#gid=1536197668';
 
@@ -61,7 +55,7 @@ async function convertTitlesToHyperlinks() {
     }
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: masterSheetId,
-      range: 'UTILS!B2:B',
+      range: 'UTILS!B2:B', // Replace with actual range if needed
     });
 
     const urls = res.data.values?.flat()?.filter(url => url); // Ensure no empty URLs
@@ -83,36 +77,45 @@ async function convertTitlesToHyperlinks() {
         const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`; // Create full URL
         const doc = await sheets.spreadsheets.values.get({
           spreadsheetId: sheetId,
-          range: 'Sheet1!A1:Z1000', // Adjust this range to process your sheet
+          range: 'Sheet1!A1:Z1000', // Adjust range if necessary
         });
-        processSpreadsheet(doc.data.values);
+
+        // If no data returned, log the issue
+        if (!doc.data.values || doc.data.values.length === 0) {
+          console.error(`No data found for sheet ID ${sheetId}`);
+          continue;
+        }
+
+        processSpreadsheet(doc.data.values, sheetId);
       } catch (e) {
-        console.log(`Failed to open or process sheet with ID: ${sheetId}, error: ${e}`);
+        console.error(`Failed to open or process sheet with ID: ${sheetId}, error: ${e}`);
       }
     }
   } catch (e) {
-    console.log(`Failed to open master sheet: ${e}`);
+    console.error(`Failed to open master sheet: ${e}`);
   }
 }
 
-// Process each spreadsheet
-function processSpreadsheet(sheetData) {
+function processSpreadsheet(sheetData, sheetId) {
   sheetsToProcess.forEach(sheetInfo => {
     const sheet = sheetData.find(sheet => sheet[0] === sheetInfo.name);
     if (sheet) {
       const lastRow = sheet.length;
       if (lastRow >= 4) {
-        convertSheetTitlesToHyperlinks(sheet, lastRow, sheetInfo.projectColumn, sheetInfo.iidColumn, sheetInfo.titleColumn, sheetInfo.urlType);
+        convertSheetTitlesToHyperlinks(sheet, lastRow, sheetInfo.projectColumn, sheetInfo.iidColumn, sheetInfo.titleColumn, sheetInfo.urlType, sheetId);
       }
     }
   });
 }
 
-// Convert sheet titles to hyperlinks
-function convertSheetTitlesToHyperlinks(sheet, lastRow, projectColumn, iidColumn, titleColumn, urlType) {
-  const titles = sheet.slice(3, lastRow).map(row => row[titleColumn.charCodeAt(0) - 65]); // Get column based on titleColumn
-  const projectNames = sheet.slice(3, lastRow).map(row => row[projectColumn.charCodeAt(0) - 65]);
-  const iids = sheet.slice(3, lastRow).map(row => row[iidColumn.charCodeAt(0) - 65]);
+function convertSheetTitlesToHyperlinks(sheet, lastRow, projectColumn, iidColumn, titleColumn, urlType, sheetId) {
+  const projectColumnIndex = projectColumn.charCodeAt(0) - 65;
+  const iidColumnIndex = iidColumn.charCodeAt(0) - 65;
+  const titleColumnIndex = titleColumn.charCodeAt(0) - 65;
+
+  const titles = sheet.slice(3, lastRow).map(row => row[titleColumnIndex]); // Get titles
+  const projectNames = sheet.slice(3, lastRow).map(row => row[projectColumnIndex]); // Get project names
+  const iids = sheet.slice(3, lastRow).map(row => row[iidColumnIndex]); // Get iids
 
   const hyperlinks = [];
 
@@ -135,11 +138,11 @@ function convertSheetTitlesToHyperlinks(sheet, lastRow, projectColumn, iidColumn
     }
   }
 
-  if (hyperlinks.length > 0) {
-    // Update sheet with hyperlinks in column E (for titles)
-    sheet.getRange(4, 5, hyperlinks.length, 1).setValues(hyperlinks); // Adjust as per your sheet's setup
-  }
+  // Log the hyperlinks for the specified sheetId
+  console.log(`Processing sheet ID ${sheetId} with hyperlinks:`, hyperlinks);
+
+  // Update sheet with hyperlinks in the relevant column (adjust as per your sheet's setup)
+  // For example: sheet.getRange(4, 5, hyperlinks.length, 1).setValues(hyperlinks); 
 }
 
-// Call the main function to process everything
 convertTitlesToHyperlinks();
