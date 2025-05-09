@@ -53,7 +53,7 @@ async function getAllIssues(sheets) {
   const rows = res.data.sheets?.[0]?.data?.[0]?.rowData || [];
 
   return rows.map(row =>
-    (row.values || []).map(cell => {
+    (row.values || []).map((cell, i) => {
       const val = cell?.userEnteredValue;
       const link = cell?.hyperlink;
       if (link) {
@@ -68,14 +68,14 @@ async function getAllIssues(sheets) {
   );
 }
 
-async function clearIssues(sheets, sheetId) {
+async function clearGIssues(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4:N`,
   });
 }
 
-async function insertDataToIssues(sheets, sheetId, data) {
+async function insertDataToGIssues(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4`,
@@ -129,10 +129,15 @@ async function main() {
         ]);
 
         const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
-        const processedData = filtered.map(row => row.slice(0, 11)); // C to N
+        const processedData = filtered.map(row => {
+          const rowCopy = [...row];
+          const hyperlink = row[2]; // Column E = index 2
+          rowCopy[2] = hyperlink;  // Ensure hyperlink stays in
+          return rowCopy.slice(0, 11); // Keep C to N (indexes 0 to 10)
+        });
 
-        await clearIssues(sheets, sheetId);
-        await insertDataToIssues(sheets, sheetId, processedData);
+        await clearGIssues(sheets, sheetId);
+        await insertDataToGIssues(sheets, sheetId, processedData);
         await updateTimestamp(sheets, sheetId);
 
         console.log(`✅ Finished: ${sheetId}`);
