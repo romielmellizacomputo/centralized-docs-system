@@ -41,17 +41,34 @@ async function getSelectedMilestones(sheets, sheetId) {
   return data.values?.flat().filter(Boolean) || [];
 }
 
+// Updated function to preserve hyperlinks from column E
 async function getAllIssues(sheets) {
-  const { data } = await sheets.spreadsheets.values.get({
+  const res = await sheets.spreadsheets.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
-    range: ALL_ISSUES_RANGE,
+    ranges: [ALL_ISSUES_RANGE],
+    includeGridData: true,
   });
 
-  if (!data.values || data.values.length === 0) {
+  const rows = res.data.sheets[0].data[0].rowData;
+
+  if (!rows || rows.length === 0) {
     throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
   }
 
-  return data.values;
+  const values = rows.map(row => {
+    const cells = row.values || [];
+
+    return cells.slice(0, 11).map((cell, colIndex) => {
+      // Column E is the third column (index 2 in slice(0, 11))
+      if (colIndex === 2 && cell.hyperlink) {
+        const text = cell.formattedValue || cell.hyperlink;
+        return `=HYPERLINK("${cell.hyperlink}", "${text}")`;
+      }
+      return cell.formattedValue || '';
+    });
+  });
+
+  return values;
 }
 
 async function clearGIssues(sheets, sheetId) {
@@ -65,7 +82,7 @@ async function insertDataToGIssues(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4`,
-    valueInputOption: 'RAW',
+    valueInputOption: 'USER_ENTERED',
     requestBody: { values: data },
   });
 }
@@ -111,12 +128,12 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([ 
+        const [milestones, issuesData] = await Promise.all([
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
         ]);
 
-        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
+        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6 in slice)
         const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
 
         await clearGIssues(sheets, sheetId);
