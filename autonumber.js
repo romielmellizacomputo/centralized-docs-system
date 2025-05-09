@@ -68,16 +68,24 @@ async function main() {
         });
 
         // Add black border to newly unmerged empty merged ranges
+        for (let r = merge.startRowIndex; r < merge.endRowIndex; r++) {
         requests.push({
           updateBorders: {
-            range: { ...merge, sheetId },
-            top: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            range: {
+              sheetId,
+              startRowIndex: r,
+              endRowIndex: r + 1,
+              startColumnIndex: 4,
+              endColumnIndex: 5
+            },
+            top:    { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
             bottom: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-            left: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
-            right: { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            left:   { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } },
+            right:  { style: 'SOLID', width: 1, color: { red: 0, green: 0, blue: 0 } }
           }
         });
       }
+
 
       // Prepare numbering and merges
       const values = Array(rows.length).fill(['']);
