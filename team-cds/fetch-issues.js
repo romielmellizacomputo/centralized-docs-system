@@ -41,7 +41,7 @@ async function getSelectedMilestones(sheets, sheetId) {
   return data.values?.flat().filter(Boolean) || [];
 }
 
-// 🔄 Get issue data with hyperlinks properly formatted
+// 🔄 Get issue data with hyperlinks preserved
 async function getAllIssues(sheets) {
   const res = await sheets.spreadsheets.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
@@ -52,21 +52,24 @@ async function getAllIssues(sheets) {
 
   const rows = res.data.sheets?.[0]?.data?.[0]?.rowData || [];
 
-  return rows.map(row =>
-    (row.values || []).map(cell => {
+  return rows.map(row => {
+    return (row.values || []).map((cell, colIndex) => {
       const val = cell?.userEnteredValue;
       const link = cell?.hyperlink;
 
-      if (link) {
-        const display = val?.stringValue || link;
-        return `=HYPERLINK("${link}", "${display}")`; // 🟢 Inserted as real formula
+      // Handle hyperlinks in column E (index 2) specifically
+      if (link && val?.stringValue) {
+        return colIndex === 2
+          ? `=HYPERLINK("${link}", "${val.stringValue}")` // Embed hyperlink in column E
+          : val.stringValue; // For other columns, just return the string value
       }
+
       if (val?.stringValue) return val.stringValue;
       if (val?.numberValue != null) return val.numberValue;
       if (val?.boolValue != null) return val.boolValue;
       return '';
-    })
-  );
+    });
+  });
 }
 
 async function clearGIssues(sheets, sheetId) {
@@ -80,7 +83,7 @@ async function insertDataToGIssues(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${G_ISSUES_SHEET}!C4`,
-    valueInputOption: 'USER_ENTERED', // ✅ Ensures formulas are interpreted
+    valueInputOption: 'USER_ENTERED', // Ensure we allow user-entered formulas
     requestBody: { values: data },
   });
 }
