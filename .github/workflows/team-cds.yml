@@ -24,9 +24,3 @@ jobs:
       run: node team-cds/index.js
       env:
         TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
-
-    - name: Run additional scripts
-      run: node team-cds/other-script.js
-      env:
-        SHEET_DATA: ${{ github.event.inputs.sheet_data }}
-        TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
