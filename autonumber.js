@@ -48,33 +48,36 @@ async function main() {
       });
 
       // Check and merge/unmerge cells
+      const sheetMetadata = metadata.data.sheets.find(sheet => sheet.properties.title === name);
+      const sheetId = sheetMetadata.properties.sheetId;
+
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const cellF = row[1] || ''; // Column F
         const cellE = values[i][0]; // Column E
 
         // Fetch current merged ranges in E and F
-        const eRange = `'${name}'!E${12 + i}:E${12 + i}`;
-        const fRange = `'${name}'!F${12 + i}:F${12 + i}`;
+        const eRange = { startRowIndex: 12 + i, endRowIndex: 12 + i + 1 };
+        const fRange = { startRowIndex: 12 + i, endRowIndex: 12 + i + 1 };
 
         // Merging logic for Column E
         if (cellF.trim() && cellE) {
-          const mergeCountF = await getMergedCount(spreadsheetId, name, fRange, sheets);
+          const mergeCountF = await getMergedCount(spreadsheetId, sheetId, fRange, sheets);
           if (mergeCountF > 1) {
-            await mergeCells(spreadsheetId, name, eRange, sheets);
+            await mergeCells(spreadsheetId, sheetId, eRange, sheets);
           }
         } else {
-          await unmergeCells(spreadsheetId, name, eRange, sheets);
+          await unmergeCells(spreadsheetId, sheetId, eRange, sheets);
         }
 
         // Merging logic for Column F
         if (cellF.trim() && lastStepNumber === cellE) {
-          const mergeCountE = await getMergedCount(spreadsheetId, name, eRange, sheets);
+          const mergeCountE = await getMergedCount(spreadsheetId, sheetId, eRange, sheets);
           if (mergeCountE > 1) {
-            await mergeCells(spreadsheetId, name, fRange, sheets);
+            await mergeCells(spreadsheetId, sheetId, fRange, sheets);
           }
         } else {
-          await unmergeCells(spreadsheetId, name, fRange, sheets);
+          await unmergeCells(spreadsheetId, sheetId, fRange, sheets);
         }
       }
 
@@ -87,20 +90,20 @@ async function main() {
 }
 
 // Helper function to check for merged ranges in a given range
-async function getMergedCount(spreadsheetId, sheetName, range, sheets) {
+async function getMergedCount(spreadsheetId, sheetId, range, sheets) {
   const res = await sheets.spreadsheets.get({
     spreadsheetId,
     ranges: [range],
     includeGridData: true
   });
 
-  const gridData = res.data.sheets[0].data[0];
+  const gridData = res.data.sheets.find(sheet => sheet.properties.sheetId === sheetId).data[0];
   const mergedRanges = gridData.merges || [];
-  return mergedRanges.filter(merge => merge.startRowIndex <= range[1] && merge.endRowIndex >= range[0]).length;
+  return mergedRanges.filter(merge => merge.startRowIndex <= range.endRowIndex && merge.endRowIndex >= range.startRowIndex).length;
 }
 
 // Helper function to merge cells
-async function mergeCells(spreadsheetId, sheetName, range, sheets) {
+async function mergeCells(spreadsheetId, sheetId, range, sheets) {
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
@@ -108,9 +111,9 @@ async function mergeCells(spreadsheetId, sheetName, range, sheets) {
         {
           mergeCells: {
             range: {
-              sheetId: sheetName,
-              startRowIndex: range[0],
-              endRowIndex: range[1]
+              sheetId: sheetId,
+              startRowIndex: range.startRowIndex,
+              endRowIndex: range.endRowIndex
             },
             mergeType: 'MERGE_ALL'
           }
@@ -121,7 +124,7 @@ async function mergeCells(spreadsheetId, sheetName, range, sheets) {
 }
 
 // Helper function to unmerge cells
-async function unmergeCells(spreadsheetId, sheetName, range, sheets) {
+async function unmergeCells(spreadsheetId, sheetId, range, sheets) {
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
@@ -129,9 +132,9 @@ async function unmergeCells(spreadsheetId, sheetName, range, sheets) {
         {
           unmergeCells: {
             range: {
-              sheetId: sheetName,
-              startRowIndex: range[0],
-              endRowIndex: range[1]
+              sheetId: sheetId,
+              startRowIndex: range.startRowIndex,
+              endRowIndex: range.endRowIndex
             }
           }
         }
