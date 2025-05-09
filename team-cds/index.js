@@ -2,11 +2,10 @@ import { google } from 'googleapis';
 
 // Your Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
-const UTILS_SHEET_NAME = 'UTILS';
-const G_ISSUES = 'G-Issues';
 const G_MILESTONES = 'G-Milestones';
-const DASHBOARD = 'Dashboard';
 const ALL_ISSUES_SHEET = 'ALL ISSUES';
+const G_ISSUES_SHEET = 'G-Issues';
+const DASHBOARD_SHEET = 'Dashboard';
 
 // This function loads the credentials from the environment variable
 async function authenticate() {
@@ -34,11 +33,11 @@ async function getAllIssues(sheets) {
   try {
     const { data } = await sheets.spreadsheets.values.get({
       spreadsheetId: UTILS_SHEET_ID,
-      range: `${ALL_ISSUES_SHEET}!A2:N`, // Adjust as per your sheet
+      range: `${ALL_ISSUES_SHEET}!C4:N`, // Adjust range to fetch C4:N data
     });
 
     if (!data.values || data.values.length === 0) {
-      throw new Error(`No data found in range ${ALL_ISSUES_SHEET}!A2:N`);
+      throw new Error(`No data found in range ${ALL_ISSUES_SHEET}!C4:N`);
     }
 
     return data.values;
@@ -52,7 +51,7 @@ async function clearSheet(sheets, sheetId) {
   // Clear the existing sheet data
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES}!A2:Z`, // Adjust as per your sheet structure
+    range: `${G_ISSUES_SHEET}!C4:N`, // Adjust as per your sheet structure
   });
 }
 
@@ -60,7 +59,7 @@ async function insertData(sheets, sheetId, data) {
   // Insert the processed data
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES}!A2`, // Adjust as per your sheet structure
+    range: `${G_ISSUES_SHEET}!C4`, // Adjust as per your sheet structure
     valueInputOption: 'RAW',
     requestBody: {
       values: data,
@@ -73,7 +72,7 @@ async function updateTimestamp(sheets, sheetId) {
   const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${DASHBOARD}!A1`, // Adjust as per your sheet structure
+    range: `${DASHBOARD_SHEET}!A1`, // Adjust as per your sheet structure
     valueInputOption: 'RAW',
     requestBody: {
       values: [[timestamp]],
@@ -96,7 +95,7 @@ async function main() {
     // Fetch list of spreadsheet IDs from UTILS sheet
     const { data } = await sheets.spreadsheets.values.get({
       spreadsheetId: UTILS_SHEET_ID,
-      range: `${UTILS_SHEET_NAME}!B2:B`,
+      range: `${UTILS_SHEET_ID}!B2:B`,
     });
 
     const sheetIds = data.values.flat().filter(Boolean);
@@ -109,19 +108,19 @@ async function main() {
           getAllIssues(sheets),
         ]);
 
-        console.log('Milestones:', milestones); // Debugging log
-        console.log('Issues Data:', issuesData); // Debugging log
+        console.log('Selected Milestones:', milestones); // Debugging log
+        console.log('All Issues Data:', issuesData); // Debugging log
 
-        // Filter issues based on the selected milestones
+        // Filter issues based on the selected milestones from column I
         const filtered = issuesData.filter(row =>
-          milestones.includes(row[8]) // Assuming column I (index 8) has the milestone name
+          milestones.includes(row[6]) // Column I (index 6) has the milestone name
         );
 
         console.log('Filtered Issues:', filtered); // Debugging log
 
-        // Process data for insertion into the sheet
+        // Process data for insertion into the sheet (columns C4:N)
         const processedData = filtered.map(row => [
-          row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12],
+          row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10]
         ]);
 
         console.log('Processed Data:', processedData); // Debugging log
