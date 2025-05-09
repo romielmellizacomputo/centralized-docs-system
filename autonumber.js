@@ -9,7 +9,6 @@ async function main() {
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = extractSheetId(process.env.SHEET_URL);
 
-  // Get all sheet names
   const metadata = await sheets.spreadsheets.get({ spreadsheetId });
   const allSheets = metadata.data.sheets.map(s => s.properties.title);
   const skipSheets = ['ToC', 'Roster', 'Issues'];
@@ -17,7 +16,7 @@ async function main() {
   for (const title of allSheets) {
     if (skipSheets.includes(title)) continue;
 
-    const range = `'${title}'!E12:F`; // Read E12:F end of sheet
+    const range = `'${title}'!E12:F`;
     const result = await sheets.spreadsheets.values.get({ spreadsheetId, range });
     const rows = result.data.values || [];
 
@@ -41,7 +40,7 @@ async function main() {
       requestBody: { values: updates }
     });
 
-    console.log(`Updated sheet: ${title}`);
+    console.log(`Updated: ${title}`);
   }
 }
 
@@ -51,6 +50,6 @@ function extractSheetId(url) {
 }
 
 main().catch(err => {
-  console.error('Error running autonumber:', err);
+  console.error('Failed to auto-number:', err);
   process.exit(1);
 });
