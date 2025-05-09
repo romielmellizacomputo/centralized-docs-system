@@ -3,10 +3,12 @@ import { google } from 'googleapis';
 // Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const G_MILESTONES = 'G-Milestones';
-const NTC_SHEET = 'NTC'; // New sheet where relevant issues will be inserted
+const NTC_SHEET = 'NTC'; // Changed target sheet to NTC
+const DASHBOARD_SHEET = 'Dashboard';
 
 const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
 const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
+const H_ISSUE_STATUS_RANGE = 'ALL ISSUES!H4:H'; // Range for the status check (Needs Test Case, etc.)
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -53,33 +55,43 @@ async function getAllIssues(sheets) {
   return data.values;
 }
 
-async function insertDataToNTC(sheets, sheetId, data) {
-  try {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: sheetId,
-      range: `${NTC_SHEET}!C4`, // Insert data into NTC sheet starting at C4
-      valueInputOption: 'RAW',
-      requestBody: { values: data },
-    });
-    console.log(`✅ Data inserted into NTC sheet for ${sheetId}`);
-  } catch (err) {
-    console.error(`❌ Error inserting data into NTC sheet for ${sheetId}: ${err.message}`);
+async function getIssueStatuses(sheets) {
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
+    range: H_ISSUE_STATUS_RANGE,
+  });
+
+  if (!data.values || data.values.length === 0) {
+    throw new Error(`No data found in range ${H_ISSUE_STATUS_RANGE}`);
   }
+
+  return data.values;
+}
+
+async function clearNTC(sheets, sheetId) {
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: sheetId,
+    range: `${NTC_SHEET}!C4:N`,
+  });
+}
+
+async function insertDataToNTC(sheets, sheetId, data) {
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `${NTC_SHEET}!C4`,
+    valueInputOption: 'RAW',
+    requestBody: { values: data },
+  });
 }
 
 async function updateTimestamp(sheets, sheetId) {
   const timestamp = new Date().toISOString();
-  try {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: sheetId,
-      range: `${NTC_SHEET}!A1`, // Update timestamp in NTC sheet
-      valueInputOption: 'RAW',
-      requestBody: { values: [[timestamp]] },
-    });
-    console.log(`✅ Timestamp updated in NTC sheet for ${sheetId}`);
-  } catch (err) {
-    console.error(`❌ Error updating timestamp in NTC sheet for ${sheetId}: ${err.message}`);
-  }
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `${DASHBOARD_SHEET}!A1`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[timestamp]] },
+  });
 }
 
 async function main() {
@@ -113,30 +125,33 @@ async function main() {
           continue;
         }
 
-        const milestones = await getSelectedMilestones(sheets, sheetId);
-        const issuesData = await getAllIssues(sheets);
+        const [milestones, issuesData, issueStatuses] = await Promise.all([
+          getSelectedMilestones(sheets, sheetId),
+          getAllIssues(sheets),
+          getIssueStatuses(sheets),
+        ]);
 
-        // Filter issues that match selected milestones and contain the relevant labels
-        const filtered = issuesData.filter(row => {
-          const labels = row[7] ? row[7].split(',').map(label => label.trim()) : []; // Column H (index 7)
-          return milestones.includes(row[6]) && labels.some(label =>
-            ['Needs Test Case', 'Needs Test Scenario', 'Test Case Needs Update'].includes(label)
+        // Create a set of issue statuses that need to be tested
+        const statusesToCheck = [
+          'Needs Test Case', 'Needs Test Scenario', 'Test Case Needs Update',
+        ];
+
+        // Filter issues based on milestones and issue status
+        const filtered = issuesData.filter((row, index) => {
+          const status = issueStatuses[index][0];  // The status column in H4:H
+          const matchesStatus = statusesToCheck.some(statusText => 
+            status.includes(statusText)
           );
+          return milestones.includes(row[6]) && matchesStatus;
         });
 
         const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
 
-        // If data exists, insert into NTC sheet
-        if (processedData.length > 0) {
-          await insertDataToNTC(sheets, sheetId, processedData);
-        } else {
-          console.log(`⚠️ No matching issues for NTC sheet in ${sheetId}`);
-        }
-
-        // Update timestamp in NTC sheet
+        await clearNTC(sheets, sheetId);
+        await insertDataToNTC(sheets, sheetId, processedData);
         await updateTimestamp(sheets, sheetId);
 
-        console.log(`✅ Finished processing ${sheetId}`);
+        console.log(`✅ Finished: ${sheetId}`);
       } catch (err) {
         console.error(`❌ Error processing ${sheetId}: ${err.message}`);
       }
