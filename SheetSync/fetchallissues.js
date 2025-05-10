@@ -2,7 +2,7 @@ import { config } from 'dotenv';
 import { google } from 'googleapis';
 import axios from 'axios';
 
-// Load environment variables (only useful if not using GitHub secrets)
+// Load environment variables
 config();
 
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
@@ -13,9 +13,9 @@ requiredEnv.forEach((key) => {
   }
 });
 
-const GITLAB_URL = process.env.GITLAB_URL;
-const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const GITLAB_URL = process.env.GITLAB_URL!;
+const GITLAB_TOKEN = process.env.GITLAB_TOKEN!;
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID!;
 
 const PROJECT_CONFIG = {
   155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
@@ -33,7 +33,7 @@ function loadServiceAccount() {
     try {
       return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     } catch (error) {
-      console.error('❌ Error parsing service account JSON:', error.message);
+      console.error('❌ Error parsing service account JSON:', (error as Error).message);
       throw error;
     }
   } else {
@@ -49,11 +49,11 @@ const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-function capitalize(str) {
+function capitalize(str: string) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function formatDate(dateString) {
+function formatDate(dateString?: string) {
   if (!dateString) return '';
   const date = new Date(dateString);
   return new Intl.DateTimeFormat('en-US', {
@@ -64,7 +64,7 @@ function formatDate(dateString) {
   }).format(date);
 }
 
-async function fetchExistingIssueKeys(sheets) {
+async function fetchExistingIssueKeys(sheets: any) {
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
@@ -81,10 +81,63 @@ async function fetchExistingIssueKeys(sheets) {
       }
     }
     return issueKeys;
-  } catch (err) {
+  } catch (err: any) {
     console.error('❌ Failed to read existing issues from sheet:', err.message);
     return new Map();
   }
+}
+
+async function fetchIssuesForProject(projectId: string, config: any, existingIssues: Map<string, any[]>) {
+  let allIssues: any[] = [];
+  let page = 1;
+
+  console.log(`🔄 Fetching issues for ${config.name}...`);
+
+  while (true) {
+    const response = await axios.get(
+      `${GITLAB_URL}api/v4/projects/${projectId}/issues?state=all&per_page=100&page=${page}`,
+      { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN } }
+    );
+
+    if (response.status !== 200) {
+      console.error(`❌ Failed to fetch page ${page} for ${config.name}`);
+      break;
+    }
+
+    const issues = response.data;
+    if (issues.length === 0) break;
+
+    for (const issue of issues) {
+      const key = `${issue.id}_${issue.iid}`;
+      const issueData = [
+        issue.id ?? '',
+        issue.iid ?? '',
+        issue.title && issue.web_url
+          ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
+          : 'No Title',
+        issue.author?.name ?? 'Unknown Author',
+        issue.assignee?.name ?? 'Unassigned',
+        (issue.labels || []).join(', '),
+        issue.milestone?.title ?? 'No Milestone',
+        capitalize(issue.state ?? ''),
+        issue.created_at ? formatDate(issue.created_at) : '',
+        issue.closed_at ? formatDate(issue.closed_at) : '',
+        issue.closed_by?.name ?? '',
+        config.name,
+      ];
+
+      if (existingIssues.has(key)) {
+        existingIssues.set(key, issueData);
+      } else {
+        allIssues.push(issueData);
+      }
+    }
+
+    console.log(`✅ Page ${page} fetched (${issues.length} issues) for ${config.name}`);
+    page++;
+  }
+
+  return allIssues;
 }
 
 async function fetchAndUpdateIssuesForAllProjects() {
@@ -92,90 +145,36 @@ async function fetchAndUpdateIssuesForAllProjects() {
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
   const existingIssues = await fetchExistingIssueKeys(sheets);
-  let allIssues = [];
+  const allNewIssues: any[] = [];
 
-  console.log('🔄 Fetching issues for all projects...');
+  const fetchPromises = Object.entries(PROJECT_CONFIG).map(([projectId, config]) =>
+    fetchIssuesForProject(projectId, config, existingIssues)
+  );
 
-  for (const projectId in PROJECT_CONFIG) {
-    const config = PROJECT_CONFIG[projectId];
-    let page = 1;
+  const newIssuesArrays = await Promise.all(fetchPromises);
+  newIssuesArrays.forEach((issues) => allNewIssues.push(...issues));
 
-    console.log(`🔄 Fetching issues for ${config.name}...`);
-
-    while (true) {
-      const response = await axios.get(
-        `${GITLAB_URL}api/v4/projects/${projectId}/issues?state=all&per_page=100&page=${page}`,
-        {
-          headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-        }
-      );
-
-      if (response.status !== 200) {
-        console.error(`❌ Failed to fetch page ${page} for ${config.name}`);
-        break;
-      }
-
-      const issues = response.data;
-      if (issues.length === 0) break;
-
-      issues.forEach(issue => {
-        const key = `${issue.id}_${issue.iid}`;
-        const existingIssue = existingIssues.get(key);
-
-        const issueData = [
-          issue.id ?? '',
-          issue.iid ?? '',
-          issue.title && issue.web_url
-            ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
-            : 'No Title',
-          issue.author?.name ?? 'Unknown Author',
-          issue.assignee?.name ?? 'Unassigned',
-          (issue.labels || []).join(', '),
-          issue.milestone?.title ?? 'No Milestone',
-          capitalize(issue.state ?? ''),
-          issue.created_at ? formatDate(issue.created_at) : '',
-          issue.closed_at ? formatDate(issue.closed_at) : '',
-          issue.closed_by?.name ?? '',
-          config.name,
-        ];
-
-        if (existingIssue) {
-          existingIssues.set(key, issueData);
-        } else {
-          allIssues.push(issueData);
-        }
-      });
-
-      console.log(`✅ Page ${page} fetched (${issues.length} issues) for ${config.name}`);
-      page++;
-    }
-  }
-
-  const updatedRows = Array.from(existingIssues.values());
+  const updatedRows = Array.from(existingIssues.values()).map(row =>
+    row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
+  );
 
   if (updatedRows.length > 0) {
-    const safeRows = updatedRows.map(row =>
-      row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
-    );
-
     try {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: 'ALL ISSUES!C4',
         valueInputOption: 'USER_ENTERED',
-        resource: { values: safeRows },
+        resource: { values: updatedRows },
       });
 
-      console.log(`✅ Updated ${safeRows.length} issues.`);
-    } catch (err) {
-      console.error('❌ Error updating data:', err.stack || err.message);
+      console.log(`✅ Updated ${updatedRows.length} issues.`);
+    } catch (err: any) {
+      console.error('❌ Error updating existing issues:', err.message);
     }
-  } else {
-    console.log('ℹ️ No updates to existing issues.');
   }
 
-  if (allIssues.length > 0) {
-    const safeNewRows = allIssues.map(row =>
+  if (allNewIssues.length > 0) {
+    const safeNewRows = allNewIssues.map(row =>
       row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
     );
 
@@ -189,8 +188,8 @@ async function fetchAndUpdateIssuesForAllProjects() {
       });
 
       console.log(`✅ Inserted ${safeNewRows.length} new issues.`);
-    } catch (err) {
-      console.error('❌ Error inserting new issues:', err.stack || err.message);
+    } catch (err: any) {
+      console.error('❌ Error inserting new issues:', err.message);
     }
   } else {
     console.log('ℹ️ No new issues to insert.');
