@@ -1,4 +1,4 @@
-fetch('https://script.google.com/macros/s/AKfycbwu_puWRN-drXODXYhkQf0hE0d4NHuA3Y7eFA4E-mLASu8bHN1jIGLgCntOrp5KC6XN/exec')
+fetch('https://script.google.com/macros/s/AKfycbzlfKEQqosn_MrRhsPHimk1mYumbJBDq7SVZOo9owRdhfJQW9xrXVDcbmFFJh4_vc2W/exec')
   .then(res => res.text())
   .then(result => console.log(result))  // You'll see either '✅ Sync successful' or error message
   .catch(err => console.error('❌ Error:', err));
