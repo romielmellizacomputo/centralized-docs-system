@@ -138,22 +138,23 @@ async function fetchAndUpdateMRsForAllProjects() {
         const reviewers = (mr.reviewers || []).map(r => r.name).join(', ') || 'Unassigned';
 
         const mrData = [
-          mr.id ?? '',
-          mr.iid ?? '',
+          mr.id ?? '', // ID
+          mr.iid ?? '', // IID
           mr.title && mr.web_url
             ? `=HYPERLINK("${mr.web_url}", "${mr.title.replace(/"/g, '""')}")`
-            : 'No Title',
-          mr.author?.name ?? 'Unknown Author',
-          mr.assignee?.name ?? 'Unassigned',
-          reviewers,
-          (mr.labels || []).join(', '),
-          mr.milestone?.title ?? 'No Milestone',
-          capitalize(mr.state ?? ''),
-          mr.created_at ? formatDate(mr.created_at) : '',
-          mr.closed_at ? formatDate(mr.closed_at) : '',
-          mr.merged_at ? formatDate(mr.merged_at) : '',
-          config.name,
+            : 'No Title', // Issue Title
+          mr.author?.name ?? 'Unknown Author', // Issue Author
+          mr.assignee?.name ?? 'Unassigned', // Assignee
+          mr.reviewers?.map(reviewer => reviewer.name).join(', ') ?? 'No Reviewer', // Reviewer (if part of the MR object)
+          (mr.labels || []).join(', '), // Labels
+          mr.milestone?.title ?? 'No Milestone', // Milestone
+          capitalize(mr.state ?? ''), // Status
+          mr.created_at ? formatDate(mr.created_at) : '', // Created At
+          mr.closed_at ? formatDate(mr.closed_at) : '', // Closed At
+          mr.merged_at ? formatDate(mr.merged_at) : '', // Merged At
+          config.name, // Project
         ];
+
 
         if (existingMR) {
           existingMRs.set(key, mrData);
