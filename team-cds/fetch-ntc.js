@@ -3,11 +3,11 @@ import { google } from 'googleapis';
 // Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const G_MILESTONES = 'G-Milestones';
-const NTC_SHEET = 'NTC';  // Target NTC sheet
+const NTC_SHEET = 'NTC'; 
 const DASHBOARD_SHEET = 'Dashboard';
 
-const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
+const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; 
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -64,7 +64,7 @@ async function clearNTCSheet(sheets, sheetId) {
 async function insertDataToNTCSheet(sheets, sheetId, data) {
   if (data.length === 0) {
     console.log("No data to insert.");
-    return; // Skip insertion if no data
+    return; 
   }
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
@@ -78,7 +78,7 @@ async function updateTimestamp(sheets, sheetId) {
   const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!A1`,
+    range: `${DASHBOARD_SHEET}!X6`,
     valueInputOption: 'RAW',
     requestBody: { values: [[timestamp]] },
   });
