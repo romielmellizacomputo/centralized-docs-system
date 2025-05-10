@@ -1,0 +1,35 @@
+name: Fetch GitLab Issues and Update Google Sheet
+
+on:
+  schedule:
+    # Run every 10 minutes
+    - cron: '*/10 * * * *'
+
+jobs:
+  fetch_issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run fetchAllIssues.js from SheetSync folder
+        run: node SheetSync/fetchAllIssues.js
+
+      - name: Trigger Google Apps Script to process issues
+        run: |
+          curl -X POST -H "Content-Type: application/json" \
+          -d '{"trigger":"fetchAllIssues"}' \
+          "https://script.google.com/macros/s/AKfycbwtgZYddE_MqrUmxfNcIdE1oehAbJPCOi2gjR2MQuLzbx2ipk004A4u2WJ0Qjf8q83p/exec"
+        env:
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+
