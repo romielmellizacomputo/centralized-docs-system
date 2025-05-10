@@ -37,9 +37,7 @@ jobs:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
 
   run-self-hosted:
-    needs: fetch  # This job depends on the previous one
     runs-on: self-hosted
-    if: failure()  # Only run this job if the first job fails
 
     steps:
       - uses: actions/checkout@v3
