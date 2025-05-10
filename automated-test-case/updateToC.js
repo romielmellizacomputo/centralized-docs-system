@@ -1,5 +1,5 @@
-const { google } = require('googleapis');
-const axios = require('axios');
+import { google } from 'googleapis';
+import axios from 'axios';
 
 // Retrieve sheet data from environment variables
 const sheetData = JSON.parse(process.env.SHEET_DATA);
