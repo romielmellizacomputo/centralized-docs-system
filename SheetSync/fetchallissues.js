@@ -87,69 +87,78 @@ async function fetchExistingIssueKeys(sheets) {
   }
 }
 
+async function fetchIssuesForProject(projectId, config, existingIssues) {
+  let page = 1;
+  let issues = [];
+  console.log(`🔄 Fetching issues for ${config.name}...`);
+
+  while (true) {
+    const response = await axios.get(
+      `${GITLAB_URL}api/v4/projects/${projectId}/issues?state=all&per_page=100&page=${page}`,
+      {
+        headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+      }
+    );
+
+    if (response.status !== 200) {
+      console.error(`❌ Failed to fetch page ${page} for ${config.name}`);
+      break;
+    }
+
+    const fetchedIssues = response.data;
+    if (fetchedIssues.length === 0) break;
+
+    fetchedIssues.forEach(issue => {
+      const key = `${issue.id}_${issue.iid}`;
+      const existingIssue = existingIssues.get(key);
+
+      const issueData = [
+        issue.id ?? '',
+        issue.iid ?? '',
+        issue.title && issue.web_url
+          ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
+          : 'No Title',
+        issue.author?.name ?? 'Unknown Author',
+        issue.assignee?.name ?? 'Unassigned',
+        (issue.labels || []).join(', '),
+        issue.milestone?.title ?? 'No Milestone',
+        capitalize(issue.state ?? ''),
+        issue.created_at ? formatDate(issue.created_at) : '',
+        issue.closed_at ? formatDate(issue.closed_at) : '',
+        issue.closed_by?.name ?? '',
+        config.name,
+      ];
+
+      if (existingIssue) {
+        existingIssues.set(key, issueData);
+      } else {
+        issues.push(issueData);
+      }
+    });
+
+    console.log(`✅ Page ${page} fetched (${fetchedIssues.length} issues) for ${config.name}`);
+    page++;
+  }
+
+  return issues;
+}
+
 async function fetchAndUpdateIssuesForAllProjects() {
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
   const existingIssues = await fetchExistingIssueKeys(sheets);
-  let allIssues = [];
 
   console.log('🔄 Fetching issues for all projects...');
 
-  for (const projectId in PROJECT_CONFIG) {
+  // Fetch issues for all projects in parallel
+  const issuesPromises = Object.keys(PROJECT_CONFIG).map(async projectId => {
     const config = PROJECT_CONFIG[projectId];
-    let page = 1;
+    return fetchIssuesForProject(projectId, config, existingIssues);
+  });
 
-    console.log(`🔄 Fetching issues for ${config.name}...`);
-
-    while (true) {
-      const response = await axios.get(
-        `${GITLAB_URL}api/v4/projects/${projectId}/issues?state=all&per_page=100&page=${page}`,
-        {
-          headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-        }
-      );
-
-      if (response.status !== 200) {
-        console.error(`❌ Failed to fetch page ${page} for ${config.name}`);
-        break;
-      }
-
-      const issues = response.data;
-      if (issues.length === 0) break;
-
-      issues.forEach(issue => {
-        const key = `${issue.id}_${issue.iid}`;
-        const existingIssue = existingIssues.get(key);
-
-        const issueData = [
-          issue.id ?? '',
-          issue.iid ?? '',
-          issue.title && issue.web_url
-            ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
-            : 'No Title',
-          issue.author?.name ?? 'Unknown Author',
-          issue.assignee?.name ?? 'Unassigned',
-          (issue.labels || []).join(', '),
-          issue.milestone?.title ?? 'No Milestone',
-          capitalize(issue.state ?? ''),
-          issue.created_at ? formatDate(issue.created_at) : '',
-          issue.closed_at ? formatDate(issue.closed_at) : '',
-          issue.closed_by?.name ?? '',
-          config.name,
-        ];
-
-        if (existingIssue) {
-          existingIssues.set(key, issueData);
-        } else {
-          allIssues.push(issueData);
-        }
-      });
-
-      console.log(`✅ Page ${page} fetched (${issues.length} issues) for ${config.name}`);
-      page++;
-    }
-  }
+  const allIssuesResults = await Promise.all(issuesPromises);
+  let allIssues = allIssuesResults.flat(); // Flatten the array of results
 
   const updatedRows = Array.from(existingIssues.values());
 
