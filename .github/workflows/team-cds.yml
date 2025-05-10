@@ -1,4 +1,4 @@
-name: Fetch GitLab Issues
+name: Team CDS Updater
 
 on:
   schedule:
@@ -7,10 +7,39 @@ on:
 
 jobs:
   fetch:
-    strategy:
-      matrix:
-        runner: [self-hosted, ubuntu-latest]  # Try self-hosted first, then GitHub-hosted
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Allow this job to fail without failing the entire workflow
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run fetch-issues.js
+        run: node team-cds/fetch-issues.js
+        env:
+          TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
+
+      - name: Run fetch-mr.js
+        run: node team-cds/fetch-mr.js
+        env:
+          TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
+
+      - name: Run fetch-ntc.js
+        run: node team-cds/fetch-ntc.js
+        env:
+          TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
+
+  run-self-hosted:
+    needs: fetch  # This job depends on the previous one
+    runs-on: self-hosted
+    if: failure()  # Only run this job if the first job fails
 
     steps:
       - uses: actions/checkout@v3
