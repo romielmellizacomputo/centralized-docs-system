@@ -141,7 +141,7 @@ async function main() {
 
         if (filtered.length > 0) {
           // Map filtered data to C4:N (columns C to N)
-          const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 11
+          const processedData = filtered.map(row => row.slice(2, 14)); // C to N → index 2 to 14
 
           await clearNTCSheet(sheets, sheetId);
           await insertDataToNTCSheet(sheets, sheetId, processedData);
