@@ -4,6 +4,7 @@ on:
   schedule:
     # Run every 10 minutes
     - cron: '*/10 * * * *'
+  workflow_dispatch:  # This allows manual trigger from GitHub UI
 
 jobs:
   fetch_issues:
@@ -32,4 +33,3 @@ jobs:
           GITLAB_URL: ${{ secrets.GITLAB_URL }}
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-
