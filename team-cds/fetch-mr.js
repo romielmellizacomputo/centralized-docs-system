@@ -117,7 +117,7 @@ async function main() {
         ]);
 
         const filtered = mrData.filter(row => milestones.includes(row[7])); // Column J
-        const processedData = filtered.map(row => row.slice(0, 13));
+        const processedData = filtered.map(row => row.slice(0, 13 + 1)); // slice(0, 14)
 
         await clearGMR(sheets, sheetId);
         await insertDataToGMR(sheets, sheetId, processedData);
