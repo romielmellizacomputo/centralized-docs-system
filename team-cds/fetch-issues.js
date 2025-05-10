@@ -1,4 +1,9 @@
-fetch('https://script.google.com/macros/s/AKfycbwZZI1jG69t5-S5GnAJfoU4yIOQzoADgyLiKUCMfBBIDYeJ-la3JWeBySNVkAs1db_A/exec')
+const fetch = require('node-fetch');
+
+const url = process.env.FETCH_GITLAB_ISSUES_SERVICE;
+
+fetch(url)
   .then(res => res.text())
-  .then(result => console.log(result))  // You'll see either '✅ Sync successful' or error message
+  .then(result => console.log(result))  // e.g., ✅ Sync successful
   .catch(err => console.error('❌ Error:', err));
+
