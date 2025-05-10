@@ -1,5 +1,7 @@
-const { google } = require('googleapis');
-const fetch = require('node-fetch'); // Use global fetch if on Node 18+
+import { google } from 'googleapis';
+
+// If using Node.js v18 or newer, fetch is globally available:
+const fetch = global.fetch;
 
 const skipSheets = ['ToC', 'Issues', 'Roster'];
 const ISSUES_SHEET = 'Issues';
