@@ -45,9 +45,8 @@ jobs:
           node fetchallmr.js
 
   run-self-hosted:
-    needs: run-github  # This job depends on the previous one
-    runs-on: self-hosted
-    if: failure()  # Only run this job if the first job fails
+    runs-on: self-hosted  # Runs on self-hosted runner
+    continue-on-error: true  # Allow this job to fail without failing the entire workflow
 
     steps:
       - name: Checkout repository
