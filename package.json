@@ -15,5 +15,6 @@
     "cronie": "^0.0.7",
     "dotenv": "^16.5.0",
     "googleapis": "^148.0.0"
+    "node-fetch": "^2.6.1"
   }
 }
