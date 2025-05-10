@@ -3,11 +3,11 @@ import { google } from 'googleapis';
 // Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const G_MILESTONES = 'G-Milestones';
-const G_MR_SHEET = 'G-MR';  // Updated target sheet
+const G_MR_SHEET = 'G-MR';
 const DASHBOARD_SHEET = 'Dashboard';
 
-const CENTRAL_MR_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';  // External sheet ID
-const ALL_MRS_RANGE = 'ALL MRs!C4:O'; // Updated range for MRs
+const CENTRAL_MR_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';
+const ALL_MRS_RANGE = 'ALL MRs!C4:O'; // ✅ Columns C to O
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -85,11 +85,9 @@ async function main() {
     const auth = await authenticate();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Confirm correct sheet titles
     await getSheetTitles(sheets, UTILS_SHEET_ID);
-
-    // Get list of Google Sheet IDs from UTILS!B2:B
     const sheetIds = await getAllTeamCDSSheetIds(sheets);
+
     if (!sheetIds.length) {
       console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
       return;
@@ -98,7 +96,6 @@ async function main() {
     for (const sheetId of sheetIds) {
       try {
         console.log(`🔄 Processing: ${sheetId}`);
-
         const sheetTitles = await getSheetTitles(sheets, sheetId);
 
         if (!sheetTitles.includes(G_MILESTONES)) {
@@ -111,13 +108,13 @@ async function main() {
           continue;
         }
 
-        const [milestones, mrData] = await Promise.all([ 
+        const [milestones, mrData] = await Promise.all([
           getSelectedMilestones(sheets, sheetId),
           getAllMRs(sheets),
         ]);
 
-        const filtered = mrData.filter(row => milestones.includes(row[7])); // Column J
-        const processedData = filtered.map(row => row.slice(0, 13 + 1)); // slice(0, 14)
+        const filtered = mrData.filter(row => milestones.includes(row[7])); // ✅ Validate using Column J
+        const processedData = filtered.map(row => row.slice(0, 13)); // ✅ C to O = index 0 to 12
 
         await clearGMR(sheets, sheetId);
         await insertDataToGMR(sheets, sheetId, processedData);
@@ -134,4 +131,3 @@ async function main() {
 }
 
 main();
-
