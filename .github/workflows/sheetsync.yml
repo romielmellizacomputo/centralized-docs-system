@@ -1,4 +1,4 @@
-name: SheetSync
+name: Fetch GitLab Issues Service
 
 on:
   schedule:
@@ -34,16 +34,6 @@ jobs:
           cd SheetSync
           node fetchallissues.js
 
-      - name: Run fetchallmr.js
-        env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          GITLAB_URL: ${{ secrets.GITLAB_URL }}
-        run: |
-          cd SheetSync
-          node fetchallmr.js
-
   run-self-hosted:
     runs-on: self-hosted  # Runs on self-hosted runner
     continue-on-error: true  # Allow this job to fail without failing the entire workflow
@@ -71,13 +61,3 @@ jobs:
         run: |
           cd SheetSync
           node fetchallissues.js
-
-      - name: Run fetchallmr.js
-        env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          GITLAB_URL: ${{ secrets.GITLAB_URL }}
-        run: |
-          cd SheetSync
-          node fetchallmr.js
