@@ -1,5 +1,4 @@
-
-const { google } = require('googleapis');
+import { google } from 'googleapis';
 
 const sheetData = JSON.parse(process.env.SHEET_DATA);
 
