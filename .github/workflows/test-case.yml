@@ -61,7 +61,7 @@ jobs:
   run-self-hosted:
     needs: autonumber
     runs-on: self-hosted
-    if: needs.autonumber.result == 'failure'
+    if: needs.autonumber.result != 'success'
 
     steps:
       - name: Checkout repository
