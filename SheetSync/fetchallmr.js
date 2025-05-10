@@ -145,7 +145,7 @@ async function fetchAndUpdateMRsForAllProjects() {
             : 'No Title', // Issue Title
           mr.author?.name ?? 'Unknown Author', // Issue Author
           mr.assignee?.name ?? 'Unassigned', // Assignee
-          mr.reviewers?.map(reviewer => reviewer.name).join(', ') ?? 'No Reviewer', // Reviewer (if part of the MR object)
+          reviewers, // ✅ Reviewer (fallback to 'Unassigned')
           (mr.labels || []).join(', '), // Labels
           mr.milestone?.title ?? 'No Milestone', // Milestone
           capitalize(mr.state ?? ''), // Status
@@ -154,6 +154,7 @@ async function fetchAndUpdateMRsForAllProjects() {
           mr.merged_at ? formatDate(mr.merged_at) : '', // Merged At
           config.name, // Project
         ];
+
 
 
         if (existingMR) {
