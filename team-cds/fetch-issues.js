@@ -71,12 +71,19 @@ async function insertDataToGIssues(sheets, sheetId, data) {
 }
 
 async function updateTimestamp(sheets, sheetId) {
-  const timestamp = new Date().toISOString();
+  const now = new Date();
+  const formatted = `Sync on ${now.toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })} at ${now.toLocaleTimeString('en-US')}`;
+
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${DASHBOARD_SHEET}!X6`,
     valueInputOption: 'RAW',
-    requestBody: { values: [[timestamp]] },
+    requestBody: { values: [[formatted]] },
   });
 }
 
