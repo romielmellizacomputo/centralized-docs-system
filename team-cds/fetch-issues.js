@@ -6,8 +6,8 @@ const G_MILESTONES = 'G-Milestones';
 const G_ISSUES_SHEET = 'G-Issues';
 const DASHBOARD_SHEET = 'Dashboard';
 
-const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; // External sheet ID
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; // Range to pull issues from
+const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:O'; 
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -74,7 +74,7 @@ async function updateTimestamp(sheets, sheetId) {
   const timestamp = new Date().toISOString();
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!A1`,
+    range: `${DASHBOARD_SHEET}!X6`,
     valueInputOption: 'RAW',
     requestBody: { values: [[timestamp]] },
   });
