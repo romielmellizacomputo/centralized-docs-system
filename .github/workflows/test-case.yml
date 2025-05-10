@@ -11,7 +11,7 @@ on:
 jobs:
   autonumber:
     runs-on: ubuntu-latest
-    continue-on-error: true  # Allow this job to fail without failing the entire workflow
+    continue-on-error: true  # Don't fail entire workflow if this job fails
 
     steps:
       - name: Checkout repository
@@ -59,9 +59,9 @@ jobs:
           AUTOMATED_PORTALS: ${{ secrets.AUTOMATED_PORTALS }}
 
   run-self-hosted:
-    needs: autonumber  # This job depends on the first one
+    needs: autonumber
     runs-on: self-hosted
-    if: failure()  # Only run this job if the first job fails
+    if: needs.autonumber.result == 'failure'
 
     steps:
       - name: Checkout repository
