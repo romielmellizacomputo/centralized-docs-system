@@ -4,11 +4,9 @@ import axios from 'axios';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Polyfill __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
 dotenv.config();
 
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
@@ -35,24 +33,17 @@ const PROJECT_CONFIG = {
 };
 
 function loadServiceAccount() {
-  let serviceAccount;
-  if (process.env.GITHUB_ACTIONS) {
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-      try {
-        serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-      } catch (error) {
-        console.error('❌ Error parsing service account JSON:', error.message);
-        throw error;
-      }
-    } else {
-      console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON secret is missing.');
+  if (process.env.GITHUB_ACTIONS && process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    try {
+      return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    } catch (error) {
+      console.error('❌ Error parsing service account JSON:', error.message);
       process.exit(1);
     }
   } else {
     console.error('❌ This script should be run in GitHub Actions.');
     process.exit(1);
   }
-  return serviceAccount;
 }
 
 const serviceAccount = loadServiceAccount();
@@ -100,27 +91,17 @@ async function fetchExistingMergeRequestKeys(sheets) {
   }
 }
 
-async function fetchAndUpdateMRsForAllProjects() {
-  const authClient = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: authClient });
+async function fetchMRsForProject(projectId, config, existingMRs) {
+  let page = 1;
+  const allProjectMRs = [];
 
-  const existingMRs = await fetchExistingMergeRequestKeys(sheets);
-  let allMRs = [];
+  console.log(`🔄 Fetching merge requests for ${config.name}...`);
 
-  console.log('🔄 Fetching merge requests for all projects...');
-
-  for (const projectId in PROJECT_CONFIG) {
-    const config = PROJECT_CONFIG[projectId];
-    let page = 1;
-
-    console.log(`🔄 Fetching merge requests for ${config.name}...`);
-
-    while (true) {
+  while (true) {
+    try {
       const response = await axios.get(
         `${GITLAB_URL}api/v4/projects/${projectId}/merge_requests?state=all&per_page=100&page=${page}`,
-        {
-          headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-        }
+        { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN } }
       );
 
       if (response.status !== 200) {
@@ -131,99 +112,100 @@ async function fetchAndUpdateMRsForAllProjects() {
       const mrs = response.data;
       if (mrs.length === 0) break;
 
-      mrs.forEach(mr => {
+      for (const mr of mrs) {
         const key = `${mr.id}_${mr.iid}`;
-        const existingMR = existingMRs.get(key);
-
         const reviewers = (mr.reviewers || []).map(r => r.name).join(', ') || 'Unassigned';
 
         const mrData = [
-          mr.id ?? '', // ID
-          mr.iid ?? '', // IID
+          mr.id ?? '',
+          mr.iid ?? '',
           mr.title && mr.web_url
             ? `=HYPERLINK("${mr.web_url}", "${mr.title.replace(/"/g, '""')}")`
-            : 'No Title', // Issue Title
-          mr.author?.name ?? 'Unknown Author', // Issue Author
-          mr.assignee?.name ?? 'Unassigned', // Assignee
-          reviewers, // ✅ Reviewer (fallback to 'Unassigned')
-          (mr.labels || []).join(', '), // Labels
-          mr.milestone?.title ?? 'No Milestone', // Milestone
-          capitalize(mr.state ?? ''), // Status
-          mr.created_at ? formatDate(mr.created_at) : '', // Created At
-          mr.closed_at ? formatDate(mr.closed_at) : '', // Closed At
-          mr.merged_at ? formatDate(mr.merged_at) : '', // Merged At
-          config.name, // Project
+            : 'No Title',
+          mr.author?.name ?? 'Unknown Author',
+          mr.assignee?.name ?? 'Unassigned',
+          reviewers,
+          (mr.labels || []).join(', '),
+          mr.milestone?.title ?? 'No Milestone',
+          capitalize(mr.state ?? ''),
+          formatDate(mr.created_at),
+          formatDate(mr.closed_at),
+          formatDate(mr.merged_at),
+          config.name,
         ];
 
-
-
-        if (existingMR) {
+        if (existingMRs.has(key)) {
           existingMRs.set(key, mrData);
         } else {
-          allMRs.push(mrData);
+          allProjectMRs.push(mrData);
         }
-      });
+      }
 
       console.log(`✅ Page ${page} fetched (${mrs.length} MRs) for ${config.name}`);
       page++;
+    } catch (err) {
+      console.error(`❌ Error fetching MRs for ${config.name}:`, err.message);
+      break;
     }
   }
 
+  return allProjectMRs;
+}
+
+async function fetchAndUpdateMRsForAllProjects() {
+  const authClient = await auth.getClient();
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
+
+  const existingMRs = await fetchExistingMergeRequestKeys(sheets);
+  console.log('🔄 Fetching merge requests for all projects in parallel...');
+
+  const fetchPromises = Object.entries(PROJECT_CONFIG).map(([projectId, config]) =>
+    fetchMRsForProject(projectId, config, existingMRs)
+  );
+
+  const results = await Promise.all(fetchPromises);
+  const allNewMRs = results.flat();
+
   const updatedRows = Array.from(existingMRs.values());
 
-  if (updatedRows.length > 0) {
-    const safeRows = updatedRows.map(row =>
-      row.map(cell => {
+  const cleanData = (rows) =>
+    rows.map((row) =>
+      row.map((cell) => {
         if (cell === null || cell === undefined) return '';
         if (typeof cell === 'object') return JSON.stringify(cell);
         return String(cell);
       })
     );
 
+  if (updatedRows.length > 0) {
     try {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: 'ALL MRs!C4',
         valueInputOption: 'USER_ENTERED',
-        resource: { values: safeRows },
+        resource: { values: cleanData(updatedRows) },
       });
-
-      console.log(`✅ Updated ${safeRows.length} merge requests.`);
+      console.log(`✅ Updated ${updatedRows.length} merge requests.`);
     } catch (err) {
       console.error('❌ Error updating data:', err.stack || err.message);
     }
-  } else {
-    console.log('ℹ️ No updates to existing merge requests.');
   }
 
-  if (allMRs.length > 0) {
-    const safeNewRows = allMRs.map(row =>
-      row.map(cell => {
-        if (cell === null || cell === undefined) return '';
-        if (typeof cell === 'object') return JSON.stringify(cell);
-        return String(cell);
-      })
-    );
-
+  if (allNewMRs.length > 0) {
     try {
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
         range: 'ALL MRs!C4',
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
-        resource: {
-          values: safeNewRows,
-        },
+        resource: { values: cleanData(allNewMRs) },
       });
-
-      console.log(`✅ Inserted ${safeNewRows.length} new merge requests.`);
+      console.log(`✅ Inserted ${allNewMRs.length} new merge requests.`);
     } catch (err) {
       console.error('❌ Error inserting new merge requests:', err.stack || err.message);
     }
-  } else {
-    console.log('ℹ️ No new merge requests to insert.');
   }
 }
 
-// Run the script
+// Run
 fetchAndUpdateMRsForAllProjects();
