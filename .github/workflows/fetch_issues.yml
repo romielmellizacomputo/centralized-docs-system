@@ -22,12 +22,12 @@ jobs:
         run: npm install
 
       - name: Run fetchallissues.js from SheetSync folder
-        run: node SheetSync/fetchAllIssues.js
+        run: node SheetSync/fetchallissues.js
 
       - name: Trigger Google Apps Script to process issues
         run: |
           curl -X POST -H "Content-Type: application/json" \
-          -d '{"trigger":"fetchAllIssues"}' \
+          -d '{"trigger":"fetchallIssues"}' \
           "https://script.google.com/macros/s/AKfycbwtgZYddE_MqrUmxfNcIdE1oehAbJPCOi2gjR2MQuLzbx2ipk004A4u2WJ0Qjf8q83p/exec"
         env:
           GITLAB_URL: ${{ secrets.GITLAB_URL }}
