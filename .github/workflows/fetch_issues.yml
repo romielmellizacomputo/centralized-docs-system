@@ -29,9 +29,10 @@ jobs:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           GITLAB_URL: ${{ secrets.GITLAB_URL }}
+          FETCH_ALL_GITLAB_ISSUES_SERVICE: ${{ secrets.FETCH_ALL_GITLAB_ISSUES_SERVICE }}  # Add the URL as an environment variable
         run: |
           cd SheetSync
-          node fetchallissues.js
+          node fetchallissues.js  # Ensure you are running the correct file in the SheetSync folder
 
       - name: Trigger Google Apps Script to process issues
         run: |
