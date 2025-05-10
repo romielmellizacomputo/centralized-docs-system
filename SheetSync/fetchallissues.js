@@ -8,7 +8,7 @@ config();
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
-    console.error(❌ Missing required environment variable: ${key});
+    console.error(`❌ Missing required environment variable: ${key}`);
     process.exit(1);
   }
 });
@@ -77,7 +77,7 @@ async function fetchExistingIssueKeys(sheets) {
       const id = row[0]?.trim();
       const iid = row[1]?.trim();
       if (id && iid) {
-        issueKeys.set(${id}_${iid}, row);
+        issueKeys.set(`${id}_${iid}`, row);
       }
     }
     return issueKeys;
@@ -100,18 +100,18 @@ async function fetchAndUpdateIssuesForAllProjects() {
     const config = PROJECT_CONFIG[projectId];
     let page = 1;
 
-    console.log(🔄 Fetching issues for ${config.name}...);
+    console.log(`🔄 Fetching issues for ${config.name}...`);
 
     while (true) {
       const response = await axios.get(
-        ${GITLAB_URL}api/v4/projects/${projectId}/issues?state=all&per_page=100&page=${page},
+        `${GITLAB_URL}api/v4/projects/${projectId}/issues?state=all&per_page=100&page=${page}`,
         {
           headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
         }
       );
 
       if (response.status !== 200) {
-        console.error(❌ Failed to fetch page ${page} for ${config.name});
+        console.error(`❌ Failed to fetch page ${page} for ${config.name}`);
         break;
       }
 
@@ -119,14 +119,14 @@ async function fetchAndUpdateIssuesForAllProjects() {
       if (issues.length === 0) break;
 
       issues.forEach(issue => {
-        const key = ${issue.id}_${issue.iid};
+        const key = `${issue.id}_${issue.iid}`;
         const existingIssue = existingIssues.get(key);
 
         const issueData = [
           issue.id ?? '',
           issue.iid ?? '',
           issue.title && issue.web_url
-            ? =HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")
+            ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
             : 'No Title',
           issue.author?.name ?? 'Unknown Author',
           issue.assignee?.name ?? 'Unassigned',
@@ -146,7 +146,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
         }
       });
 
-      console.log(✅ Page ${page} fetched (${issues.length} issues) for ${config.name});
+      console.log(`✅ Page ${page} fetched (${issues.length} issues) for ${config.name}`);
       page++;
     }
   }
@@ -166,7 +166,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
         resource: { values: safeRows },
       });
 
-      console.log(✅ Updated ${safeRows.length} issues.);
+      console.log(`✅ Updated ${safeRows.length} issues.`);
     } catch (err) {
       console.error('❌ Error updating data:', err.stack || err.message);
     }
@@ -188,7 +188,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
         resource: { values: safeNewRows },
       });
 
-      console.log(✅ Inserted ${safeNewRows.length} new issues.);
+      console.log(`✅ Inserted ${safeNewRows.length} new issues.`);
     } catch (err) {
       console.error('❌ Error inserting new issues:', err.stack || err.message);
     }
