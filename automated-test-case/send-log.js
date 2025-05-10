@@ -1,4 +1,4 @@
-const { google } = require('googleapis');
+import { google } from 'googleapis';
 
 const sheetData = JSON.parse(process.env.SHEET_DATA); // includes source info
 const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON); // service account with access
