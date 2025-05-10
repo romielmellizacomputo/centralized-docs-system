@@ -1,0 +1,63 @@
+name: Fetch GitLab MRs Service
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-github:
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Allow this job to fail without failing the entire workflow
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+
+      - name: Install dependencies
+        run: |
+          cd SheetSync
+          npm install
+
+      - name: Run fetchallmr.js
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}
+        run: |
+          cd SheetSync
+          node fetchallmr.js
+
+  run-self-hosted:
+    runs-on: self-hosted  # Runs on self-hosted runner
+    continue-on-error: true  # Allow this job to fail without failing the entire workflow
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+
+      - name: Install dependencies
+        run: |
+          cd SheetSync
+          npm install
+
+      - name: Run fetchallmr.js
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}
+        run: |
+          cd SheetSync
+          node fetchallmr.js
