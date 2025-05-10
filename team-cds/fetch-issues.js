@@ -117,7 +117,7 @@ async function main() {
         ]);
 
         const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
-        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 10
+        const processedData = filtered.map(row => row.slice(0, 11)); // C to N → index 0 to 11
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
