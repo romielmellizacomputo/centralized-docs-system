@@ -50,7 +50,13 @@ async function fetchSheetData(sheets, sheetName) {
   });
 
   const values = res.data.values || [];
-  return values.filter(row => row.length > 0 && row.some(cell => cell !== ""));
+  return values.filter(row => {
+    // Ensure that columns B, C, and D are not empty
+    const colB = row[0] || ''; // Column B
+    const colC = row[1] || ''; // Column C
+    const colD = row[2] || ''; // Column D
+    return colB && colC && colD;  // Only keep rows where all 3 columns are not empty
+  });
 }
 
 async function clearTargetSheet(sheets) {
@@ -73,6 +79,19 @@ async function insertBatchData(sheets, rows) {
   });
 }
 
+function detectHyperlinks(row) {
+  return row.map(cell => {
+    // Check if the cell has a hyperlink formula
+    if (cell && cell.startsWith('=HYPERLINK')) {
+      const matches = cell.match(/"([^"]+)"/);
+      if (matches && matches[1]) {
+        return { formula: cell, value: matches[1] }; // Return the hyperlink URL
+      }
+    }
+    return cell;
+  });
+}
+
 async function main() {
   const client = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: client });
@@ -89,7 +108,13 @@ async function main() {
     if (!label) continue; 
 
     const data = await fetchSheetData(sheets, sheetTitle);
-    const labeledData = data.map(row => [label, ...row]);
+
+    // Apply the hyperlink detection function and prepend the label
+    const labeledData = data.map(row => {
+      const detectedRow = detectHyperlinks(row);
+      return [label, ...detectedRow];
+    });
+
     allRows = [...allRows, ...labeledData];
   }
 
