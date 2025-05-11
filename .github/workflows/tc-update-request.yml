@@ -22,5 +22,5 @@ jobs:
         with:
           workflow: "automated-test-case/test-case-update.yml"
           ref: main
-          inputs:
+          inputs: |
             sheet_data: ${{ github.event.inputs.sheet_data }}
