@@ -112,12 +112,7 @@ async function main() {
       }
 
       // Update values in column E
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `'${name}'!E12:E${startRow + values.length - 1}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values },
-      });
+      await updateValuesWithRetry(sheets, spreadsheetId, `'${name}'!E12:E${startRow + values.length - 1}`, values);
 
       // Apply merge/unmerge requests
       if (requests.length > 0) {
@@ -128,14 +123,40 @@ async function main() {
       }
 
       console.log(`✅ Updated: ${name}`);
-
-      // Rate limiting to avoid hitting quota
-      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds delay
     }
   } catch (err) {
     console.error('❌ ERROR:', err);
     process.exit(1);
   }
+}
+
+async function updateValuesWithRetry(sheets, spreadsheetId, range, values) {
+  const maxRetries = 5;
+  let attempts = 0;
+
+  while (attempts < maxRetries) {
+    try {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values },
+      });
+      return; // Success, exit the function
+    } catch (error) {
+      if (error.response && error.response.status === 429) {
+        // Quota exceeded error, apply exponential backoff
+        attempts++;
+        const waitTime = Math.pow(2, attempts) * 1000; // Exponential backoff
+        console.log(`Quota exceeded. Retrying in ${waitTime / 1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } else {
+        throw error; // Rethrow other errors
+      }
+    }
+  }
+
+  throw new Error('Max retries reached for updating values.');
 }
 
 main();
