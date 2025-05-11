@@ -58,7 +58,7 @@ function detectHyperlinks(row) {
 }
 
 async function fetchSheetData(sheets, sheetName) {
-  const range = `${sheetName}!B3:W`; 
+  const range = `${sheetName}!B3:X`; 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range,
@@ -72,7 +72,7 @@ async function fetchSheetData(sheets, sheetName) {
 }
 
 async function clearTargetSheet(sheets) {
-  const range = `${DEST_SHEET}!B3:X`;
+  const range = `${DEST_SHEET}!B3:Y`;
   await sheets.spreadsheets.values.clear({
     spreadsheetId: SHEET_ID,
     range
@@ -96,7 +96,7 @@ async function main() {
   const sheets = google.sheets({ version: 'v4', auth: client });
 
   await clearTargetSheet(sheets);
-  console.log('Target sheet cleared from B3 to X.');
+  console.log('Target sheet cleared from B3 to Y.');
 
   const sheetTitles = await fetchSheetTitles(sheets);
 
