@@ -285,19 +285,17 @@ async function updateTestCasesInLibrary() {
     return;
   }
 
-  await logData(authClient, `Starting processing ${Math.min(urlsWithIndices.length, MAX_URLS)} URLs...`);
+  await logData(authClient, `Starting processing 1 URL...`);
 
   const uniqueUrls = new Set();
   const processedRowIndices = [];
 
-  for (let i = 0; i < urlsWithIndices.length && uniqueUrls.size < MAX_URLS; i++) {
-    const { url, rowIndex } = urlsWithIndices[i];
-    if (uniqueUrls.has(url)) {
-      await logData(authClient, `Duplicate URL found: ${url}. Clearing row data.`);
-      processedRowIndices.push(rowIndex);
-      continue;
-    }
-
+  // Process only the first URL
+  const { url, rowIndex } = urlsWithIndices[0];
+  if (uniqueUrls.has(url)) {
+    await logData(authClient, `Duplicate URL found: ${url}. Clearing row data.`);
+    processedRowIndices.push(rowIndex);
+  } else {
     uniqueUrls.add(url);
     processedRowIndices.push(rowIndex);
 
