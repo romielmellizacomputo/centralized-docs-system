@@ -109,11 +109,17 @@ async function processUrl(url, auth) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
     const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
-    if (data) {
-      allData.push(data);
-      processedSheets.push(sheetTitle);
+
+    // Skip sheets that returned null or are empty (only headers/formulas)
+    const hasContent = Object.values(data || {}).some(v => v !== null && v !== '');
+    if (!hasContent) {
+      await logData(auth, `Skipped sheet '${sheetTitle}' — no usable content.`);
+      continue;
     }
+    allData.push(data);
+    processedSheets.push(sheetTitle);
   }
+
 
   if (processedSheets.length > 0) {
     await logData(auth, `Fetched sheets: ${processedSheets.join(", ")}`);
