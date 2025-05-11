@@ -49,7 +49,7 @@ function detectHyperlinks(row) {
       if (matches && matches[1] && matches[2]) {
         const url = matches[1];
         const description = matches[2];
-        // Return the correct HYPERLINK formula
+        // Return the correct HYPERLINK formula with the text embedded
         return `=HYPERLINK("${url}", "${description}")`;
       }
     }
@@ -90,7 +90,6 @@ async function insertBatchData(sheets, rows) {
     }
   });
 }
-
 
 async function main() {
   const client = await auth.getClient();
