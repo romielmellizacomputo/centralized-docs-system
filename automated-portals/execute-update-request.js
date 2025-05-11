@@ -149,20 +149,10 @@ async function validateAndInsertData(auth, data) {
 
     let lastC24Index = -1;
     let existingC3Index = -1;
-    let matchingEmptyRowIndex = -1;
 
     for (let i = 0; i < firstColumn.length; i++) {
-      const val1 = firstColumn[i];
-      const val2 = secondColumn[i];
-
-      if (val1 === data.C24) {
-        lastC24Index = i + 1;
-        if (!val2 || val2 === '') {
-          matchingEmptyRowIndex = i + 1; // B/C matches but C/D is empty
-        }
-      }
-
-      if (val2 === data.C3) {
+      if (firstColumn[i] === data.C24) lastC24Index = i + 1;
+      if (secondColumn[i] === data.C3) {
         existingC3Index = i + 1;
         break;
       }
@@ -172,10 +162,6 @@ async function validateAndInsertData(auth, data) {
       await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
       await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
-      processed = true;
-    } else if (matchingEmptyRowIndex !== -1) {
-      await insertDataInRow(auth, sheetTitle, matchingEmptyRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
-      await logData(auth, `Filled empty C3 cell at row ${matchingEmptyRowIndex} in sheet '${sheetTitle}'`);
       processed = true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
