@@ -136,20 +136,22 @@ async function validateAndInsertData(auth, data) {
     let lastC24Index = -1;
     let existingC3Index = -1;
 
+    // Check for existing C24 and C3 values
     for (let i = 0; i < CColumn.length; i++) {
       if (CColumn[i] === data.C24) lastC24Index = i + 1;
       if (DColumn[i] === data.C3) {
         existingC3Index = i + 1;
-        break;
+        break; // Stop searching once we find C3
       }
     }
 
+    // Insert or update data based on existing values
     if (existingC3Index !== -1) {
       await clearRowData(auth, sheetTitle, existingC3Index);
       await insertDataInRow(auth, sheetTitle, existingC3Index, data);
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
       inserted = true;
-      break; // Exit loop after inserting/ updating
+      break; // Exit loop after inserting/updating
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertDataInRow(auth, sheetTitle, newRowIndex, data);
