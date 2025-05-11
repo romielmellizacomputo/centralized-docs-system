@@ -47,6 +47,48 @@ async function logData(auth, message) {
   console.log(message);
 }
 
+async function collectSheetData(auth, spreadsheetId, sheetTitle) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24'];
+  const data = {};
+
+  for (const ref of cellRefs) {
+    const range = `${sheetTitle}!${ref}`;
+    data[ref] = await getCellValue(auth, spreadsheetId, range);
+  }
+
+  if (!data['C24']) return null;
+
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = meta.data.sheets.find(s => s.properties.title === sheetTitle);
+  const sheetId = sheet.properties.sheetId;
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
+
+  return {
+    C24: data['C24'],
+    C3: data['C3'],
+    C4: data['C4'],
+    C5: data['C5'],
+    C6: data['C6'],
+    C7: data['C7'],
+    C13: data['C13'],
+    C14: data['C14'],
+    C15: data['C15'],
+    C18: data['C18'],
+    C19: data['C19'],
+    C20: data['C20'],
+    C21: data['C21'],
+    sheetUrl,
+    sheetName: sheetTitle
+  };
+}
+
+async function getCellValue(auth, spreadsheetId, range) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+  return res.data.values?.[0]?.[0] || null;
+}
+
 async function processUrl(url, auth) {
   const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
   const sheets = google.sheets({ version: 'v4', auth });
@@ -152,6 +194,19 @@ async function clearRowData(auth, sheetTitle, row) {
     spreadsheetId: SHEET_ID,
     range: `${sheetTitle}!D${row}:T${row}`
   });
+}
+
+async function getTargetSheetTitles(auth) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  return meta.data.sheets.map(s => s.properties.title);
+}
+
+async function getColumnValues(auth, sheetTitle, column) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const range = `${sheetTitle}!${column}:${column}`;
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
+  return res.data.values?.map(row => row[0]) || [];
 }
 
 async function updateTestCasesInLibrary() {
