@@ -114,7 +114,7 @@ async function main() {
       // Update values in column E
       await updateValuesWithRetry(sheets, spreadsheetId, `'${name}'!E12:E${startRow + values.length - 1}`, values);
 
-      // Apply merge/unmerge requests
+      // Apply merge/unmerge requests in batches
       if (requests.length > 0) {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
@@ -136,6 +136,7 @@ async function updateValuesWithRetry(sheets, spreadsheetId, range, values) {
 
   while (attempts < maxRetries) {
     try {
+      // Batch update: Ensure we send a larger set of values
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range,
