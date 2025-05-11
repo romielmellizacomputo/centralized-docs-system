@@ -1,6 +1,7 @@
-const { google } = require('googleapis');
-const { GoogleAuth } = require('google-auth-library');
-require('dotenv').config();
+import { google } from 'googleapis';
+import { GoogleAuth } from 'google-auth-library';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Logs';
@@ -8,16 +9,10 @@ const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_URLS = 20;
 
 async function authGoogle() {
-  const credentials = JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON);
-
   const auth = new GoogleAuth({
-    credentials,
-    scopes: [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive.readonly'
-    ]
+    scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly'],
+    keyFile: 'credentials.json' // Store this securely!
   });
-
   return await auth.getClient();
 }
 
