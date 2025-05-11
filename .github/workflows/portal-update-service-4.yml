@@ -1,4 +1,4 @@
-name: CDS Portals Update Service
+name: CDS Portals Update Service 4
 
 on:
   workflow_dispatch:  # allows manual triggering
