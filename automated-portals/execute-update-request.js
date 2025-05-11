@@ -62,7 +62,10 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     data[cellRefs[index]] = value;
   });
 
-  if (!data['C24']) return null;
+  // Check for at least one valid field instead of just C24
+  const hasValidData = Object.values(data).some(value => value !== null && value !== '');
+
+  if (!hasValidData) return null;
 
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const sheet = meta.data.sheets.find(s => s.properties.title === sheetTitle);
@@ -70,19 +73,7 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
 
   return {
-    C24: data['C24'],
-    C3: data['C3'],
-    C4: data['C4'],
-    C5: data['C5'],
-    C6: data['C6'],
-    C7: data['C7'],
-    C13: data['C13'],
-    C14: data['C14'],
-    C15: data['C15'],
-    C18: data['C18'],
-    C19: data['C19'],
-    C20: data['C20'],
-    C21: data['C21'],
+    ...data,
     sheetUrl,
     sheetName: sheetTitle
   };
@@ -131,8 +122,6 @@ async function processUrl(url, auth) {
 
   await validateAndInsertData(auth, data);
 }
-
-
 
 async function validateAndInsertData(auth, data) {
   const sheets = google.sheets({ version: 'v4', auth });
