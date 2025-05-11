@@ -6,7 +6,6 @@ dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const DEST_SHEET = 'Test Case Portal';
-const START_COLUMN = 'C'; // Destination start column
 const START_ROW = 3;
 
 const EXCLUDED_SHEETS = [
@@ -43,9 +42,9 @@ async function fetchSheetTitles(sheets) {
     .filter(title => !EXCLUDED_SHEETS.includes(title));
 }
 
-// Fetch data from each sheet, starting from B3 to W and ensuring columns B, C, D are not empty
+// Fetch data from each sheet, starting from C3 to X (column B should be empty)
 async function fetchSheetData(sheets, sheetName) {
-  const range = `${sheetName}!B3:W`;
+  const range = `${sheetName}!C3:X`;  // Fetch from C3 to X (columns C to X)
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range,
@@ -53,8 +52,8 @@ async function fetchSheetData(sheets, sheetName) {
   });
 
   const values = res.data.values || [];
-  // Filter rows where columns B to D are not empty
-  return values.filter(row => row[0] && row[1] && row[2]);
+  // Filter rows where columns C to X are not empty
+  return values.filter(row => row.length > 0 && row.some(cell => cell !== ""));
 }
 
 // Clear the target range in 'Test Case Portal' from B3 to X
@@ -66,9 +65,9 @@ async function clearTargetSheet(sheets) {
   });
 }
 
-// Insert data into 'Test Case Portal' sheet starting from C3
+// Insert data into 'Test Case Portal' sheet starting from C3 (columns C to X, with label in column B)
 async function insertBatchData(sheets, rows) {
-  const range = `${DEST_SHEET}!C3`; // Starting from C3
+  const range = `${DEST_SHEET}!B3`; // Start from B3 (for the label and data)
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range,
@@ -107,7 +106,7 @@ async function main() {
     return;
   }
 
-  // Insert data into the target sheet in 'Test Case Portal' starting from C3
+  // Insert data into the target sheet in 'Test Case Portal' starting from B3 (with label in column B)
   await insertBatchData(sheets, allRows);
   console.log('Data successfully inserted into Test Case Portal.');
 }
