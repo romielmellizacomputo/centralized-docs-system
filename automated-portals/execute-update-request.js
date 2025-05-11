@@ -50,7 +50,7 @@ async function logData(auth, message) {
 
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24', 'C27', 'C32'];
+  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24', 'B27', 'C32', 'C11'];
   const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
 
   const res = await sheets.spreadsheets.values.batchGet({
@@ -75,10 +75,11 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     C24: data['C24'],
     C3: data['C3'],
     C4: data['C4'],
-    C27: data['C27'],
+    B27: data['B27'],
     C5: data['C5'],
     C6: data['C6'],
     C7: data['C7'],
+    C11: data['C11'],
     C32: data['C32'],
     C13: data['C13'],
     C14: data['C14'],
@@ -205,9 +206,9 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
     data.C27,
     data.C5,
     data.C6,
-    data.C7,
+    data.B7,
     '',
-    '',
+    data.C11,
     data.C32,
     '',
     '',
