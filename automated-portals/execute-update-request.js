@@ -50,12 +50,18 @@ async function logData(auth, message) {
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
   const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24'];
-  const data = {};
+  const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
 
-  for (const ref of cellRefs) {
-    const range = `${sheetTitle}!${ref}`;
-    data[ref] = await getCellValue(auth, spreadsheetId, range);
-  }
+  const res = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId,
+    ranges,
+  });
+
+  const data = {};
+  res.data.valueRanges.forEach((range, index) => {
+    const value = range.values?.[0]?.[0] || null;
+    data[cellRefs[index]] = value;
+  });
 
   if (!data['C24']) return null;
 
@@ -82,6 +88,7 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     sheetName: sheetTitle
   };
 }
+
 
 async function getCellValue(auth, spreadsheetId, range) {
   const sheets = google.sheets({ version: 'v4', auth });
