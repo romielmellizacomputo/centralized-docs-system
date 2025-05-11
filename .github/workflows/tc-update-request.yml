@@ -17,6 +17,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Trigger next workflow
         uses: peter-evans/workflow-dispatch@v1
         with:
