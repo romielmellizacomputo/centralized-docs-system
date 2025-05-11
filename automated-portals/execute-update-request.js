@@ -8,11 +8,17 @@ const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_URLS = 20;
+const REQUEST_DELAY_MS = 2000; // Delay between requests in milliseconds
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
   scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
 });
+
+// Function to introduce a delay
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
@@ -244,6 +250,7 @@ async function updateTestCasesInLibrary() {
     await logData(authClient, `Processing URL: ${url}`);
     try {
       await processUrl(url, authClient);
+      await delay(REQUEST_DELAY_MS); // Delay between requests
     } catch (error) {
       await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
     }
