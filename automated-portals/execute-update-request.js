@@ -7,6 +7,7 @@ dotenv.config();
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
+const MAX_URLS = 20;
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
@@ -48,7 +49,7 @@ async function logData(auth, message) {
 
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21'];
+  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24'];
   const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
 
   const res = await sheets.spreadsheets.values.batchGet({
@@ -62,10 +63,7 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     data[cellRefs[index]] = value;
   });
 
-  // Check for at least one valid field instead of just C24
-  const hasValidData = Object.values(data).some(value => value !== null && value !== '');
-
-  if (!hasValidData) return null;
+  if (!data['C24']) return null;
 
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const sheet = meta.data.sheets.find(s => s.properties.title === sheetTitle);
@@ -73,54 +71,65 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
 
   return {
-    ...data,
+    C24: data['C24'],
+    C3: data['C3'],
+    C4: data['C4'],
+    C5: data['C5'],
+    C6: data['C6'],
+    C7: data['C7'],
+    C13: data['C13'],
+    C14: data['C14'],
+    C15: data['C15'],
+    C18: data['C18'],
+    C19: data['C19'],
+    C20: data['C20'],
+    C21: data['C21'],
     sheetUrl,
     sheetName: sheetTitle
   };
 }
 
-async function processUrl(url, auth) {
-  // Extract the spreadsheet ID from the URL
-  const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
-
-  // Create a Google Sheets API client
+async function getCellValue(auth, spreadsheetId, range) {
   const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+  return res.data.values?.[0]?.[0] || null;
+}
 
-  // Get the sheet ID from the URL (gid parameter)
-  const gidMatch = url.match(/gid=(\d+)/);
-  const sheetGid = gidMatch ? gidMatch[1] : null;
-
-  if (!sheetGid) {
-    console.log("No valid gid found in the URL.");
-    return;
-  }
-
-  // Fetch the spreadsheet metadata to find the sheet title
+async function processUrl(url, auth) {
+  const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
+  const sheets = google.sheets({ version: 'v4', auth });
   const targetSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
-  const sheet = targetSpreadsheet.data.sheets.find(s => s.properties.sheetId.toString() === sheetGid);
-
-  if (!sheet) {
-    console.log(`No sheet found with gid: ${sheetGid}`);
-    return;
-  }
-
-  const sheetTitle = sheet.properties.title;
-
-  // Check if the sheet title is in the skip list
-  if (SHEETS_TO_SKIP.includes(sheetTitle)) {
-    console.log(`Cancelled processing for sheet '${sheetTitle}' as it is in the skip list.`);
-    return;
-  }
-
-  // Proceed to collect data if the sheet title is valid
-  const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
   
-  if (!data) {
-    await logData(auth, `No valid data found in sheet '${sheetTitle}'.`);
-    return;
+  const allData = [];
+  const processedSheets = [];
+
+  for (const sheet of targetSpreadsheet.data.sheets) {
+    const sheetTitle = sheet.properties.title;
+    if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
+
+    const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
+
+    // Skip sheets that returned null or are empty (only headers/formulas)
+    const hasContent = Object.values(data || {}).some(v => v !== null && v !== '');
+    if (!hasContent) {
+      await logData(auth, `Skipped sheet '${sheetTitle}' — no usable content.`);
+      continue;
+    }
+    allData.push(data);
+    processedSheets.push(sheetTitle);
   }
 
-  await validateAndInsertData(auth, data);
+  if (processedSheets.length > 0) {
+    await logData(auth, `Fetched sheets: ${processedSheets.join(", ")}`);
+  }
+
+  if (allData.length > 0) {
+    for (const data of allData) {
+      await validateAndInsertData(auth, data);
+    }
+  } else {
+    await logData(auth, `No valid data found in fetched sheets from URL: ${url}`);
+  }
 }
 
 async function validateAndInsertData(auth, data) {
@@ -173,28 +182,6 @@ async function validateAndInsertData(auth, data) {
 
 async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
   const sheets = google.sheets({ version: 'v4', auth });
-  
-  // Check for protected ranges
-  const protections = await sheets.spreadsheets.get({
-    spreadsheetId: SHEET_ID,
-    ranges: [sheetTitle],
-    includeGridData: true
-  });
-
-  const sheet = protections.data.sheets.find(s => s.properties.title === sheetTitle);
-  const protectedRanges = sheet.protectedRanges || [];
-
-  // Determine if the row to insert is within a protected range
-  const isProtected = protectedRanges.some(range => {
-    const startRow = range.range.startRowIndex;
-    const endRow = range.range.endRowIndex;
-    return sourceRowIndex >= startRow && sourceRowIndex < endRow;
-  });
-
-  if (isProtected) {
-    console.log(`Cannot insert row at index ${sourceRowIndex} because it is protected.`);
-    return; // Skip the insertion if the range is protected
-  }
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SHEET_ID,
@@ -217,7 +204,6 @@ async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
 
   console.log(`Inserted new row after row ${sourceRowIndex} in sheet '${sheetTitle}' with formatting.`);
 }
-
 
 async function getSheetId(auth, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
@@ -301,20 +287,31 @@ async function updateTestCasesInLibrary() {
 
   await logData(authClient, `Starting processing 1 URL...`);
 
+  const uniqueUrls = new Set();
+  const processedRowIndices = [];
+
+  // Process only the first URL
   const { url, rowIndex } = urlsWithIndices[0];
 
   // Clear the row for the URL before processing
-  await clearFetchedRows(authClient, [rowIndex]);
+  processedRowIndices.push(rowIndex);
+  await clearFetchedRows(authClient, processedRowIndices);
   await logData(authClient, `Cleared row for URL: ${url}`);
-  
-  await logData(authClient, `Processing URL: ${url}`);
-  try {
-    await processUrl(url, authClient);
-  } catch (error) {
-    await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
+
+  if (uniqueUrls.has(url)) {
+    await logData(authClient, `Duplicate URL found: ${url}.`);
+  } else {
+    uniqueUrls.add(url);
+    await logData(authClient, `Processing URL: ${url}`);
+    try {
+      await processUrl(url, authClient);
+    } catch (error) {
+      await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
+    }
   }
 
   await logData(authClient, "Processing complete.");
 }
+
 
 updateTestCasesInLibrary().catch(console.error);
