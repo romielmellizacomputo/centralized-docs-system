@@ -1,0 +1,31 @@
+name: Update TC Labels Service
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-update-tc-labels:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: 📦 Install Dependencies
+        run: npm install
+
+      - name: 📄 Write Service Account JSON to File
+        run: echo "${{ secrets.CDS_PORTALS_SERVICE_ACCOUNT_JSON_CONTENT }}" > automated-portals/service-account.json
+
+      - name: 🚀 Run update-tc-labels.js
+        env:
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          CDS_PORTAL_SPREADSHEET_ID: ${{ secrets.CDS_PORTAL_SPREADSHEET_ID }}
+          CDS_PORTALS_SERVICE_ACCOUNT_JSON: './automated-portals/service-account.json'
+        run: node automated-portals/update-tc-labels.js
