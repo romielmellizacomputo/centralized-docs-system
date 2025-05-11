@@ -137,8 +137,11 @@ async function processUrl(url, auth) {
 async function validateAndInsertData(auth, data) {
   const sheets = google.sheets({ version: 'v4', auth });
   const targetSheetTitles = await getTargetSheetTitles(auth);
-  let processed = false;
 
+  const allInserts = [];
+  const allUpdates = [];
+
+  // Loop through each sheet title
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
@@ -162,51 +165,84 @@ async function validateAndInsertData(auth, data) {
     }
 
     if (existingC3Index !== -1) {
-      await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
-      await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
-      processed = true;
+      allUpdates.push({
+        sheetTitle,
+        row: existingC3Index,
+        data,
+        startCol: isAllTestCases ? 'C' : 'B',
+        endCol: isAllTestCases ? 'T' : 'S',
+      });
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
-      await insertRowWithFormat(auth, sheetTitle, lastC24Index);
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
-      await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
-      processed = true;
+      allInserts.push({
+        sheetTitle,
+        row: newRowIndex,
+        sourceRowIndex: lastC24Index,
+        data,
+        startCol: isAllTestCases ? 'C' : 'B',
+        endCol: isAllTestCases ? 'T' : 'S',
+      });
     }
   }
 
-  if (!processed) {
+  // Perform all updates and inserts in bulk
+  if (allInserts.length > 0) {
+    await batchInsertRows(auth, allInserts);
+  }
+
+  if (allUpdates.length > 0) {
+    await batchUpdateRows(auth, allUpdates);
+  }
+
+  if (allInserts.length === 0 && allUpdates.length === 0) {
     await logData(auth, `No matches found for C24 ('${data.C24}') or C3 ('${data.C3}') in any sheet.`);
   }
 
-  return processed;
+  return allInserts.length > 0 || allUpdates.length > 0;
 }
 
-
-async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
+async function batchInsertRows(auth, inserts) {
   const sheets = google.sheets({ version: 'v4', auth });
+
+  const requests = inserts.map((insert) => {
+    return {
+      insertDimension: {
+        range: {
+          sheetId: await getSheetId(auth, insert.sheetTitle),
+          dimension: 'ROWS',
+          startIndex: insert.sourceRowIndex,
+          endIndex: insert.sourceRowIndex + 1
+        },
+        inheritFromBefore: true
+      }
+    };
+  });
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SHEET_ID,
-    requestBody: {
-      requests: [
-        {
-          insertDimension: {
-            range: {
-              sheetId: await getSheetId(auth, sheetTitle),
-              dimension: 'ROWS',
-              startIndex: sourceRowIndex, // zero-based
-              endIndex: sourceRowIndex + 1
-            },
-            inheritFromBefore: true // Inherit formulas and data validation from the row above
-          }
-        }
-      ]
-    }
+    requestBody: { requests }
   });
 
-  console.log(`Inserted new row after row ${sourceRowIndex} in sheet '${sheetTitle}' with formatting.`);
+  // Now insert data into these rows
+  const dataInserts = inserts.map((insert) => {
+    return insertDataInRow(auth, insert.sheetTitle, insert.row, insert.data, insert.startCol, insert.endCol);
+  });
+
+  await Promise.all(dataInserts);
+  console.log(`Inserted ${inserts.length} rows.`);
 }
+
+async function batchUpdateRows(auth, updates) {
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  const dataUpdates = updates.map((update) => {
+    return insertDataInRow(auth, update.sheetTitle, update.row, update.data, update.startCol, update.endCol);
+  });
+
+  await Promise.all(dataUpdates);
+  console.log(`Updated ${updates.length} rows.`);
+}
+
 
 async function getSheetId(auth, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
