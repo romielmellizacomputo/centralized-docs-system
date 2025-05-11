@@ -135,33 +135,37 @@ async function validateAndInsertData(auth, data) {
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
-    const CColumn = await getColumnValues(auth, sheetTitle, 'B');
-    const DColumn = await getColumnValues(auth, sheetTitle, 'C');
+    // Use different validation columns based on sheet name
+    const isAllTestCases = sheetTitle === "ALL TEST CASES";
+    const validationCol1 = isAllTestCases ? 'C' : 'B';
+    const validationCol2 = isAllTestCases ? 'D' : 'C';
+    const insertRangeEnd = isAllTestCases ? 'T' : 'S';
+    const clearRangeStart = isAllTestCases ? 'C' : 'D';
+    const clearRangeEnd = 'T';
+
+    const firstCol = await getColumnValues(auth, sheetTitle, validationCol1);
+    const secondCol = await getColumnValues(auth, sheetTitle, validationCol2);
 
     let lastC24Index = -1;
     let existingC3Index = -1;
 
-    for (let i = 0; i < CColumn.length; i++) {
-      if (CColumn[i] === data.C24) lastC24Index = i + 1;
-      if (DColumn[i] === data.C3) {
+    for (let i = 0; i < firstCol.length; i++) {
+      if (firstCol[i] === data.C24) lastC24Index = i + 1;
+      if (secondCol[i] === data.C3) {
         existingC3Index = i + 1;
         break;
       }
     }
 
     if (existingC3Index !== -1) {
-      // Clear row and insert updated data if row exists
-      await clearRowData(auth, sheetTitle, existingC3Index);
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data);
+      await clearRowData(auth, sheetTitle, existingC3Index, clearRangeStart, clearRangeEnd);
+      await insertDataInRow(auth, sheetTitle, existingC3Index, data, insertRangeEnd);
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
       return true;
     } else if (lastC24Index !== -1) {
-      // Insert new row with formulas and dropdowns from last row
       const newRowIndex = lastC24Index + 1;
-      await insertRowWithFormat(auth, sheetTitle, lastC24Index); // Insert blank row with formulas and dropdowns
-
-      // Insert data into the newly inserted row
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data);
+      await insertRowWithFormat(auth, sheetTitle, lastC24Index);
+      await insertDataInRow(auth, sheetTitle, newRowIndex, data, insertRangeEnd);
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
       return true;
     }
@@ -203,11 +207,11 @@ async function getSheetId(auth, sheetTitle) {
   return sheet.properties.sheetId;
 }
 
-async function insertDataInRow(auth, sheetTitle, row, data) {
+async function insertDataInRow(auth, sheetTitle, row, data, endCol) {
   const sheets = google.sheets({ version: 'v4', auth });
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${sheetTitle}!B${row}:S${row}`,
+    range: `${sheetTitle}!B${row}:${endCol}${row}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [[
@@ -234,13 +238,15 @@ async function insertDataInRow(auth, sheetTitle, row, data) {
   });
 }
 
-async function clearRowData(auth, sheetTitle, row) {
+
+async function clearRowData(auth, sheetTitle, row, startCol, endCol) {
   const sheets = google.sheets({ version: 'v4', auth });
   await sheets.spreadsheets.values.clear({
     spreadsheetId: SHEET_ID,
-    range: `${sheetTitle}!D${row}:T${row}`
+    range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`
   });
 }
+
 
 async function getTargetSheetTitles(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
