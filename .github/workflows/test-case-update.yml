@@ -9,9 +9,8 @@ on:
         type: string
 
 concurrency:
-  group: 'test-case-updater'  # Ensures all runs are part of the same group
-  cancel-in-progress: false    # Do not cancel any currently running workflows
-
+  group: 'test-case-updater'
+  cancel-in-progress: false   
 jobs:
   autonumber:
     runs-on: ubuntu-latest
@@ -40,7 +39,7 @@ jobs:
   updateToC:
     runs-on: ubuntu-latest
     continue-on-error: true
-    needs: autonumber  # This job depends on the autonumber job to run first
+    needs: autonumber 
 
     steps:
       - name: Checkout repository
@@ -65,7 +64,7 @@ jobs:
   issuesSheetDropdown:
     runs-on: ubuntu-latest
     continue-on-error: true
-    needs: updateToC  # This job depends on the updateToC job to run first
+    needs: updateToC 
 
     steps:
       - name: Checkout repository
@@ -90,7 +89,7 @@ jobs:
   sendLog:
     runs-on: ubuntu-latest
     continue-on-error: true
-    needs: issuesSheetDropdown  # This job depends on issuesSheetDropdown to run first
+    needs: issuesSheetDropdown 
 
     steps:
       - name: Checkout repository
