@@ -13,17 +13,16 @@ const auth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
 });
 
-
-async function fetchUrls(auth) {
-  const sheets = google.sheets({ version: 'v4', auth });
+async function fetchUrls(authClient) {
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
   const range = `${SHEET_NAME}!B3:B`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   const values = response.data.values || [];
   return values.flat().filter(url => url);
 }
 
-async function clearFetchedRows(auth, numRowsToClear) {
-  const sheets = google.sheets({ version: 'v4', auth });
+async function clearFetchedRows(authClient, numRowsToClear) {
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
   if (numRowsToClear === 0) return;
 
   await sheets.spreadsheets.values.batchClear({
@@ -36,13 +35,13 @@ async function clearFetchedRows(auth, numRowsToClear) {
   console.log(`Cleared ${numRowsToClear} rows from Logs sheet.`);
 }
 
-async function processSpreadsheetUrl(url, auth) {
+async function processSpreadsheetUrl(url, authClient) {
   try {
     const match = url.match(/[-\w]{25,}/); // Extract spreadsheet ID from URL
     if (!match) throw new Error('Invalid sheet URL');
     const sheetId = match[0];
 
-    const sheets = google.sheets({ version: 'v4', auth });
+    const sheets = google.sheets({ version: 'v4', auth: authClient });
     const meta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
     const sheetTitles = meta.data.sheets.map(s => s.properties.title);
 
@@ -72,8 +71,8 @@ async function processSpreadsheetUrl(url, auth) {
 }
 
 async function updateTestCasesInLibrary() {
-  const auth = await authGoogle();
-  const urls = await fetchUrls(auth);
+  const authClient = await auth.getClient();
+  const urls = await fetchUrls(authClient);
 
   if (!urls.length) {
     console.log('No URLs to process.');
@@ -89,14 +88,14 @@ async function updateTestCasesInLibrary() {
     const url = urls[i];
     if (uniqueUrls.has(url)) continue;
 
-    const result = await processSpreadsheetUrl(url, auth);
+    const result = await processSpreadsheetUrl(url, authClient);
     if (result > 0) {
       uniqueUrls.add(url);
       processedCount++;
     }
   }
 
-  await clearFetchedRows(auth, processedCount);
+  await clearFetchedRows(authClient, processedCount);
   console.log('Processing complete.');
 }
 
