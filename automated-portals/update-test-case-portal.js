@@ -95,35 +95,35 @@ async function main() {
   const client = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: client });
 
-  await clearTargetSheet(sheets);
-  console.log('Target sheet cleared from B3 to Y.');
-
   const sheetTitles = await fetchSheetTitles(sheets);
-
   let allRows = [];
 
   for (const sheetTitle of sheetTitles) {
     const label = SHEET_NAME_MAP[sheetTitle];
-    if (!label) continue;  // Skip if no corresponding label is found
+    if (!label) continue;
 
     const data = await fetchSheetData(sheets, sheetTitle);
     const labeledData = data.map(row => {
-      // Process each row, add the label, and handle hyperlinks
       const processedRow = detectHyperlinks(row);
-      return [label, ...processedRow];  // Add label to the first column
+      return [label, ...processedRow];
     });
 
     allRows = [...allRows, ...labeledData];
   }
 
   if (allRows.length === 0) {
-    console.log('No data found to insert.');
+    console.log('No data found to insert. Target sheet not modified.');
     return;
   }
+
+  // Clear the sheet only if we have data to insert
+  await clearTargetSheet(sheets);
+  console.log('Target sheet cleared from B3 to Y.');
 
   await insertBatchData(sheets, allRows);
   console.log('Data successfully inserted into Test Case Portal.');
 }
+
 
 main().catch(err => {
   console.error('Failed to update Test Case Portal:', err.message);
