@@ -17,6 +17,6 @@ jobs:
         uses: peter-evans/workflow-dispatch@v1
         with:
           workflow: "run-test-case.yml"
-          ref: main  # Ensure you're targeting the correct branch
+          ref: main  # Targeting the correct branch
           inputs:
             sheet_data: ${{ github.event.inputs.sheet_data }}
