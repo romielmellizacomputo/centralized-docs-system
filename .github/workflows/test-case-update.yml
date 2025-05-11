@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: 'test-case-updater'  # Ensures all runs are part of the same group
-  cancel-in-progress: false    # Do not cancel any currently running workflows
+  cancel-in-progress: false    # Do not cancel any currently running workflows. Jobs will queue up.
 
 jobs:
   autonumber:
@@ -90,7 +90,7 @@ jobs:
   sendLog:
     runs-on: ubuntu-latest
     continue-on-error: true
-    needs: issuesSheetDropdown  # This job depends on issuesSheetDropdown to run first
+    needs: issuesSheetDropdown  # This job depends on the issuesSheetDropdown to run first
 
     steps:
       - name: Checkout repository
