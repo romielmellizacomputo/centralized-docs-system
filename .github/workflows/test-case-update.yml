@@ -8,6 +8,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: "automated-test-case-updater"
+  cancel-in-progress: false
+
 jobs:
   autonumber:
     runs-on: ubuntu-latest
