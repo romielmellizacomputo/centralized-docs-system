@@ -41,22 +41,32 @@ async function fetchSheetTitles(sheets) {
     .filter(title => !EXCLUDED_SHEETS.includes(title));
 }
 
+function detectHyperlinks(row) {
+  return row.map(cell => {
+    // Check if the cell contains a hyperlink
+    if (typeof cell === 'string' && cell.startsWith('=HYPERLINK')) {
+      const matches = cell.match(/"([^"]+)"/);
+      if (matches && matches[1]) {
+        // Return the hyperlink formula in the correct format
+        return `=HYPERLINK("${matches[1]}", "${cell.split('","')[1]?.split(')')[0] || ''}")`;
+      }
+    }
+    return cell;  // Return the original cell value if no hyperlink
+  });
+}
+
 async function fetchSheetData(sheets, sheetName) {
   const range = `${sheetName}!B3:W`; 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range,
-    valueRenderOption: 'FORMULA' 
+    valueRenderOption: 'FORMULA'  // Ensure formulas are rendered as formulas
   });
 
   const values = res.data.values || [];
-  return values.filter(row => {
-    // Ensure that columns B, C, and D are not empty
-    const colB = row[0] || ''; // Column B
-    const colC = row[1] || ''; // Column C
-    const colD = row[2] || ''; // Column D
-    return colB && colC && colD;  // Only keep rows where all 3 columns are not empty
-  });
+
+  // Filter out rows where any of the 3 columns (B, C, D) are empty
+  return values.filter(row => row[1] && row[2] && row[3]);
 }
 
 async function clearTargetSheet(sheets) {
@@ -68,31 +78,16 @@ async function clearTargetSheet(sheets) {
 }
 
 async function insertBatchData(sheets, rows) {
-  const range = `${DEST_SHEET}!B3`; 
+  const range = `${DEST_SHEET}!B3`;  // Start inserting at row 3
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: 'USER_ENTERED',  // Allow the formulas to be entered as formulas
     requestBody: {
       values: rows
     }
   });
 }
-
-function detectHyperlinks(row) {
-  return row.map(cell => {
-    // Ensure cell is a string before calling startsWith
-    if (typeof cell === 'string' && cell.startsWith('=HYPERLINK')) {
-      const matches = cell.match(/"([^"]+)"/);
-      if (matches && matches[1]) {
-        return matches[1]; // Return only the hyperlink URL
-      }
-    }
-    return cell;
-  });
-}
-
-
 
 async function main() {
   const client = await auth.getClient();
@@ -107,14 +102,13 @@ async function main() {
 
   for (const sheetTitle of sheetTitles) {
     const label = SHEET_NAME_MAP[sheetTitle];
-    if (!label) continue; 
+    if (!label) continue;  // Skip if no corresponding label is found
 
     const data = await fetchSheetData(sheets, sheetTitle);
-
-    // Apply the hyperlink detection function and prepend the label
     const labeledData = data.map(row => {
-      const detectedRow = detectHyperlinks(row);
-      return [label, ...detectedRow];
+      // Process each row, add the label, and handle hyperlinks
+      const processedRow = detectHyperlinks(row);
+      return [label, ...processedRow];  // Add label to the first column
     });
 
     allRows = [...allRows, ...labeledData];
