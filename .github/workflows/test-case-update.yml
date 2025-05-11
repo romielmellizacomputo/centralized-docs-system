@@ -1,10 +1,12 @@
-name: Run Test Case Scripts
+name: Automated Test Case Updater
 
 on:
-  workflow_run:
-    workflows: ["Automated Test Case Updater"]
-    types:
-      - completed
+  workflow_dispatch:
+    inputs:
+      sheet_data:
+        description: 'Data from the edited sheet'
+        required: true
+        type: string
 
 jobs:
   autonumber:
@@ -55,3 +57,5 @@ jobs:
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
           TEST_CASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_CASE_SERVICE_ACCOUNT_JSON }}
           AUTOMATED_PORTALS: ${{ secrets.AUTOMATED_PORTALS }}
+
+
