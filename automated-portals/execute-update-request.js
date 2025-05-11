@@ -16,7 +16,7 @@ const auth = new GoogleAuth({
 
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = ${SHEET_NAME}!B3:B;
+  const range = `${SHEET_NAME}!B3:B`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   const values = response.data.values || [];
   return values.map((row, index) => ({ url: row[0], rowIndex: index + 3 })).filter(entry => entry.url);
@@ -24,7 +24,7 @@ async function fetchUrls(auth) {
 
 async function clearFetchedRows(auth, rowIndices) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const ranges = rowIndices.map(rowIndex => ${SHEET_NAME}!${rowIndex}:${rowIndex});
+  const ranges = rowIndices.map(rowIndex => `${SHEET_NAME}!${rowIndex}:${rowIndex}`);
   if (ranges.length === 0) return;
 
   await sheets.spreadsheets.values.batchClear({
@@ -32,7 +32,7 @@ async function clearFetchedRows(auth, rowIndices) {
     requestBody: { ranges }
   });
 
-  console.log(Cleared ${ranges.length} entire rows from Logs sheet.);
+  console.log(`Cleared ${ranges.length} entire rows from Logs sheet.`);
 }
 
 async function logData(auth, message) {
@@ -40,7 +40,7 @@ async function logData(auth, message) {
   const logCell = 'B1'; // Reference to cell B1 for logging
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: ${SHEET_NAME}!${logCell},
+    range: `${SHEET_NAME}!${logCell}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [[message]] }
   });
@@ -50,7 +50,7 @@ async function logData(auth, message) {
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
   const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24'];
-  const ranges = cellRefs.map(ref => ${sheetTitle}!${ref});
+  const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
 
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId,
@@ -68,7 +68,7 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
   const sheet = meta.data.sheets.find(s => s.properties.title === sheetTitle);
   const sheetId = sheet.properties.sheetId;
-  const sheetUrl = https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId};
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
 
   return {
     C24: data['C24'],
@@ -88,7 +88,6 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     sheetName: sheetTitle
   };
 }
-
 
 async function getCellValue(auth, spreadsheetId, range) {
   const sheets = google.sheets({ version: 'v4', auth });
@@ -113,16 +112,15 @@ async function processUrl(url, auth) {
     // Skip sheets that returned null or are empty (only headers/formulas)
     const hasContent = Object.values(data || {}).some(v => v !== null && v !== '');
     if (!hasContent) {
-      await logData(auth, Skipped sheet '${sheetTitle}' — no usable content.);
+      await logData(auth, `Skipped sheet '${sheetTitle}' — no usable content.`);
       continue;
     }
     allData.push(data);
     processedSheets.push(sheetTitle);
   }
 
-
   if (processedSheets.length > 0) {
-    await logData(auth, Fetched sheets: ${processedSheets.join(", ")});
+    await logData(auth, `Fetched sheets: ${processedSheets.join(", ")}`);
   }
 
   if (allData.length > 0) {
@@ -130,7 +128,7 @@ async function processUrl(url, auth) {
       await validateAndInsertData(auth, data);
     }
   } else {
-    await logData(auth, No valid data found in fetched sheets from URL: ${url});
+    await logData(auth, `No valid data found in fetched sheets from URL: ${url}`);
   }
 }
 
@@ -164,24 +162,23 @@ async function validateAndInsertData(auth, data) {
     if (existingC3Index !== -1) {
       await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
       await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
-      await logData(auth, Updated row ${existingC3Index} in sheet '${sheetTitle}');
+      await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
       processed = true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertRowWithFormat(auth, sheetTitle, lastC24Index);
       await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
-      await logData(auth, Inserted row after ${lastC24Index} in sheet '${sheetTitle}');
+      await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
       processed = true;
     }
   }
 
   if (!processed) {
-    await logData(auth, No matches found for C24 ('${data.C24}') or C3 ('${data.C3}') in any sheet.);
+    await logData(auth, `No matches found for C24 ('${data.C24}') or C3 ('${data.C3}') in any sheet.`);
   }
 
   return processed;
 }
-
 
 async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
   const sheets = google.sheets({ version: 'v4', auth });
@@ -205,7 +202,7 @@ async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
     }
   });
 
-  console.log(Inserted new row after row ${sourceRowIndex} in sheet '${sheetTitle}' with formatting.);
+  console.log(`Inserted new row after row ${sourceRowIndex} in sheet '${sheetTitle}' with formatting.`);
 }
 
 async function getSheetId(auth, sheetTitle) {
@@ -225,7 +222,7 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
   const values = [
     data.C24,                            // B or C
     data.C3,                             // C or D
-    =HYPERLINK("${data.sheetUrl}", "${data.C4}"),
+    `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
     data.C5,
     data.C6,
     data.C7,
@@ -249,7 +246,7 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: ${sheetTitle}!${startCol}${row}:${endCol}${row},
+    range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [values]
@@ -257,17 +254,14 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
   });
 }
 
-
-
 async function clearRowData(auth, sheetTitle, row, isAllTestCases) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = isAllTestCases ? D${row}:T${row} : C${row}:S${row};
+  const range = isAllTestCases ? `D${row}:T${row}` : `C${row}:S${row}`;
   await sheets.spreadsheets.values.clear({
     spreadsheetId: SHEET_ID,
-    range: ${sheetTitle}!${range}
+    range: `${sheetTitle}!${range}`
   });
 }
-
 
 async function getTargetSheetTitles(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
@@ -277,7 +271,7 @@ async function getTargetSheetTitles(auth) {
 
 async function getColumnValues(auth, sheetTitle, column) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = ${sheetTitle}!${column}:${column};
+  const range = `${sheetTitle}!${column}:${column}`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   return res.data.values?.map(row => row[0]) || [];
 }
@@ -291,7 +285,7 @@ async function updateTestCasesInLibrary() {
     return;
   }
 
-  await logData(authClient, Starting processing ${Math.min(urlsWithIndices.length, MAX_URLS)} URLs...);
+  await logData(authClient, `Starting processing ${Math.min(urlsWithIndices.length, MAX_URLS)} URLs...`);
 
   const uniqueUrls = new Set();
   const processedRowIndices = [];
@@ -299,7 +293,7 @@ async function updateTestCasesInLibrary() {
   for (let i = 0; i < urlsWithIndices.length && uniqueUrls.size < MAX_URLS; i++) {
     const { url, rowIndex } = urlsWithIndices[i];
     if (uniqueUrls.has(url)) {
-      await logData(authClient, Duplicate URL found: ${url}. Clearing row data.);
+      await logData(authClient, `Duplicate URL found: ${url}. Clearing row data.`);
       processedRowIndices.push(rowIndex);
       continue;
     }
@@ -307,11 +301,11 @@ async function updateTestCasesInLibrary() {
     uniqueUrls.add(url);
     processedRowIndices.push(rowIndex);
 
-    await logData(authClient, Processing URL: ${url});
+    await logData(authClient, `Processing URL: ${url}`);
     try {
       await processUrl(url, authClient);
     } catch (error) {
-      await logData(authClient, Error processing URL: ${url}. Error: ${error.message});
+      await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
     }
   }
 
