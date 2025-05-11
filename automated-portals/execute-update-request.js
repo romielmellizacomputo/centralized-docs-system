@@ -5,7 +5,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const SHEET_NAME = 'Logs';
+const SHEET_NAME = 'Logs'; // This is the name of the main sheet (the one we're working with)
+const TARGET_SHEET_NAME = 'Template HQZen'; // Define the sheet you want to process
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_URLS = 20;
 
@@ -89,61 +90,32 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   };
 }
 
-async function getCellValue(auth, spreadsheetId, range) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-  return res.data.values?.[0]?.[0] || null;
-}
-
 async function processUrl(url, auth) {
   const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
   const sheets = google.sheets({ version: 'v4', auth });
   const targetSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
   
-  const allData = [];
-  const processedSheets = [];
+  const sheetTitle = TARGET_SHEET_NAME; // Use the target sheet defined above
+  const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
 
-  for (const sheet of targetSpreadsheet.data.sheets) {
-    const sheetTitle = sheet.properties.title;
-    if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
-
-    const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
-
-    // Skip sheets that returned null or are empty (only headers/formulas)
-    const hasContent = Object.values(data || {}).some(v => v !== null && v !== '');
-    if (!hasContent) {
-      await logData(auth, `Skipped sheet '${sheetTitle}' — no usable content.`);
-      continue;
-    }
-    allData.push(data);
-    processedSheets.push(sheetTitle);
-  }
-
-  if (processedSheets.length > 0) {
-    await logData(auth, `Fetched sheets: ${processedSheets.join(", ")}`);
-  }
-
-  if (allData.length > 0) {
-    for (const data of allData) {
-      await validateAndInsertData(auth, data);
-    }
+  if (data) {
+    await validateAndInsertData(auth, data);
   } else {
-    await logData(auth, `No valid data found in fetched sheets from URL: ${url}`);
+    await logData(auth, `No valid data found in sheet '${sheetTitle}' from URL: ${url}`);
   }
 }
 
 async function validateAndInsertData(auth, data) {
   const sheets = google.sheets({ version: 'v4', auth });
   const targetSheetTitles = await getTargetSheetTitles(auth);
-  let processed = false;
 
+  // Skipping unnecessary sheets
+  let processed = false;
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
-    // Use different validation columns
-    const isAllTestCases = sheetTitle === "ALL TEST CASES";
-    const validateCol1 = isAllTestCases ? 'C' : 'B';
-    const validateCol2 = isAllTestCases ? 'D' : 'C';
+    const validateCol1 = 'B'; // Specify validation columns based on your sheet
+    const validateCol2 = 'C';
 
     const firstColumn = await getColumnValues(auth, sheetTitle, validateCol1);
     const secondColumn = await getColumnValues(auth, sheetTitle, validateCol2);
@@ -160,14 +132,14 @@ async function validateAndInsertData(auth, data) {
     }
 
     if (existingC3Index !== -1) {
-      await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
+      await clearRowData(auth, sheetTitle, existingC3Index);
+      await insertDataInRow(auth, sheetTitle, existingC3Index, data);
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
       processed = true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertRowWithFormat(auth, sheetTitle, lastC24Index);
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
+      await insertDataInRow(auth, sheetTitle, newRowIndex, data);
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
       processed = true;
     }
@@ -195,7 +167,7 @@ async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
               startIndex: sourceRowIndex, // zero-based
               endIndex: sourceRowIndex + 1
             },
-            inheritFromBefore: true // Inherit formulas and data validation from the row above
+            inheritFromBefore: true
           }
         }
       ]
@@ -212,55 +184,11 @@ async function getSheetId(auth, sheetTitle) {
   return sheet.properties.sheetId;
 }
 
-async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
+async function getColumnValues(auth, sheetTitle, column) {
   const sheets = google.sheets({ version: 'v4', auth });
-
-  // Determine if "ALL TEST CASES"
-  const isAllTestCases = sheetTitle === "ALL TEST CASES";
-
-  // Common values to insert
-  const values = [
-    data.C24,                            // B or C
-    data.C3,                             // C or D
-    `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
-    data.C5,
-    data.C6,
-    data.C7,
-    '',
-    '',
-    '',
-    '',
-    '',
-    data.C15,
-    data.C13,
-    data.C14,
-    data.C18,
-    data.C19,
-    data.C20
-  ];
-
-  // Add one more item only for "ALL TEST CASES"
-  if (isAllTestCases) {
-    values.push(data.C21);
-  }
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
-    range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: {
-      values: [values]
-    }
-  });
-}
-
-async function clearRowData(auth, sheetTitle, row, isAllTestCases) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const range = isAllTestCases ? `D${row}:T${row}` : `C${row}:S${row}`;
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: SHEET_ID,
-    range: `${sheetTitle}!${range}`
-  });
+  const range = `${sheetTitle}!${column}:${column}`;
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
+  return res.data.values?.map(row => row[0]) || [];
 }
 
 async function getTargetSheetTitles(auth) {
@@ -269,49 +197,24 @@ async function getTargetSheetTitles(auth) {
   return meta.data.sheets.map(s => s.properties.title);
 }
 
-async function getColumnValues(auth, sheetTitle, column) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${sheetTitle}!${column}:${column}`;
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
-  return res.data.values?.map(row => row[0]) || [];
-}
-
 async function updateTestCasesInLibrary() {
   const authClient = await auth.getClient();
   const urlsWithIndices = await fetchUrls(authClient);
 
-  if (!urlsWithIndices.length) {
-    await logData(authClient, 'No URLs to process.');
+  if (urlsWithIndices.length === 0) {
+    console.log("No URLs to process.");
     return;
   }
 
-  await logData(authClient, `Starting processing 1 URL...`);
-
-  const uniqueUrls = new Set();
-  const processedRowIndices = [];
-
-  // Process only the first URL
-  const { url, rowIndex } = urlsWithIndices[0];
-
-  // Clear the row for the URL before processing
-  processedRowIndices.push(rowIndex);
-  await clearFetchedRows(authClient, processedRowIndices);
-  await logData(authClient, `Cleared row for URL: ${url}`);
-
-  if (uniqueUrls.has(url)) {
-    await logData(authClient, `Duplicate URL found: ${url}.`);
-  } else {
-    uniqueUrls.add(url);
-    await logData(authClient, `Processing URL: ${url}`);
+  for (const { url, rowIndex } of urlsWithIndices) {
     try {
+      console.log(`Processing URL: ${url}`);
       await processUrl(url, authClient);
-    } catch (error) {
-      await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
+      await clearFetchedRows(authClient, [rowIndex]);
+    } catch (err) {
+      console.error(`Error processing URL ${url}:`, err);
     }
   }
-
-  await logData(authClient, "Processing complete.");
 }
 
-
-updateTestCasesInLibrary().catch(console.error);
+updateTestCasesInLibrary();
