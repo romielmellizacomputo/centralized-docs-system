@@ -20,26 +20,25 @@ async function main() {
   try {
     const metadata = await sheets.spreadsheets.get({ spreadsheetId });
     const sheetNames = metadata.data.sheets.map(s => s.properties.title);
-    const allData = {};
 
-    // Fetch all data from each sheet
     for (const name of sheetNames) {
       if (skip.includes(name)) continue;
 
-      const range = `'${name}'!A:Z`; // Adjust range as needed
+      const sheetMeta = metadata.data.sheets.find(s => s.properties.title === name);
+      const sheetId = sheetMeta.properties.sheetId;
+      const merges = sheetMeta.merges || [];
+
+      const range = `'${name}'!E12:F`;
       const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-      allData[name] = res.data.values || [];
-    }
+      const rows = res.data.values || [];
+      const startRow = 12;
 
-    const requests = [];
-
-    // Process data in memory
-    for (const [name, rows] of Object.entries(allData)) {
-      const merges = metadata.data.sheets.find(s => s.properties.title === name).merges || [];
-      const startRow = 12; // Assuming numbering starts from row 12
+      const requests = [];
+      const values = Array(rows.length).fill(['']);
       let number = 1;
+      let row = 0;
 
-      for (let row = 0; row < rows.length; row++) {
+      while (row < rows.length) {
         const absRow = row + startRow;
 
         // Check for merge in column F
@@ -58,19 +57,29 @@ async function main() {
         }
 
         const isMergedInF = mergeEnd > mergeStart;
+        const mergeLength = mergeEnd - mergeStart;
 
         const fValue = (rows[row] && rows[row][1])?.trim();
+        const eValue = (rows[row] && rows[row][0])?.trim();
+
+        // Check if E is incorrectly merged or needs merging
+        const eMerge = merges.find(m =>
+          m.startRowIndex === mergeStart - 1 &&
+          m.endRowIndex === mergeEnd - 1 &&
+          m.startColumnIndex === 4 &&
+          m.endColumnIndex === 5
+        );
 
         if (fValue) {
           // Fill number
-          rows[row][0] = number.toString(); // Assuming column E is the first column in the fetched range
+          values[row] = [number.toString()];
 
-          // Prepare merge/unmerge requests if needed
-          if (isMergedInF) {
+          // Merge E if F is merged and E isn't
+          if (isMergedInF && !eMerge) {
             requests.push({
               mergeCells: {
                 range: {
-                  sheetId: metadata.data.sheets.find(s => s.properties.title === name).properties.sheetId,
+                  sheetId,
                   startRowIndex: mergeStart - 1,
                   endRowIndex: mergeEnd - 1,
                   startColumnIndex: 4,
@@ -81,26 +90,40 @@ async function main() {
             });
           }
 
+          // Unmerge E if F is not merged but E is
+          if (!isMergedInF && eMerge) {
+            requests.push({
+              unmergeCells: {
+                range: {
+                  sheetId,
+                  startRowIndex: eMerge.startRowIndex,
+                  endRowIndex: eMerge.endRowIndex,
+                  startColumnIndex: 4,
+                  endColumnIndex: 5,
+                }
+              }
+            });
+          }
+
           number++;
         }
+
+        row += mergeLength;
       }
-    }
 
-    // Update all values in one go
-    for (const [name, rows] of Object.entries(allData)) {
-      const range = `'${name}'!E12:E${12 + rows.length - 1}`; // Adjust range as needed
-      await updateValuesWithRetry(sheets, spreadsheetId, range, rows.map(row => [row[0]]));
-    }
+      // Update values in column E
+      await updateValuesWithRetry(sheets, spreadsheetId, `'${name}'!E12:E${startRow + values.length - 1}`, values);
 
-    // Apply merge/unmerge requests in batches
-    if (requests.length > 0) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests },
-      });
-    }
+      // Apply merge/unmerge requests in batches
+      if (requests.length > 0) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: { requests },
+        });
+      }
 
-    console.log('✅ All sheets updated successfully.');
+      console.log(`✅ Updated: ${name}`);
+    }
   } catch (err) {
     console.error('❌ ERROR:', err);
     process.exit(1);
