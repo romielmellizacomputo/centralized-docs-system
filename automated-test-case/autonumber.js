@@ -131,12 +131,10 @@ async function main() {
 }
 
 async function updateValuesWithRetry(sheets, spreadsheetId, range, values) {
-  const maxRetries = 5;
   let attempts = 0;
 
-  while (attempts < maxRetries) {
+  while (true) { // Infinite loop for retries
     try {
-      // Batch update: Ensure we send a larger set of values
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range,
@@ -156,8 +154,6 @@ async function updateValuesWithRetry(sheets, spreadsheetId, range, values) {
       }
     }
   }
-
-  throw new Error('Max retries reached for updating values.');
 }
 
 main();
