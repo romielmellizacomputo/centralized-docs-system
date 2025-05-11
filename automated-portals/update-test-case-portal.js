@@ -81,15 +81,27 @@ async function clearTargetSheet(sheets) {
 
 async function insertBatchData(sheets, rows) {
   const range = `${DEST_SHEET}!B3`;  // Start inserting at row 3
+  
+  // Ensure the row data matches expected format
+  const formattedRows = rows.map(row => {
+    return row.map(cell => {
+      if (typeof cell === 'string' && cell.startsWith('=HYPERLINK')) {
+        return [`=HYPERLINK("${cell[0]}", "${cell[1]}")`];
+      }
+      return [cell];  // Return the original cell value if no hyperlink
+    });
+  });
+
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range,
     valueInputOption: 'USER_ENTERED',  // Ensures formulas are recognized
     requestBody: {
-      values: rows
+      values: formattedRows
     }
   });
 }
+
 
 async function main() {
   const client = await auth.getClient();
