@@ -7,7 +7,6 @@ dotenv.config();
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
-const MAX_URLS = 20;
 const REQUEST_DELAY_MS = 5000; // Delay between requests in milliseconds (5 seconds)
 
 const auth = new GoogleAuth({
@@ -231,47 +230,31 @@ async function updateTestCasesInLibrary() {
     return;
   }
 
-  await logData(authClient, `Starting processing ${Math.min(urlsWithIndices.length, MAX_URLS)} URLs...`);
+  // Process only the first URL
+  const { url, rowIndex } = urlsWithIndices[0];
+  await logData(authClient, `Processing URL: ${url}`);
 
-  const uniqueUrls = new Set();
-  const processedRowIndices = [];
+  let attempts = 0;
+  let success = false;
 
-  for (let i = 0; i < urlsWithIndices.length && uniqueUrls.size < MAX_URLS; i++) {
-    const { url, rowIndex } = urlsWithIndices[i];
-    if (uniqueUrls.has(url)) {
-      await logData(authClient, `Duplicate URL found: ${url}. Clearing row data.`);
-      processedRowIndices.push(rowIndex);
-      continue;
-    }
-
-    uniqueUrls.add(url);
-    processedRowIndices.push(rowIndex);
-
-    await logData(authClient, `Processing URL: ${url}`);
-    let attempts = 0;
-    let success = false;
-
-    while (attempts < 5 && !success) {
-      try {
-        await processUrl(url, authClient);
-        success = true; // If successful, exit the loop
-      } catch (error) {
-        if (error.message.includes('Quota exceeded')) {
-          attempts++;
-          const waitTime = Math.pow(2, attempts) * 1000; // Exponential backoff
-          await delay(waitTime);
-          await logData(authClient, `Retrying after ${waitTime / 1000} seconds due to quota error.`);
-        } else {
-          await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
-          break; // Exit on other errors
-        }
+  while (attempts < 5 && !success) {
+    try {
+      await processUrl(url, authClient);
+      success = true; // If successful, exit the loop
+    } catch (error) {
+      if (error.message.includes('Quota exceeded')) {
+        attempts++;
+        const waitTime = Math.pow(2, attempts) * 1000; // Exponential backoff
+        await delay(waitTime);
+        await logData(authClient, `Retrying after ${waitTime / 1000} seconds due to quota error.`);
+      } else {
+        await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
+        break; // Exit on other errors
       }
     }
-
-    await delay(REQUEST_DELAY_MS); // Delay between requests
   }
 
-  await clearFetchedRows(authClient, processedRowIndices);
+  await clearFetchedRows(authClient, [rowIndex]); // Clear only the processed row
   await logData(authClient, "Processing complete.");
 }
 
