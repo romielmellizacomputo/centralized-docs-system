@@ -125,6 +125,8 @@ async function validateAndInsertData(auth, data) {
   const sheets = google.sheets({ version: 'v4', auth });
   const targetSheetTitles = await getTargetSheetTitles(auth);
 
+  let inserted = false; // Track if data has been inserted or updated
+
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
@@ -146,17 +148,20 @@ async function validateAndInsertData(auth, data) {
       await clearRowData(auth, sheetTitle, existingC3Index);
       await insertDataInRow(auth, sheetTitle, existingC3Index, data);
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
-      return true;
+      inserted = true;
+      break; // Exit loop after inserting/ updating
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertDataInRow(auth, sheetTitle, newRowIndex, data);
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
-      return true;
+      inserted = true;
+      break; // Exit loop after inserting
     }
   }
 
-  await logData(auth, `Neither C24 ('${data.C24}') nor C3 ('${data.C3}') found for insertion in any sheet.`);
-  return false;
+  if (!inserted) {
+    await logData(auth, `Neither C24 ('${data.C24}') nor C3 ('${data.C3}') found for insertion in any sheet.`);
+  }
 }
 
 async function insertDataInRow(auth, sheetTitle, row, data) {
