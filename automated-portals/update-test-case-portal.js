@@ -84,12 +84,13 @@ async function insertBatchData(sheets, rows) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range,
-    valueInputOption: 'USER_ENTERED',  // Allow the formulas to be entered as formulas
+    valueInputOption: 'USER_ENTERED',  // Ensures formulas are recognized
     requestBody: {
       values: rows
     }
   });
 }
+
 
 async function main() {
   const client = await auth.getClient();
