@@ -26,6 +26,7 @@ jobs:
           CDS_PORTALS_SERVICE_ACCOUNT_JSON: ${{ secrets.CDS_PORTALS_SERVICE_ACCOUNT_JSON }}
           CDS_PORTAL_SPREADSHEET_ID: ${{ secrets.CDS_PORTAL_SPREADSHEET_ID }}
           GITLAB_URL: ${{ secrets.GITLAB_URL }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: |
           cd automated-portals
           node update-tc-labels.js
