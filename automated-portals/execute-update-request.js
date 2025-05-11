@@ -8,7 +8,7 @@ const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_URLS = 20;
-const REQUEST_DELAY_MS = 2000; // Delay between requests in milliseconds
+const REQUEST_DELAY_MS = 5000; // Delay between requests in milliseconds (5 seconds)
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
@@ -55,7 +55,7 @@ async function logData(auth, message) {
 
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24'];
+  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21'];
   const data = {};
 
   for (const ref of cellRefs) {
@@ -248,12 +248,27 @@ async function updateTestCasesInLibrary() {
     processedRowIndices.push(rowIndex);
 
     await logData(authClient, `Processing URL: ${url}`);
-    try {
-      await processUrl(url, authClient);
-      await delay(REQUEST_DELAY_MS); // Delay between requests
-    } catch (error) {
-      await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
+    let attempts = 0;
+    let success = false;
+
+    while (attempts < 5 && !success) {
+      try {
+        await processUrl(url, authClient);
+        success = true; // If successful, exit the loop
+      } catch (error) {
+        if (error.message.includes('Quota exceeded')) {
+          attempts++;
+          const waitTime = Math.pow(2, attempts) * 1000; // Exponential backoff
+          await delay(waitTime);
+          await logData(authClient, `Retrying after ${waitTime / 1000} seconds due to quota error.`);
+        } else {
+          await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
+          break; // Exit on other errors
+        }
+      }
     }
+
+    await delay(REQUEST_DELAY_MS); // Delay between requests
   }
 
   await clearFetchedRows(authClient, processedRowIndices);
