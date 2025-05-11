@@ -211,34 +211,46 @@ async function getSheetId(auth, sheetTitle) {
 
 async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
   const sheets = google.sheets({ version: 'v4', auth });
+
+  // Determine if "ALL TEST CASES"
+  const isAllTestCases = sheetTitle === "ALL TEST CASES";
+
+  // Common values to insert
+  const values = [
+    data.C24,                            // B or C
+    data.C3,                             // C or D
+    `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
+    data.C5,
+    data.C6,
+    data.C7,
+    '',
+    '',
+    '',
+    '',
+    '',
+    data.C15,
+    data.C13,
+    data.C14,
+    data.C18,
+    data.C19,
+    data.C20
+  ];
+
+  // Add one more item only for "ALL TEST CASES"
+  if (isAllTestCases) {
+    values.push(data.C21);
+  }
+
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
-      values: [[
-        data.C24,
-        data.C3,
-        `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
-        data.C5,
-        data.C6,
-        data.C7,
-        '',
-        '',
-        '',
-        '',
-        '',
-        data.C15,
-        data.C13,
-        data.C14,
-        data.C18,
-        data.C19,
-        data.C20,
-        data.C21
-      ]]
+      values: [values]
     }
   });
 }
+
 
 
 async function clearRowData(auth, sheetTitle, row, startCol, endCol) {
