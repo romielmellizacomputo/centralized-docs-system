@@ -43,12 +43,14 @@ async function fetchSheetTitles(sheets) {
 
 function detectHyperlinks(row) {
   return row.map(cell => {
-    // Check if the cell contains a hyperlink
+    // Check if the cell contains a hyperlink formula
     if (typeof cell === 'string' && cell.startsWith('=HYPERLINK')) {
-      const matches = cell.match(/"([^"]+)"/);
-      if (matches && matches[1]) {
-        // Return the hyperlink formula in the correct format
-        return `=HYPERLINK("${matches[1]}", "${cell.split('","')[1]?.split(')')[0] || ''}")`;
+      const matches = cell.match(/=HYPERLINK\("([^"]+)",\s*"([^"]+)"\)/);  // Capture both URL and description
+      if (matches && matches[1] && matches[2]) {
+        const url = matches[1];
+        const description = matches[2];
+        // Return the correct HYPERLINK formula
+        return `=HYPERLINK("${url}", "${description}")`;
       }
     }
     return cell;  // Return the original cell value if no hyperlink
