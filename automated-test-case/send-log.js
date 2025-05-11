@@ -1,13 +1,8 @@
 import { google } from 'googleapis';
 
-const sheetData = JSON.parse(process.env.SHEET_DATA);
-const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
-const targetSpreadsheetId = process.env.AUTOMATED_PORTALS;
-
-function extractSpreadsheetId(url) {
-  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  return match ? match[1] : null;
-}
+const sheetData = JSON.parse(process.env.SHEET_DATA); // Can be an array or single entry
+const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON); // Service account credentials
+const targetSpreadsheetId = process.env.AUTOMATED_PORTALS; // Destination spreadsheet for logs
 
 async function sendUpdateSignal() {
   try {
@@ -17,54 +12,51 @@ async function sendUpdateSignal() {
       throw new Error('Missing required environment variable: AUTOMATED_PORTALS');
     }
 
-    const targetSheetName = 'Logs';
-
     const auth = new google.auth.GoogleAuth({
       credentials,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly', 'https://www.googleapis.com/auth/spreadsheets'],
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
-
-    const currentDate = new Date().toISOString();
     const updates = Array.isArray(sheetData) ? sheetData : [sheetData];
 
     const logEntries = [];
 
     for (const entry of updates) {
-      const spreadsheetUrl = entry.spreadsheetUrl;
-      const spreadsheetId = entry.spreadsheetId || extractSpreadsheetId(spreadsheetUrl);
-      const sheetName = entry.sheetName;
-      const editedRange = entry.editedRange || '';
+      const { spreadsheetUrl, sheetName, editedRange } = entry;
 
-      if (!spreadsheetId || !sheetName) {
-        throw new Error(`Missing spreadsheetId or sheetName in entry: ${JSON.stringify(entry)}`);
+      if (!spreadsheetUrl || !sheetName) {
+        throw new Error(`Missing spreadsheetUrl or sheetName in entry: ${JSON.stringify(entry)}`);
       }
 
-      // Fetch sheet metadata to get sheetId (gid)
-      const metadata = await sheets.spreadsheets.get({
-        spreadsheetId,
-        fields: 'sheets.properties',
-      });
+      const spreadsheetIdMatch = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (!spreadsheetIdMatch) {
+        throw new Error(`Invalid spreadsheet URL: ${spreadsheetUrl}`);
+      }
 
-      const matchingSheet = metadata.data.sheets?.find(
-        (s) => s.properties?.title === sheetName
+      const spreadsheetId = spreadsheetIdMatch[1];
+
+      // Get spreadsheet metadata to find the gid (sheetId)
+      const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+      const matchingSheet = metadata.data.sheets.find(
+        (sheet) => sheet.properties.title === sheetName
       );
 
-      if (!matchingSheet || matchingSheet.properties?.sheetId === undefined) {
-        throw new Error(`Could not find sheet ID for "${sheetName}" in spreadsheet ${spreadsheetId}`);
+      if (!matchingSheet) {
+        throw new Error(`Sheet name "${sheetName}" not found in spreadsheet: ${spreadsheetUrl}`);
       }
 
-      const sheetId = matchingSheet.properties.sheetId;
-      const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
-      const logMessage = `Sheet: ${sheetName} | Range: ${editedRange}`;
+      const gid = matchingSheet.properties.sheetId;
+      const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit?gid=${gid}#gid=${gid}`;
+      const currentDate = new Date().toISOString();
+      const logMessage = `Sheet: ${sheetName} | Range: ${editedRange || 'N/A'}`;
 
       logEntries.push([currentDate, sheetUrl, logMessage]);
     }
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: targetSpreadsheetId,
-      range: `${targetSheetName}!A:C`,
+      range: `Logs!A:C`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: logEntries,
