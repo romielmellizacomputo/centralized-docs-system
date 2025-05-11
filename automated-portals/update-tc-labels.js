@@ -26,9 +26,9 @@ requiredEnv.forEach((key) => {
 const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SPREADSHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const SERVICE_ACCOUNT = JSON.parse(
-  fs.readFileSync(path.resolve(__dirname, process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON))
-);
+
+// Parse the service account JSON from the environment variable
+const SERVICE_ACCOUNT = JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON);
 
 const LABELS_TO_PROCESS = [
   'To Do',
