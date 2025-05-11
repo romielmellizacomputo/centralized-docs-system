@@ -10,7 +10,12 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
-const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
+const requiredEnv = [
+  'GITLAB_URL',
+  'GITLAB_TOKEN',
+  'CDS_PORTAL_SPREADSHEET_ID',
+  'CDS_PORTALS_SERVICE_ACCOUNT_JSON',
+];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
     console.error(`❌ Missing required environment variable: ${key}`);
@@ -20,14 +25,22 @@ requiredEnv.forEach((key) => {
 
 const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-const SERVICE_ACCOUNT = JSON.parse(fs.readFileSync(path.resolve(__dirname, process.env.GOOGLE_SERVICE_ACCOUNT_JSON)));
+const SPREADSHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
+const SERVICE_ACCOUNT = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON))
+);
 
 const LABELS_TO_PROCESS = [
-  "To Do", "Doing", "Changes Requested",
-  "Manual QA For Review", "QA Lead For Review",
-  "Automation QA For Review", "Done", "On Hold", "Deprecated",
-  "Automation Team For Review",
+  'To Do',
+  'Doing',
+  'Changes Requested',
+  'Manual QA For Review',
+  'QA Lead For Review',
+  'Automation QA For Review',
+  'Done',
+  'On Hold',
+  'Deprecated',
+  'Automation Team For Review',
 ];
 
 const PROJECT_IDS = {
@@ -38,8 +51,20 @@ const PROJECT_IDS = {
   88: 'ApplyBPO',
   141: 'Ministry',
   147: 'Scalema',
-  89: 'BPOSeats.com'
+  89: 'BPOSeats.com',
 };
+
+const EXCLUDED_SHEETS = [
+  'Metrics Comparison',
+  'Test Scenario Portal',
+  'Scenario Extractor',
+  'TEMPLATE',
+  'Template',
+  'Help',
+  'Feature Change Log',
+  'Logs',
+  'UTILS',
+];
 
 async function authorizeGoogle() {
   const auth = new google.auth.GoogleAuth({
@@ -75,102 +100,92 @@ async function reviewMetricsLabels() {
   const authClient = await authorizeGoogle();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  const range = 'TC Review!A2:J'; // Adjust as needed
-  const response = await sheets.spreadsheets.values.get({
+  // Get all sheet names
+  const spreadsheet = await sheets.spreadsheets.get({
     spreadsheetId: SPREADSHEET_ID,
-    range,
   });
+  const sheetTitles = spreadsheet.data.sheets
+    .map((sheet) => sheet.properties.title)
+    .filter((title) => !EXCLUDED_SHEETS.includes(title));
 
-  const rows = response.data.values || [];
-  const updates = [];
-
-  console.log(`Processing ${rows.length} rows...`);
-
-  for (let i = 0; i < rows.length; i++) {
-    const rowIndex = i + 2; // Because spreadsheet is 1-based and starts from row 2
-    const url = rows[i][7] || ''; // Column H (index 7)
-
-    if (!url || !/^https:\/\/forge\.bposeats\.com\/[^\/]+\/[^\/]+\/-\/issues\/\d+$/.test(url)) {
-      console.log(`Row ${rowIndex}: Skipped due to invalid or missing URL`);
-      continue;
-    }
-
-    const issueId = url.split('/').pop();
-    const project = extractProjectIdFromUrl(url);
-
-    if (!project) {
-      console.log(`Row ${rowIndex}: Project not found for URL`);
-      continue;
-    }
-
-    try {
-      const issue = await fetchIssue(project.id, issueId);
-      const label = LABELS_TO_PROCESS.find((l) => issue.labels.includes(l));
-
-      if (label) {
-        const note = [
-          `Title: ${issue.title || 'No Title'}`,
-          `Author: ${issue.author?.name || 'Unknown'}`,
-          `Assignee: ${issue.assignee?.name || 'Unassigned'}`,
-          `Status: ${issue.state.charAt(0).toUpperCase() + issue.state.slice(1)}`,
-          `Created At: ${new Date(issue.created_at).toLocaleString()}`,
-          `Labels: ${issue.labels.join(', ') || 'None'}`,
-          `URL: ${url}`,
-        ].join('\n');
-
-        updates.push({
-          range: `J${rowIndex}`,
-          values: [[label]],
-          note,
-        });
-
-        updates.push({
-          range: `H${rowIndex}`,
-          values: [[`=HYPERLINK("${url}", "#${issueId}")`]],
-        });
-
-        console.log(`Row ${rowIndex}: Label set to "${label}"`);
-      }
-    } catch (err) {
-      console.error(`Row ${rowIndex}: Error fetching issue - ${err.message}`);
-    }
-
-    if (updates.length >= 300) break;
-  }
-
-  // Batch update values
-  if (updates.length > 0) {
-    const valueUpdates = updates.map(({ range, values }) => ({ range, values }));
-    await sheets.spreadsheets.values.batchUpdate({
+  for (const title of sheetTitles) {
+    console.log(`Processing sheet: ${title}`);
+    const range = `'${title}'!E3:E`;
+    const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      requestBody: {
-        valueInputOption: 'USER_ENTERED',
-        data: valueUpdates,
-      },
+      range,
     });
 
-    // Add cell notes separately (Google Sheets API v4 doesn’t support adding notes via batch)
-    for (const update of updates.filter(u => u.note)) {
-      await sheets.spreadsheets.developerMetadata.create({
+    const rows = response.data.values || [];
+    const updates = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowIndex = i + 3; // Adjusting for starting from row 3
+      const url = rows[i][0] || '';
+
+      if (!url || !/^https:\/\/forge\.bposeats\.com\/[^\/]+\/[^\/]+\/-\/issues\/\d+$/.test(url)) {
+        console.log(`Row ${rowIndex}: Skipped due to invalid or missing URL`);
+        continue;
+      }
+
+      const issueId = url.split('/').pop();
+      const project = extractProjectIdFromUrl(url);
+
+      if (!project) {
+        console.log(`Row ${rowIndex}: Project not found for URL`);
+        continue;
+      }
+
+      try {
+        const issue = await fetchIssue(project.id, issueId);
+        const label = LABELS_TO_PROCESS.find((l) => issue.labels.includes(l));
+
+        if (label) {
+          const note = [
+            `Title: ${issue.title || 'No Title'}`,
+            `Author: ${issue.author?.name || 'Unknown'}`,
+            `Assignee: ${issue.assignee?.name || 'Unassigned'}`,
+            `Status: ${issue.state.charAt(0).toUpperCase() + issue.state.slice(1)}`,
+            `Created At: ${new Date(issue.created_at).toLocaleString()}`,
+            `Labels: ${issue.labels.join(', ') || 'None'}`,
+            `URL: ${url}`,
+          ].join('\n');
+
+          updates.push({
+            range: `'${title}'!I${rowIndex}`,
+            values: [[label]],
+            note,
+          });
+
+          updates.push({
+            range: `'${title}'!E${rowIndex}`,
+            values: [[`=HYPERLINK("${url}", "#${issueId}")`]],
+          });
+
+          console.log(`Row ${rowIndex}: Label set to "${label}"`);
+        }
+      } catch (err) {
+        console.error(`Row ${rowIndex}: Error fetching issue - ${err.message}`);
+      }
+    }
+
+    // Batch update values
+    if (updates.length > 0) {
+      const valueUpdates = updates.map(({ range, values }) => ({ range, values }));
+      await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: SPREADSHEET_ID,
         requestBody: {
-          metadataKey: `note-${update.range}`,
-          metadataValue: update.note,
-          location: {
-            dimensionRange: {
-              sheetId: 0,
-              dimension: 'ROWS',
-              startIndex: parseInt(update.range.match(/\d+/)[0]) - 1,
-              endIndex: parseInt(update.range.match(/\d+/)[0])
-            }
-          },
-          visibility: 'DOCUMENT',
-        }
-      }).catch(() => {}); // Notes API workaround, often skipped
-    }
-  }
+          valueInputOption: 'USER_ENTERED',
+          data: valueUpdates,
+        },
+      });
 
-  console.log(`✅ Finished processing ${updates.length} updates`);
+      // Note: Adding notes to cells is not directly supported via the Google Sheets API v4.
+      // This functionality would require the use of Google Apps Script or other workarounds.
+    }
+
+    console.log(`✅ Finished processing sheet: ${title}`);
+  }
 }
 
 reviewMetricsLabels().catch((err) => console.error(`❌ Error: ${err.message}`));
