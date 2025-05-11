@@ -11,6 +11,7 @@ on:
 jobs:
   autonumber:
     runs-on: ubuntu-latest
+    continue-on-error: true
 
     steps:
       - name: Checkout repository
@@ -24,10 +25,36 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run send log script
+      - name: Run send-log script
         run: |
           echo "Sheet Data: ${{ github.event.inputs.sheet_data }}"
           node automated-test-case/send-log.js
         env:
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
           TEST_CASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_CASE_SERVICE_ACCOUNT_JSON }}
+          AUTOMATED_PORTALS: ${{ secrets.AUTOMATED_PORTALS }}
+
+
+  run-self-hosted:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run send-log script
+        run: |
+          echo "Sheet Data: ${{ github.event.inputs.sheet_data }}"
+          node automated-test-case/send-log.js
+        env:
+          SHEET_DATA: ${{ github.event.inputs.sheet_data }}
+          TEST_CASE_SERVICE_ACCOUNT_JSON: ${{ secrets.TEST_CASE_SERVICE_ACCOUNT_JSON }}
+          AUTOMATED_PORTALS: ${{ secrets.AUTOMATED_PORTALS }}
