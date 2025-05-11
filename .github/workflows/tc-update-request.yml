@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: "test-case-update"
-  cancel-in-progress: false  # Don't cancel an in-progress job
+  cancel-in-progress: false
 
 jobs:
   start-job:
@@ -20,7 +20,7 @@ jobs:
       - name: Trigger next workflow
         uses: peter-evans/workflow-dispatch@v1
         with:
-          workflow: "automated-test-case/test-case-update.yml"  # Path to the workflow file inside the folder
-          ref: main  # Ensure you're targeting the correct branch
+          workflow: "automated-test-case/test-case-update.yml"
+          ref: main
           inputs:
             sheet_data: ${{ github.event.inputs.sheet_data }}
