@@ -1,8 +1,13 @@
 import { google } from 'googleapis';
 
-const sheetData = JSON.parse(process.env.SHEET_DATA); // Can be an object or array
+const sheetData = JSON.parse(process.env.SHEET_DATA);
 const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
 const targetSpreadsheetId = process.env.AUTOMATED_PORTALS;
+
+function extractSpreadsheetId(url) {
+  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : null;
+}
 
 async function sendUpdateSignal() {
   try {
@@ -27,7 +32,8 @@ async function sendUpdateSignal() {
     const logEntries = [];
 
     for (const entry of updates) {
-      const spreadsheetId = entry.spreadsheetId;
+      const spreadsheetUrl = entry.spreadsheetUrl;
+      const spreadsheetId = entry.spreadsheetId || extractSpreadsheetId(spreadsheetUrl);
       const sheetName = entry.sheetName;
       const editedRange = entry.editedRange || '';
 
@@ -56,7 +62,6 @@ async function sendUpdateSignal() {
       logEntries.push([currentDate, sheetUrl, logMessage]);
     }
 
-    // Append to the Logs sheet
     await sheets.spreadsheets.values.append({
       spreadsheetId: targetSpreadsheetId,
       range: `${targetSheetName}!A:C`,
