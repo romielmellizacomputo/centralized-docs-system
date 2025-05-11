@@ -135,37 +135,38 @@ async function validateAndInsertData(auth, data) {
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
-    // Use different validation columns based on sheet name
     const isAllTestCases = sheetTitle === "ALL TEST CASES";
-    const validationCol1 = isAllTestCases ? 'C' : 'B';
-    const validationCol2 = isAllTestCases ? 'D' : 'C';
-    const insertRangeEnd = isAllTestCases ? 'T' : 'S';
-    const clearRangeStart = isAllTestCases ? 'C' : 'D';
-    const clearRangeEnd = 'T';
 
-    const firstCol = await getColumnValues(auth, sheetTitle, validationCol1);
-    const secondCol = await getColumnValues(auth, sheetTitle, validationCol2);
+    const validateCol1 = isAllTestCases ? 'C' : 'B';
+    const validateCol2 = isAllTestCases ? 'D' : 'C';
+    const insertStartCol = isAllTestCases ? 'C' : 'B';
+    const insertEndCol = isAllTestCases ? 'T' : 'S';
+    const clearStartCol = isAllTestCases ? 'C' : 'D';
+    const clearEndCol = 'T';
+
+    const col1 = await getColumnValues(auth, sheetTitle, validateCol1);
+    const col2 = await getColumnValues(auth, sheetTitle, validateCol2);
 
     let lastC24Index = -1;
     let existingC3Index = -1;
 
-    for (let i = 0; i < firstCol.length; i++) {
-      if (firstCol[i] === data.C24) lastC24Index = i + 1;
-      if (secondCol[i] === data.C3) {
+    for (let i = 0; i < col1.length; i++) {
+      if (col1[i] === data.C24) lastC24Index = i + 1;
+      if (col2[i] === data.C3) {
         existingC3Index = i + 1;
         break;
       }
     }
 
     if (existingC3Index !== -1) {
-      await clearRowData(auth, sheetTitle, existingC3Index, clearRangeStart, clearRangeEnd);
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data, insertRangeEnd);
+      await clearRowData(auth, sheetTitle, existingC3Index, clearStartCol, clearEndCol);
+      await insertDataInRow(auth, sheetTitle, existingC3Index, data, insertStartCol, insertEndCol);
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
       return true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertRowWithFormat(auth, sheetTitle, lastC24Index);
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data, insertRangeEnd);
+      await insertDataInRow(auth, sheetTitle, newRowIndex, data, insertStartCol, insertEndCol);
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
       return true;
     }
@@ -174,6 +175,7 @@ async function validateAndInsertData(auth, data) {
   await logData(auth, `Neither C24 ('${data.C24}') nor C3 ('${data.C3}') found for insertion in any sheet.`);
   return false;
 }
+
 
 async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
   const sheets = google.sheets({ version: 'v4', auth });
@@ -207,11 +209,11 @@ async function getSheetId(auth, sheetTitle) {
   return sheet.properties.sheetId;
 }
 
-async function insertDataInRow(auth, sheetTitle, row, data, endCol) {
+async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
   const sheets = google.sheets({ version: 'v4', auth });
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${sheetTitle}!B${row}:${endCol}${row}`,
+    range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [[
@@ -246,6 +248,7 @@ async function clearRowData(auth, sheetTitle, row, startCol, endCol) {
     range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`
   });
 }
+
 
 
 async function getTargetSheetTitles(auth) {
