@@ -183,6 +183,8 @@ async function insertDataInRow(auth, sheetTitle, row, data) {
         '',
         '',
         '',
+        '',
+        '',
         data.C15,
         data.C13,
         data.C14,
