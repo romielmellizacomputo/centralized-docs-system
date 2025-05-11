@@ -183,12 +183,13 @@ async function reviewMetricsLabels() {
           updates.push({
             range: `'${title}'!I${rowIndex}`,
             values: [[label]],
-            note,
           });
 
+          // Add note directly in the same cell where label is placed
           updates.push({
             range: `'${title}'!E${rowIndex}`,
-            values: [[`=HYPERLINK("${url}", "#${issueId}")`]],
+            values: [[url]],
+            note,  // Adding the note to the same cell where the URL is
           });
 
           console.log(`Row ${rowIndex}: Label set to "${label}"`);
@@ -208,9 +209,6 @@ async function reviewMetricsLabels() {
           data: valueUpdates,
         },
       });
-
-      // Note: Adding notes to cells is not directly supported via the Google Sheets API v4.
-      // This functionality would require the use of Google Apps Script or other workarounds.
     }
 
     console.log(`✅ Finished processing sheet: ${title}`);
