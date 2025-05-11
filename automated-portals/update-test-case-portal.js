@@ -49,11 +49,11 @@ function detectHyperlinks(row) {
       if (matches && matches[1] && matches[2]) {
         const url = matches[1];
         const description = matches[2];
-        // Return the correct HYPERLINK formula as a string
-        return [`=HYPERLINK("${url}", "${description}")`];  // Ensure the formula is passed as a string
+        // Return the correct HYPERLINK formula with the text embedded
+        return `=HYPERLINK("${url}", "${description}")`;
       }
     }
-    return [cell];  // Return the original cell value if no hyperlink
+    return cell;  // Return the original cell value if no hyperlink
   });
 }
 
@@ -81,27 +81,15 @@ async function clearTargetSheet(sheets) {
 
 async function insertBatchData(sheets, rows) {
   const range = `${DEST_SHEET}!B3`;  // Start inserting at row 3
-  
-  // Ensure the row data matches expected format
-  const formattedRows = rows.map(row => {
-    return row.map(cell => {
-      if (typeof cell === 'string' && cell.startsWith('=HYPERLINK')) {
-        return [`=HYPERLINK("${cell[0]}", "${cell[1]}")`];
-      }
-      return [cell];  // Return the original cell value if no hyperlink
-    });
-  });
-
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range,
     valueInputOption: 'USER_ENTERED',  // Ensures formulas are recognized
     requestBody: {
-      values: formattedRows
+      values: rows
     }
   });
 }
-
 
 async function main() {
   const client = await auth.getClient();
