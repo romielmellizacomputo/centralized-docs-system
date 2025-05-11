@@ -81,8 +81,8 @@ async function insertBatchData(sheets, rows) {
 
 function detectHyperlinks(row) {
   return row.map(cell => {
-    // Check if the cell has a hyperlink formula
-    if (cell && cell.startsWith('=HYPERLINK')) {
+    // Ensure cell is a string before calling startsWith
+    if (typeof cell === 'string' && cell.startsWith('=HYPERLINK')) {
       const matches = cell.match(/"([^"]+)"/);
       if (matches && matches[1]) {
         return { formula: cell, value: matches[1] }; // Return the hyperlink URL
@@ -91,6 +91,7 @@ function detectHyperlinks(row) {
     return cell;
   });
 }
+
 
 async function main() {
   const client = await auth.getClient();
