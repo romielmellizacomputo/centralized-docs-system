@@ -20,6 +20,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Debug: Print sheet data
+        run: echo "Sheet Data: ${{ github.event.inputs.sheet_data }}"
+
       - name: Trigger next workflow
         uses: peter-evans/workflow-dispatch@v1
         with:
