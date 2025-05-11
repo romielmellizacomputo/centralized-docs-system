@@ -49,14 +49,13 @@ function detectHyperlinks(row) {
       if (matches && matches[1] && matches[2]) {
         const url = matches[1];
         const description = matches[2];
-        // Return the correct HYPERLINK formula
-        return `=HYPERLINK("${url}", "${description}")`;
+        // Return the correct HYPERLINK formula as a string
+        return [`=HYPERLINK("${url}", "${description}")`];  // Ensure the formula is passed as a string
       }
     }
-    return cell;  // Return the original cell value if no hyperlink
+    return [cell];  // Return the original cell value if no hyperlink
   });
 }
-
 
 async function fetchSheetData(sheets, sheetName) {
   const range = `${sheetName}!B3:W`; 
