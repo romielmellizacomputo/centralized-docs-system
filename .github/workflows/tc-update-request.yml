@@ -1,4 +1,4 @@
-name: Main Workflow
+name: Automated Test Case Updater
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
       - name: Trigger next workflow
         uses: peter-evans/workflow-dispatch@v1
         with:
-          workflow: "test-case-update.yml"
-          ref: main  # or the appropriate branch
+          workflow: "run-test-case.yml"
+          ref: main  # Ensure you're targeting the correct branch
           inputs:
             sheet_data: ${{ github.event.inputs.sheet_data }}
