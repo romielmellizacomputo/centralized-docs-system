@@ -8,6 +8,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: "test-case-update"
+  cancel-in-progress: false  # Don't cancel an in-progress job
+
 jobs:
   start-job:
     runs-on: ubuntu-latest
@@ -16,7 +20,7 @@ jobs:
       - name: Trigger next workflow
         uses: peter-evans/workflow-dispatch@v1
         with:
-          workflow: "test-case-update.yml"
-          ref: main  # Targeting the correct branch
+          workflow: "run-test-case.yml"  # Ensure you're targeting the correct workflow file
+          ref: main  # Ensure you're targeting the correct branch
           inputs:
             sheet_data: ${{ github.event.inputs.sheet_data }}
