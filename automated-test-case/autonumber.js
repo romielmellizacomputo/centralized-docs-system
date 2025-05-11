@@ -128,6 +128,9 @@ async function main() {
       }
 
       console.log(`✅ Updated: ${name}`);
+
+      // Rate limiting to avoid hitting quota
+      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds delay
     }
   } catch (err) {
     console.error('❌ ERROR:', err);
