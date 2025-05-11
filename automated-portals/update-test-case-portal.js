@@ -85,12 +85,13 @@ function detectHyperlinks(row) {
     if (typeof cell === 'string' && cell.startsWith('=HYPERLINK')) {
       const matches = cell.match(/"([^"]+)"/);
       if (matches && matches[1]) {
-        return { formula: cell, value: matches[1] }; // Return the hyperlink URL
+        return matches[1]; // Return only the hyperlink URL
       }
     }
     return cell;
   });
 }
+
 
 
 async function main() {
