@@ -8,6 +8,7 @@ const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_URLS = 20;
+const RATE_LIMIT_DELAY = 2000; // 2 seconds delay between requests
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
@@ -146,6 +147,9 @@ async function validateAndInsertData(auth, data) {
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
       processed = true;
     }
+
+    // Rate limiting to avoid quota issues
+    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
   }
 
   if (!processed) {
@@ -277,7 +281,17 @@ async function updateTestCasesInLibrary() {
     try {
       await processUrl(url, authClient);
     } catch (error) {
-      await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
+      if (error.message.includes('Quota exceeded')) {
+        await logData(authClient, `Quota exceeded for URL: ${url}. Retrying...`);
+        await new Promise(resolve => setTimeout(resolve, 60000)); // Wait for 1 minute before retrying
+        try {
+          await processUrl(url, authClient);
+        } catch (retryError) {
+          await logData(authClient, `Error processing URL on retry: ${url}. Error: ${retryError.message}`);
+        }
+      } else {
+        await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
+      }
     }
   }
 
