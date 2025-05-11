@@ -65,7 +65,7 @@ async function clearTargetSheet(sheets) {
   });
 }
 
-// Insert data into 'Test Case Portal' sheet starting from C3 (columns C to X, with label in column B)
+// Insert data into 'Test Case Portal' sheet starting from B3 (columns B is the label, C to X is the actual data)
 async function insertBatchData(sheets, rows) {
   const range = `${DEST_SHEET}!B3`; // Start from B3 (for the label and data)
   await sheets.spreadsheets.values.update({
@@ -97,7 +97,8 @@ async function main() {
     if (!label) continue; // Skip if the sheet doesn't have a label
 
     const data = await fetchSheetData(sheets, sheetTitle);
-    const labeledData = data.map(row => [label, ...row]); // Column B = label
+    // Insert the sheet name as the label in column B and then map the data to start from column C
+    const labeledData = data.map(row => [label, ...row]); // Column B = label, rest are the data (C to X)
     allRows = [...allRows, ...labeledData];
   }
 
