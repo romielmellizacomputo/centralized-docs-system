@@ -173,6 +173,28 @@ async function validateAndInsertData(auth, data) {
 
 async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
   const sheets = google.sheets({ version: 'v4', auth });
+  
+  // Check for protected ranges
+  const protections = await sheets.spreadsheets.get({
+    spreadsheetId: SHEET_ID,
+    ranges: [sheetTitle],
+    includeGridData: true
+  });
+
+  const sheet = protections.data.sheets.find(s => s.properties.title === sheetTitle);
+  const protectedRanges = sheet.protectedRanges || [];
+
+  // Determine if the row to insert is within a protected range
+  const isProtected = protectedRanges.some(range => {
+    const startRow = range.range.startRowIndex;
+    const endRow = range.range.endRowIndex;
+    return sourceRowIndex >= startRow && sourceRowIndex < endRow;
+  });
+
+  if (isProtected) {
+    console.log(`Cannot insert row at index ${sourceRowIndex} because it is protected.`);
+    return; // Skip the insertion if the range is protected
+  }
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SHEET_ID,
@@ -195,6 +217,7 @@ async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
 
   console.log(`Inserted new row after row ${sourceRowIndex} in sheet '${sheetTitle}' with formatting.`);
 }
+
 
 async function getSheetId(auth, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
