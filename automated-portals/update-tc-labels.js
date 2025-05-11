@@ -57,6 +57,7 @@ const PROJECT_IDS = {
 const EXCLUDED_SHEETS = [
   'Metrics Comparison',
   'Test Scenario Portal',
+  'Test Case Portal',
   'Scenario Extractor',
   'TEMPLATE',
   'Template',
