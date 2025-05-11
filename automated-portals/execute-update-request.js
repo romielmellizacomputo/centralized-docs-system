@@ -14,6 +14,9 @@ const auth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
 });
 
+// Cache for sheet data
+const cache = {};
+
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
   const range = `${SHEET_NAME}!B3:B`;
@@ -35,19 +38,21 @@ async function clearFetchedRows(auth, rowIndices) {
   console.log(`Cleared ${ranges.length} entire rows from Logs sheet.`);
 }
 
-async function logData(auth, message) {
+async function logData(auth, messages) {
   const sheets = google.sheets({ version: 'v4', auth });
   const logCell = 'B1'; // Reference to cell B1 for logging
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range: `${SHEET_NAME}!${logCell}`,
     valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [[message]] }
+    requestBody: { values: [[messages.join('\n')]] }
   });
-  console.log(message);
+  console.log(messages.join('\n'));
 }
 
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
+  if (cache[sheetTitle]) return cache[sheetTitle]; // Use cache
+
   const sheets = google.sheets({ version: 'v4', auth });
   const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24'];
   const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
@@ -70,7 +75,7 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheetId = sheet.properties.sheetId;
   const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
 
-  return {
+  cache[sheetTitle] = {
     C24: data['C24'],
     C3: data['C3'],
     C4: data['C4'],
@@ -87,12 +92,8 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     sheetUrl,
     sheetName: sheetTitle
   };
-}
 
-async function getCellValue(auth, spreadsheetId, range) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-  return res.data.values?.[0]?.[0] || null;
+  return cache[sheetTitle];
 }
 
 async function processUrl(url, auth) {
@@ -112,7 +113,7 @@ async function processUrl(url, auth) {
     // Skip sheets that returned null or are empty (only headers/formulas)
     const hasContent = Object.values(data || {}).some(v => v !== null && v !== '');
     if (!hasContent) {
-      await logData(auth, `Skipped sheet '${sheetTitle}' — no usable content.`);
+      await logData(auth, [`Skipped sheet '${sheetTitle}' — no usable content.`]);
       continue;
     }
     allData.push(data);
@@ -120,15 +121,14 @@ async function processUrl(url, auth) {
   }
 
   if (processedSheets.length > 0) {
-    await logData(auth, `Fetched sheets: ${processedSheets.join(", ")}`);
+    await logData(auth, [`Fetched sheets: ${processedSheets.join(", ")}`]);
   }
 
   if (allData.length > 0) {
-    for (const data of allData) {
-      await validateAndInsertData(auth, data);
-    }
+    const insertPromises = allData.map(data => validateAndInsertData(auth, data));
+    await Promise.all(insertPromises); // Process all data in parallel
   } else {
-    await logData(auth, `No valid data found in fetched sheets from URL: ${url}`);
+    await logData(auth, [`No valid data found in fetched sheets from URL: ${url}`]);
   }
 }
 
@@ -137,10 +137,11 @@ async function validateAndInsertData(auth, data) {
   const targetSheetTitles = await getTargetSheetTitles(auth);
   let processed = false;
 
+  const updatePromises = [];
+
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
-    // Use different validation columns
     const isAllTestCases = sheetTitle === "ALL TEST CASES";
     const validateCol1 = isAllTestCases ? 'C' : 'B';
     const validateCol2 = isAllTestCases ? 'D' : 'C';
@@ -161,20 +162,22 @@ async function validateAndInsertData(auth, data) {
 
     if (existingC3Index !== -1) {
       await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
-      await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
+      updatePromises.push(insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S'));
+      await logData(auth, [`Updated row ${existingC3Index} in sheet '${sheetTitle}'`]);
       processed = true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertRowWithFormat(auth, sheetTitle, lastC24Index);
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
-      await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
+      updatePromises.push(insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S'));
+      await logData(auth, [`Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`]);
       processed = true;
     }
   }
 
+  await Promise.all(updatePromises); // Batch insert/update rows
+
   if (!processed) {
-    await logData(auth, `No matches found for C24 ('${data.C24}') or C3 ('${data.C3}') in any sheet.`);
+    await logData(auth, [`No matches found for C24 ('${data.C24}') or C3 ('${data.C3}') in any sheet.`]);
   }
 
   return processed;
@@ -276,16 +279,33 @@ async function getColumnValues(auth, sheetTitle, column) {
   return res.data.values?.map(row => row[0]) || [];
 }
 
+async function makeApiCallWithRetry(apiCall, retries = 5) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      if (i === retries - 1 || !isQuotaError(error)) {
+        throw error; // Rethrow if we've exhausted retries or it's not a quota error
+      }
+      await new Promise(res => setTimeout(res, Math.pow(2, i) * 1000)); // Exponential backoff
+    }
+  }
+}
+
+function isQuotaError(error) {
+  return error.code === 429; // Check for quota exceeded error
+}
+
 async function updateTestCasesInLibrary() {
   const authClient = await auth.getClient();
   const urlsWithIndices = await fetchUrls(authClient);
 
   if (!urlsWithIndices.length) {
-    await logData(authClient, 'No URLs to process.');
+    await logData(authClient, ['No URLs to process.']);
     return;
   }
 
-  await logData(authClient, `Starting processing 1 URL...`);
+  await logData(authClient, [`Starting processing 1 URL...`]);
 
   const uniqueUrls = new Set();
   const processedRowIndices = [];
@@ -296,22 +316,21 @@ async function updateTestCasesInLibrary() {
   // Clear the row for the URL before processing
   processedRowIndices.push(rowIndex);
   await clearFetchedRows(authClient, processedRowIndices);
-  await logData(authClient, `Cleared row for URL: ${url}`);
+  await logData(authClient, [`Cleared row for URL: ${url}`]);
 
   if (uniqueUrls.has(url)) {
-    await logData(authClient, `Duplicate URL found: ${url}.`);
+    await logData(authClient, [`Duplicate URL found: ${url}.`]);
   } else {
     uniqueUrls.add(url);
-    await logData(authClient, `Processing URL: ${url}`);
+    await logData(authClient, [`Processing URL: ${url}`]);
     try {
       await processUrl(url, authClient);
     } catch (error) {
-      await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
+      await logData(authClient, [`Error processing URL: ${url}. Error: ${error.message}`]);
     }
   }
 
-  await logData(authClient, "Processing complete.");
+  await logData(authClient, ["Processing complete."]);
 }
-
 
 updateTestCasesInLibrary().catch(console.error);
