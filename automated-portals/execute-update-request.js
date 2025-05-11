@@ -24,7 +24,7 @@ async function fetchUrls(auth) {
 
 async function clearFetchedRows(auth, rowIndices) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const ranges = rowIndices.map(rowIndex => `${SHEET_NAME}!B${rowIndex}`);
+  const ranges = rowIndices.map(rowIndex => `${SHEET_NAME}!${rowIndex}:${rowIndex}`);
   if (ranges.length === 0) return;
 
   await sheets.spreadsheets.values.batchClear({
@@ -32,7 +32,7 @@ async function clearFetchedRows(auth, rowIndices) {
     requestBody: { ranges }
   });
 
-  console.log(`Cleared ${ranges.length} rows from Logs sheet.`);
+  console.log(`Cleared ${ranges.length} entire rows from Logs sheet.`);
 }
 
 async function logData(auth, message) {
