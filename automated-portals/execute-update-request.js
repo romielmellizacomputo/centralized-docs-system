@@ -204,7 +204,7 @@ async function validateAndInsertData(auth, data) {
 async function batchInsertRows(auth, inserts) {
   const sheets = google.sheets({ version: 'v4', auth });
 
-  const requests = inserts.map((insert) => {
+  const requests = inserts.map(async (insert) => { // Make the callback async
     return {
       insertDimension: {
         range: {
@@ -224,7 +224,7 @@ async function batchInsertRows(auth, inserts) {
   });
 
   // Now insert data into these rows
-  const dataInserts = inserts.map((insert) => {
+  const dataInserts = inserts.map(async (insert) => { // Make the callback async
     return insertDataInRow(auth, insert.sheetTitle, insert.row, insert.data, insert.startCol, insert.endCol);
   });
 
