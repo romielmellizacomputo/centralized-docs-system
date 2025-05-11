@@ -30,4 +30,4 @@ jobs:
         run: |
           cd automated-portals
           ls -la  # List files in the folder for verification
-          node execute-update-portals.js
+          node execute-update-request.js
