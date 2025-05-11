@@ -57,6 +57,7 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24'];
   const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
 
+  // Use batchGet to fetch all necessary cells in one call
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId,
     ranges,
@@ -96,34 +97,40 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   return cache[sheetTitle];
 }
 
+
 async function processUrl(url, auth) {
   const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
   const sheets = google.sheets({ version: 'v4', auth });
   const targetSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
-  
+
   const allData = [];
   const processedSheets = [];
 
-  for (const sheet of targetSpreadsheet.data.sheets) {
-    const sheetTitle = sheet.properties.title;
-    if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
+  // Fetch all sheet titles first
+  const sheetTitles = targetSpreadsheet.data.sheets.map(sheet => sheet.properties.title);
+  const validSheetTitles = sheetTitles.filter(title => !SHEETS_TO_SKIP.includes(title));
 
-    const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
+  // Collect data for all valid sheets in a single batch
+  const dataPromises = validSheetTitles.map(sheetTitle => collectSheetData(auth, targetSpreadsheetId, sheetTitle));
+  const allSheetData = await Promise.all(dataPromises);
 
-    // Skip sheets that returned null or are empty (only headers/formulas)
-    const hasContent = Object.values(data || {}).some(v => v !== null && v !== '');
+  for (const data of allSheetData) {
+    if (!data) continue; // Skip null data
+
+    const hasContent = Object.values(data).some(v => v !== null && v !== '');
     if (!hasContent) {
-      await logData(auth, [`Skipped sheet '${sheetTitle}' — no usable content.`]);
+      await logData(auth, [`Skipped sheet '${data.sheetName}' — no usable content.`]);
       continue;
     }
     allData.push(data);
-    processedSheets.push(sheetTitle);
+    processedSheets.push(data.sheetName);
   }
 
   if (processedSheets.length > 0) {
     await logData(auth, [`Fetched sheets: ${processedSheets.join(", ")}`]);
   }
 
+  // Insert or update data in batches
   if (allData.length > 0) {
     const insertPromises = allData.map(data => validateAndInsertData(auth, data));
     await Promise.all(insertPromises); // Process all data in parallel
@@ -305,26 +312,28 @@ async function updateTestCasesInLibrary() {
     return;
   }
 
-  await logData(authClient, [`Starting processing 1 URL...`]);
+  await logData(authClient, [`Starting processing URLs...`]);
 
   const uniqueUrls = new Set();
   const processedRowIndices = [];
 
-  // Process only the first URL
-  const { url, rowIndex } = urlsWithIndices[0];
+  for (const { url, rowIndex } of urlsWithIndices) {
+    // Clear the row for the URL before processing
+    processedRowIndices.push(rowIndex);
+    await clearFetchedRows(authClient, processedRowIndices);
+    await logData(authClient, [`Cleared row for URL: ${url}`]);
 
-  // Clear the row for the URL before processing
-  processedRowIndices.push(rowIndex);
-  await clearFetchedRows(authClient, processedRowIndices);
-  await logData(authClient, [`Cleared row for URL: ${url}`]);
+    if (uniqueUrls.has(url)) {
+      await logData(authClient, [`Duplicate URL found: ${url}.`]);
+      continue;
+    }
 
-  if (uniqueUrls.has(url)) {
-    await logData(authClient, [`Duplicate URL found: ${url}.`]);
-  } else {
     uniqueUrls.add(url);
     await logData(authClient, [`Processing URL: ${url}`]);
+
     try {
       await processUrl(url, authClient);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Delay between requests
     } catch (error) {
       await logData(authClient, [`Error processing URL: ${url}. Error: ${error.message}`]);
     }
