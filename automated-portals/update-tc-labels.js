@@ -188,11 +188,11 @@ async function reviewMetricsLabels() {
           // Add note directly in the same cell where label is placed
           updates.push({
             range: `'${title}'!E${rowIndex}`,
-            values: [[url]],
-            note,  // Adding the note to the same cell where the URL is
+            values: [[url]], // This keeps the URL in the cell
+            note: note, // Adding the note to the same cell
           });
 
-          console.log(`Row ${rowIndex}: Label set to "${label}"`);
+          console.log(`Row ${rowIndex}: Label set to "${label}" with note`);
         }
       } catch (err) {
         console.error(`Row ${rowIndex}: Error fetching issue - ${err.message}`);
