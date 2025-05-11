@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 
-const sheetData = JSON.parse(process.env.SHEET_DATA); // includes source info, possibly multiple sheets
+const sheetData = JSON.parse(process.env.SHEET_DATA); // Can be an object or array
 const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
 const targetSpreadsheetId = process.env.AUTOMATED_PORTALS;
 
@@ -13,33 +13,50 @@ async function sendUpdateSignal() {
     }
 
     const targetSheetName = 'Logs';
+
     const auth = new google.auth.GoogleAuth({
       credentials,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
 
     const currentDate = new Date().toISOString();
-
     const updates = Array.isArray(sheetData) ? sheetData : [sheetData];
 
-    const logEntries = updates.map((entry) => {
-      if (!entry.spreadsheetId || !entry.sheetId) {
-        throw new Error(`Missing spreadsheetId or sheetId for entry: ${JSON.stringify(entry)}`);
-      }
-    
+    const logEntries = [];
+
+    for (const entry of updates) {
       const spreadsheetId = entry.spreadsheetId;
-      const sheetId = entry.sheetId;
-      const sheetName = entry.sheetName || '';
+      const sheetName = entry.sheetName;
       const editedRange = entry.editedRange || '';
+
+      if (!spreadsheetId || !sheetName) {
+        throw new Error(`Missing spreadsheetId or sheetName in entry: ${JSON.stringify(entry)}`);
+      }
+
+      // Fetch sheet metadata to get sheetId (gid)
+      const metadata = await sheets.spreadsheets.get({
+        spreadsheetId,
+        fields: 'sheets.properties',
+      });
+
+      const matchingSheet = metadata.data.sheets?.find(
+        (s) => s.properties?.title === sheetName
+      );
+
+      if (!matchingSheet || matchingSheet.properties?.sheetId === undefined) {
+        throw new Error(`Could not find sheet ID for "${sheetName}" in spreadsheet ${spreadsheetId}`);
+      }
+
+      const sheetId = matchingSheet.properties.sheetId;
       const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
       const logMessage = `Sheet: ${sheetName} | Range: ${editedRange}`;
-    
-      return [currentDate, sheetUrl, logMessage];
-    });
 
+      logEntries.push([currentDate, sheetUrl, logMessage]);
+    }
 
+    // Append to the Logs sheet
     await sheets.spreadsheets.values.append({
       spreadsheetId: targetSpreadsheetId,
       range: `${targetSheetName}!A:C`,
