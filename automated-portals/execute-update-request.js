@@ -7,7 +7,6 @@ dotenv.config();
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
-const MAX_URLS = 20;
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
@@ -49,7 +48,7 @@ async function logData(auth, message) {
 
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24'];
+  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21'];
   const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
 
   const res = await sheets.spreadsheets.values.batchGet({
@@ -89,47 +88,27 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   };
 }
 
-async function getCellValue(auth, spreadsheetId, range) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
-  return res.data.values?.[0]?.[0] || null;
-}
-
 async function processUrl(url, auth) {
   const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
   const sheets = google.sheets({ version: 'v4', auth });
   const targetSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
   
-  const allData = [];
-  const processedSheets = [];
+  const sheetTitle = targetSpreadsheet.data.sheets[0].properties.title;
 
-  for (const sheet of targetSpreadsheet.data.sheets) {
-    const sheetTitle = sheet.properties.title;
-    if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
-
-    const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
-
-    // Skip sheets that returned null or are empty (only headers/formulas)
-    const hasContent = Object.values(data || {}).some(v => v !== null && v !== '');
-    if (!hasContent) {
-      await logData(auth, `Skipped sheet '${sheetTitle}' — no usable content.`);
-      continue;
-    }
-    allData.push(data);
-    processedSheets.push(sheetTitle);
+  // Check if the sheet title is in the skip list
+  if (SHEETS_TO_SKIP.includes(sheetTitle)) {
+    console.log(`Cancelled processing for sheet '${sheetTitle}' as it is in the skip list.`);
+    return;
   }
 
-  if (processedSheets.length > 0) {
-    await logData(auth, `Fetched sheets: ${processedSheets.join(", ")}`);
+  const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
+  
+  if (!data) {
+    await logData(auth, `No valid data found in sheet '${sheetTitle}'.`);
+    return;
   }
 
-  if (allData.length > 0) {
-    for (const data of allData) {
-      await validateAndInsertData(auth, data);
-    }
-  } else {
-    await logData(auth, `No valid data found in fetched sheets from URL: ${url}`);
-  }
+  await validateAndInsertData(auth, data);
 }
 
 async function validateAndInsertData(auth, data) {
@@ -287,31 +266,20 @@ async function updateTestCasesInLibrary() {
 
   await logData(authClient, `Starting processing 1 URL...`);
 
-  const uniqueUrls = new Set();
-  const processedRowIndices = [];
-
-  // Process only the first URL
   const { url, rowIndex } = urlsWithIndices[0];
 
   // Clear the row for the URL before processing
-  processedRowIndices.push(rowIndex);
-  await clearFetchedRows(authClient, processedRowIndices);
+  await clearFetchedRows(authClient, [rowIndex]);
   await logData(authClient, `Cleared row for URL: ${url}`);
-
-  if (uniqueUrls.has(url)) {
-    await logData(authClient, `Duplicate URL found: ${url}.`);
-  } else {
-    uniqueUrls.add(url);
-    await logData(authClient, `Processing URL: ${url}`);
-    try {
-      await processUrl(url, authClient);
-    } catch (error) {
-      await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
-    }
+  
+  await logData(authClient, `Processing URL: ${url}`);
+  try {
+    await processUrl(url, authClient);
+  } catch (error) {
+    await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
   }
 
   await logData(authClient, "Processing complete.");
 }
-
 
 updateTestCasesInLibrary().catch(console.error);
