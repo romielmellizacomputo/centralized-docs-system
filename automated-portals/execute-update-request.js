@@ -8,13 +8,11 @@ const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_URLS = 20;
 
-async function authGoogle() {
-  const auth = new GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly'],
-    keyFile: 'credentials.json' // Store this securely!
-  });
-  return await auth.getClient();
-}
+const auth = new GoogleAuth({
+  credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
+});
+
 
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
