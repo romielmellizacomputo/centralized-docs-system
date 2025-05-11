@@ -19,10 +19,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Verify folder contents (for debugging)
+        run: |
+          ls -la automated-portals  # List contents of the folder
+
       - name: Run update script
         env:
           CDS_PORTALS_SERVICE_ACCOUNT_JSON: ${{ secrets.CDS_PORTALS_SERVICE_ACCOUNT_JSON }}
           CDS_PORTAL_SPREADSHEET_ID: ${{ secrets.CDS_PORTAL_SPREADSHEET_ID }}
         run: |
           cd automated-portals
+          ls -la  # List files in the folder for verification
           node execute-update-portals.js
