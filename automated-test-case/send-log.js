@@ -25,14 +25,20 @@ async function sendUpdateSignal() {
     const updates = Array.isArray(sheetData) ? sheetData : [sheetData];
 
     const logEntries = updates.map((entry) => {
+      if (!entry.spreadsheetId || !entry.sheetId) {
+        throw new Error(`Missing spreadsheetId or sheetId for entry: ${JSON.stringify(entry)}`);
+      }
+    
       const spreadsheetId = entry.spreadsheetId;
       const sheetId = entry.sheetId;
       const sheetName = entry.sheetName || '';
       const editedRange = entry.editedRange || '';
       const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
       const logMessage = `Sheet: ${sheetName} | Range: ${editedRange}`;
+    
       return [currentDate, sheetUrl, logMessage];
     });
+
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: targetSpreadsheetId,
