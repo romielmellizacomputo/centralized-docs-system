@@ -7,17 +7,12 @@ dotenv.config();
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
-const REQUEST_DELAY_MS = 5000; // Delay between requests in milliseconds (5 seconds)
+const MAX_URLS = 20;
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
   scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
 });
-
-// Function to introduce a delay
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
@@ -54,7 +49,7 @@ async function logData(auth, message) {
 
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21'];
+  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24'];
   const data = {};
 
   for (const ref of cellRefs) {
@@ -130,8 +125,6 @@ async function validateAndInsertData(auth, data) {
   const sheets = google.sheets({ version: 'v4', auth });
   const targetSheetTitles = await getTargetSheetTitles(auth);
 
-  let inserted = false; // Track if data has been inserted or updated
-
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
@@ -141,34 +134,29 @@ async function validateAndInsertData(auth, data) {
     let lastC24Index = -1;
     let existingC3Index = -1;
 
-    // Check for existing C24 and C3 values
     for (let i = 0; i < CColumn.length; i++) {
       if (CColumn[i] === data.C24) lastC24Index = i + 1;
       if (DColumn[i] === data.C3) {
         existingC3Index = i + 1;
-        break; // Stop searching once we find C3
+        break;
       }
     }
 
-    // Insert or update data based on existing values
     if (existingC3Index !== -1) {
       await clearRowData(auth, sheetTitle, existingC3Index);
       await insertDataInRow(auth, sheetTitle, existingC3Index, data);
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
-      inserted = true;
-      break; // Exit loop after inserting/updating
+      return true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertDataInRow(auth, sheetTitle, newRowIndex, data);
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
-      inserted = true;
-      break; // Exit loop after inserting
+      return true;
     }
   }
 
-  if (!inserted) {
-    await logData(auth, `Neither C24 ('${data.C24}') nor C3 ('${data.C3}') found for insertion in any sheet.`);
-  }
+  await logData(auth, `Neither C24 ('${data.C24}') nor C3 ('${data.C3}') found for insertion in any sheet.`);
+  return false;
 }
 
 async function insertDataInRow(auth, sheetTitle, row, data) {
@@ -230,31 +218,31 @@ async function updateTestCasesInLibrary() {
     return;
   }
 
-  // Process only the first URL
-  const { url, rowIndex } = urlsWithIndices[0];
-  await logData(authClient, `Processing URL: ${url}`);
+  await logData(authClient, `Starting processing ${Math.min(urlsWithIndices.length, MAX_URLS)} URLs...`);
 
-  let attempts = 0;
-  let success = false;
+  const uniqueUrls = new Set();
+  const processedRowIndices = [];
 
-  while (attempts < 5 && !success) {
+  for (let i = 0; i < urlsWithIndices.length && uniqueUrls.size < MAX_URLS; i++) {
+    const { url, rowIndex } = urlsWithIndices[i];
+    if (uniqueUrls.has(url)) {
+      await logData(authClient, `Duplicate URL found: ${url}. Clearing row data.`);
+      processedRowIndices.push(rowIndex);
+      continue;
+    }
+
+    uniqueUrls.add(url);
+    processedRowIndices.push(rowIndex);
+
+    await logData(authClient, `Processing URL: ${url}`);
     try {
       await processUrl(url, authClient);
-      success = true; // If successful, exit the loop
     } catch (error) {
-      if (error.message.includes('Quota exceeded')) {
-        attempts++;
-        const waitTime = Math.pow(2, attempts) * 1000; // Exponential backoff
-        await delay(waitTime);
-        await logData(authClient, `Retrying after ${waitTime / 1000} seconds due to quota error.`);
-      } else {
-        await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
-        break; // Exit on other errors
-      }
+      await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
     }
   }
 
-  await clearFetchedRows(authClient, [rowIndex]); // Clear only the processed row
+  await clearFetchedRows(authClient, processedRowIndices);
   await logData(authClient, "Processing complete.");
 }
 
