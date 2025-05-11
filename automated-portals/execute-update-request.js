@@ -292,13 +292,16 @@ async function updateTestCasesInLibrary() {
 
   // Process only the first URL
   const { url, rowIndex } = urlsWithIndices[0];
+
+  // Clear the row for the URL before processing
+  processedRowIndices.push(rowIndex);
+  await clearFetchedRows(authClient, processedRowIndices);
+  await logData(authClient, `Cleared row for URL: ${url}`);
+
   if (uniqueUrls.has(url)) {
-    await logData(authClient, `Duplicate URL found: ${url}. Clearing row data.`);
-    processedRowIndices.push(rowIndex);
+    await logData(authClient, `Duplicate URL found: ${url}.`);
   } else {
     uniqueUrls.add(url);
-    processedRowIndices.push(rowIndex);
-
     await logData(authClient, `Processing URL: ${url}`);
     try {
       await processUrl(url, authClient);
@@ -307,8 +310,8 @@ async function updateTestCasesInLibrary() {
     }
   }
 
-  await clearFetchedRows(authClient, processedRowIndices);
   await logData(authClient, "Processing complete.");
 }
+
 
 updateTestCasesInLibrary().catch(console.error);
