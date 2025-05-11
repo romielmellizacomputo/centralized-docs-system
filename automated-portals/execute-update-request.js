@@ -89,15 +89,31 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
 }
 
 async function processUrl(url, auth) {
+  // Extract the spreadsheet ID from the URL
   const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
+
+  // Create a Google Sheets API client
   const sheets = google.sheets({ version: 'v4', auth });
+
+  // Get the sheet ID from the URL (gid parameter)
+  const gidMatch = url.match(/gid=(\d+)/);
+  const sheetGid = gidMatch ? gidMatch[1] : null;
+
+  if (!sheetGid) {
+    console.log("No valid gid found in the URL.");
+    return;
+  }
+
+  // Fetch the spreadsheet metadata to find the sheet title
   const targetSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
+  const sheet = targetSpreadsheet.data.sheets.find(s => s.properties.sheetId.toString() === sheetGid);
 
-  // Log all sheet titles for debugging
-  const allSheetTitles = targetSpreadsheet.data.sheets.map(sheet => sheet.properties.title);
-  console.log(`Available sheets: ${allSheetTitles.join(', ')}`);
+  if (!sheet) {
+    console.log(`No sheet found with gid: ${sheetGid}`);
+    return;
+  }
 
-  const sheetTitle = targetSpreadsheet.data.sheets[0].properties.title; // Change this line if necessary
+  const sheetTitle = sheet.properties.title;
 
   // Check if the sheet title is in the skip list
   if (SHEETS_TO_SKIP.includes(sheetTitle)) {
@@ -105,6 +121,7 @@ async function processUrl(url, auth) {
     return;
   }
 
+  // Proceed to collect data if the sheet title is valid
   const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
   
   if (!data) {
@@ -114,6 +131,7 @@ async function processUrl(url, auth) {
 
   await validateAndInsertData(auth, data);
 }
+
 
 
 async function validateAndInsertData(auth, data) {
