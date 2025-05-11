@@ -135,8 +135,8 @@ async function validateAndInsertData(auth, data) {
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
-    const CColumn = await getColumnValues(auth, sheetTitle, 'C');
-    const DColumn = await getColumnValues(auth, sheetTitle, 'D');
+    const CColumn = await getColumnValues(auth, sheetTitle, 'B');
+    const DColumn = await getColumnValues(auth, sheetTitle, 'C');
 
     let lastC24Index = -1;
     let existingC3Index = -1;
@@ -150,12 +150,17 @@ async function validateAndInsertData(auth, data) {
     }
 
     if (existingC3Index !== -1) {
+      // Clear row and insert updated data if row exists
       await clearRowData(auth, sheetTitle, existingC3Index);
       await insertDataInRow(auth, sheetTitle, existingC3Index, data);
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
       return true;
     } else if (lastC24Index !== -1) {
+      // Insert new row with formulas and dropdowns from last row
       const newRowIndex = lastC24Index + 1;
+      await insertRowWithFormat(auth, sheetTitle, lastC24Index); // Insert blank row with formulas and dropdowns
+
+      // Insert data into the newly inserted row
       await insertDataInRow(auth, sheetTitle, newRowIndex, data);
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}' with data: ${JSON.stringify(data)}`);
       return true;
@@ -166,11 +171,43 @@ async function validateAndInsertData(auth, data) {
   return false;
 }
 
+async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          insertDimension: {
+            range: {
+              sheetId: await getSheetId(auth, sheetTitle),
+              dimension: 'ROWS',
+              startIndex: sourceRowIndex, // zero-based
+              endIndex: sourceRowIndex + 1
+            },
+            inheritFromBefore: true // Inherit formulas and data validation from the row above
+          }
+        }
+      ]
+    }
+  });
+
+  console.log(`Inserted new row after row ${sourceRowIndex} in sheet '${sheetTitle}' with formatting.`);
+}
+
+async function getSheetId(auth, sheetTitle) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const sheet = res.data.sheets.find(s => s.properties.title === sheetTitle);
+  return sheet.properties.sheetId;
+}
+
 async function insertDataInRow(auth, sheetTitle, row, data) {
   const sheets = google.sheets({ version: 'v4', auth });
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${sheetTitle}!C${row}:T${row}`,
+    range: `${sheetTitle}!B${row}:S${row}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [[
