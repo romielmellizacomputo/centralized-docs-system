@@ -1,8 +1,8 @@
-name: Automated Test Case Updater
+name: Run Test Case Scripts
 
 on:
   workflow_run:
-    workflows: ["Main Workflow"]
+    workflows: ["Automated Test Case Updater"]
     types:
       - completed
 
