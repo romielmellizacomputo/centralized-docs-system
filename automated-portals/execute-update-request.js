@@ -92,8 +92,12 @@ async function processUrl(url, auth) {
   const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
   const sheets = google.sheets({ version: 'v4', auth });
   const targetSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
-  
-  const sheetTitle = targetSpreadsheet.data.sheets[0].properties.title;
+
+  // Log all sheet titles for debugging
+  const allSheetTitles = targetSpreadsheet.data.sheets.map(sheet => sheet.properties.title);
+  console.log(`Available sheets: ${allSheetTitles.join(', ')}`);
+
+  const sheetTitle = targetSpreadsheet.data.sheets[0].properties.title; // Change this line if necessary
 
   // Check if the sheet title is in the skip list
   if (SHEETS_TO_SKIP.includes(sheetTitle)) {
@@ -110,6 +114,7 @@ async function processUrl(url, auth) {
 
   await validateAndInsertData(auth, data);
 }
+
 
 async function validateAndInsertData(auth, data) {
   const sheets = google.sheets({ version: 'v4', auth });
