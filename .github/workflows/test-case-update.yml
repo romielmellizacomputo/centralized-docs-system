@@ -1,16 +1,10 @@
 name: Automated Test Case Updater
 
 on:
-  workflow_dispatch:
-    inputs:
-      sheet_data:
-        description: 'Data from the edited sheet'
-        required: true
-        type: string
-
-concurrency:
-  group: "automated-test-case-updater"
-  cancel-in-progress: false  # Ensures new runs don't cancel the ongoing one, they just wait in the queue
+  workflow_run:
+    workflows: ["Main Workflow"]
+    types:
+      - completed
 
 jobs:
   autonumber:
