@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: "automated-test-case-updater"
-  cancel-in-progress: false
+  cancel-in-progress: false  # Ensures new runs don't cancel the ongoing one, they just wait in the queue
 
 jobs:
   autonumber:
