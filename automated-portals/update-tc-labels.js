@@ -96,6 +96,16 @@ async function fetchIssue(projectId, issueId) {
   return res.data;
 }
 
+async function fetchIssueNotes(projectId, issueId) {
+  const apiUrl = `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`;
+  const res = await axios.get(apiUrl, {
+    headers: {
+      'PRIVATE-TOKEN': GITLAB_TOKEN,
+    },
+  });
+  return res.data;
+}
+
 async function reviewMetricsLabels() {
   const authClient = await authorizeGoogle();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
@@ -141,15 +151,34 @@ async function reviewMetricsLabels() {
         const label = LABELS_TO_PROCESS.find((l) => issue.labels.includes(l));
 
         if (label) {
-          const note = [
-            `Title: ${issue.title || 'No Title'}`,
-            `Author: ${issue.author?.name || 'Unknown'}`,
-            `Assignee: ${issue.assignee?.name || 'Unassigned'}`,
-            `Status: ${issue.state.charAt(0).toUpperCase() + issue.state.slice(1)}`,
-            `Created At: ${new Date(issue.created_at).toLocaleString()}`,
-            `Labels: ${issue.labels.join(', ') || 'None'}`,
-            `URL: ${url}`,
-          ].join('\n');
+          // Fetch the notes (comments) for the issue
+          const notes = await fetchIssueNotes(project.id, issueId);
+          const lastComment = notes.length > 0 ? notes[notes.length - 1] : null;
+
+          let note = '';
+          if (issue.state === 'opened') {
+            note += `The ticket was created by ${issue.author?.name || 'Unknown'}\n`;
+            note += `The ticket is still open\n`;
+            if (issue.assignee) {
+              note += `${issue.assignee.name} is the current assignee\n`;
+            } else {
+              note += `No assignee on the ticket\n`;
+            }
+          } else if (issue.state === 'closed') {
+            note += `The ticket was created by ${issue.author?.name || 'Unknown'}\n`;
+            note += `The ticket was closed\n`;
+            if (issue.assignee) {
+              note += `${issue.assignee.name} was the assignee\n`;
+            } else {
+              note += `No assignee on the ticket\n`;
+            }
+          }
+
+          // Add the latest comment to the note if available
+          if (lastComment) {
+            note += `Last activity: ${lastComment.body}\n`;
+            note += `Commented by: ${lastComment.author.name}\n`;
+          }
 
           updates.push({
             range: `'${title}'!I${rowIndex}`,
