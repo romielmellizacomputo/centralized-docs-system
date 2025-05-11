@@ -5,8 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const SHEET_NAME = 'Logs'; // This is the name of the main sheet (the one we're working with)
-const TARGET_SHEET_NAME = 'Template HQZen'; // Define the sheet you want to process
+const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_URLS = 20;
 
@@ -90,32 +89,60 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   };
 }
 
+async function getCellValue(auth, spreadsheetId, range) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+  return res.data.values?.[0]?.[0] || null;
+}
+
 async function processUrl(url, auth) {
   const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
   const sheets = google.sheets({ version: 'v4', auth });
-  const targetSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
-  
-  const sheetTitle = TARGET_SHEET_NAME; // Use the target sheet defined above
+
+  let sheetTitle;
+
+  // Attempt to extract the sheet title or gid from the URL
+  const gidMatch = url.match(/gid=(\d+)/);
+  const titleMatch = url.match(/\/edit#gid=\d+$/); // fallback
+
+  if (gidMatch) {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
+    const sheetByGid = meta.data.sheets.find(s => s.properties.sheetId.toString() === gidMatch[1]);
+    if (!sheetByGid) {
+      await logData(auth, `No sheet found with gid=${gidMatch[1]} in spreadsheet.`);
+      return;
+    }
+    sheetTitle = sheetByGid.properties.title;
+  } else {
+    await logData(auth, `No gid parameter found in URL: ${url}`);
+    return;
+  }
+
+  // Directly fetch only the intended sheet's data
   const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
 
-  if (data) {
-    await validateAndInsertData(auth, data);
-  } else {
-    await logData(auth, `No valid data found in sheet '${sheetTitle}' from URL: ${url}`);
+  const hasContent = Object.values(data || {}).some(v => v !== null && v !== '');
+  if (!hasContent) {
+    await logData(auth, `Skipped sheet '${sheetTitle}' — no usable content.`);
+    return;
   }
+
+  await logData(auth, `Fetched data from sheet: ${sheetTitle}`);
+  await validateAndInsertData(auth, data);
 }
 
 async function validateAndInsertData(auth, data) {
   const sheets = google.sheets({ version: 'v4', auth });
   const targetSheetTitles = await getTargetSheetTitles(auth);
-
-  // Skipping unnecessary sheets
   let processed = false;
+
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
-    const validateCol1 = 'B'; // Specify validation columns based on your sheet
-    const validateCol2 = 'C';
+    // Use different validation columns
+    const isAllTestCases = sheetTitle === "ALL TEST CASES";
+    const validateCol1 = isAllTestCases ? 'C' : 'B';
+    const validateCol2 = isAllTestCases ? 'D' : 'C';
 
     const firstColumn = await getColumnValues(auth, sheetTitle, validateCol1);
     const secondColumn = await getColumnValues(auth, sheetTitle, validateCol2);
@@ -132,14 +159,14 @@ async function validateAndInsertData(auth, data) {
     }
 
     if (existingC3Index !== -1) {
-      await clearRowData(auth, sheetTitle, existingC3Index);
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data);
+      await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
+      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
       processed = true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertRowWithFormat(auth, sheetTitle, lastC24Index);
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data);
+      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
       processed = true;
     }
@@ -167,7 +194,7 @@ async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
               startIndex: sourceRowIndex, // zero-based
               endIndex: sourceRowIndex + 1
             },
-            inheritFromBefore: true
+            inheritFromBefore: true // Inherit formulas and data validation from the row above
           }
         }
       ]
@@ -184,11 +211,55 @@ async function getSheetId(auth, sheetTitle) {
   return sheet.properties.sheetId;
 }
 
-async function getColumnValues(auth, sheetTitle, column) {
+async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${sheetTitle}!${column}:${column}`;
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
-  return res.data.values?.map(row => row[0]) || [];
+
+  // Determine if "ALL TEST CASES"
+  const isAllTestCases = sheetTitle === "ALL TEST CASES";
+
+  // Common values to insert
+  const values = [
+    data.C24,                            // B or C
+    data.C3,                             // C or D
+    `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
+    data.C5,
+    data.C6,
+    data.C7,
+    '',
+    '',
+    '',
+    '',
+    '',
+    data.C15,
+    data.C13,
+    data.C14,
+    data.C18,
+    data.C19,
+    data.C20
+  ];
+
+  // Add one more item only for "ALL TEST CASES"
+  if (isAllTestCases) {
+    values.push(data.C21);
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [values]
+    }
+  });
+}
+
+async function clearRowData(auth, sheetTitle, row, isAllTestCases) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const range = isAllTestCases ? `D${row}:T${row}` : `C${row}:S${row}`;
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: SHEET_ID,
+    range: `${sheetTitle}!${range}`
+  });
 }
 
 async function getTargetSheetTitles(auth) {
@@ -197,24 +268,49 @@ async function getTargetSheetTitles(auth) {
   return meta.data.sheets.map(s => s.properties.title);
 }
 
+async function getColumnValues(auth, sheetTitle, column) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const range = `${sheetTitle}!${column}:${column}`;
+  const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
+  return res.data.values?.map(row => row[0]) || [];
+}
+
 async function updateTestCasesInLibrary() {
   const authClient = await auth.getClient();
   const urlsWithIndices = await fetchUrls(authClient);
 
-  if (urlsWithIndices.length === 0) {
-    console.log("No URLs to process.");
+  if (!urlsWithIndices.length) {
+    await logData(authClient, 'No URLs to process.');
     return;
   }
 
-  for (const { url, rowIndex } of urlsWithIndices) {
+  await logData(authClient, `Starting processing 1 URL...`);
+
+  const uniqueUrls = new Set();
+  const processedRowIndices = [];
+
+  // Process only the first URL
+  const { url, rowIndex } = urlsWithIndices[0];
+
+  // Clear the row for the URL before processing
+  processedRowIndices.push(rowIndex);
+  await clearFetchedRows(authClient, processedRowIndices);
+  await logData(authClient, `Cleared row for URL: ${url}`);
+
+  if (uniqueUrls.has(url)) {
+    await logData(authClient, `Duplicate URL found: ${url}.`);
+  } else {
+    uniqueUrls.add(url);
+    await logData(authClient, `Processing URL: ${url}`);
     try {
-      console.log(`Processing URL: ${url}`);
       await processUrl(url, authClient);
-      await clearFetchedRows(authClient, [rowIndex]);
-    } catch (err) {
-      console.error(`Error processing URL ${url}:`, err);
+    } catch (error) {
+      await logData(authClient, `Error processing URL: ${url}. Error: ${error.message}`);
     }
   }
+
+  await logData(authClient, "Processing complete.");
 }
 
-updateTestCasesInLibrary();
+
+updateTestCasesInLibrary().catch(console.error);
