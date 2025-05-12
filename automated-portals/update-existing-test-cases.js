@@ -59,7 +59,19 @@ async function fetchUrls(auth) {
   }));
 
   const results = await Promise.all(tasks);
-  return results.filter(Boolean);
+  const filteredResults = results.filter(Boolean);
+
+  // Remove duplicate URLs
+  const seenUrls = new Set();
+  const uniqueResults = [];
+  for (const item of filteredResults) {
+    if (!seenUrls.has(item.url)) {
+      seenUrls.add(item.url);
+      uniqueResults.push(item);
+    }
+  }
+
+  return uniqueResults;
 }
 
 // Entry point
