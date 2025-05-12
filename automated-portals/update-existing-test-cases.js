@@ -7,6 +7,7 @@ dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Boards Test Cases';
+const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_CONCURRENT_REQUESTS = 3;
 
 const auth = new GoogleAuth({
