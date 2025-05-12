@@ -27,32 +27,23 @@ async function fetchUrls(auth) {
     if (index + 3 > 17) return null; // Skip if index exceeds max rows
 
     try {
-      // Check if the row contains text
       const text = row[0] || null; // Get the text from the row
       if (!text) {
         console.error(`No text found for cell ${cell}`);
         return null; // Return null if no text is found
       }
 
-      // Attempt to extract a URL from the text if it's not a hyperlink
-      const linkResponse = await sheets.spreadsheets.get({
-        spreadsheetId: SHEET_ID,
-        ranges: [cell],
-        fields: 'sheets.data.rowData.values.hyperlink'
-      });
+      // Use a regular expression to extract the URL from the text
+      const urlRegex = /https?:\/\/\S+/;
+      const match = text.match(urlRegex);
+      const url = match ? match[0] : null;
 
-      const hyperlink = linkResponse.data.sheets &&
-                        linkResponse.data.sheets[0] &&
-                        linkResponse.data.sheets[0].data &&
-                        linkResponse.data.sheets[0].data[0] &&
-                        linkResponse.data.sheets[0].data[0].rowData &&
-                        linkResponse.data.sheets[0].data[0].rowData[0] &&
-                        linkResponse.data.sheets[0].data[0].rowData[0].values &&
-                        linkResponse.data.sheets[0].data[0].rowData[0].values[0] &&
-                        linkResponse.data.sheets[0].data[0].rowData[0].values[0].hyperlink;
+      if (!url) {
+        console.error(`No URL found in text for cell ${cell}`);
+        return null; // Return null if no URL is found
+      }
 
-      // If hyperlink is null, return the text as a fallback
-      return { url: hyperlink || text, rowIndex: index + 3 };
+      return { url, rowIndex: index + 3 };
     } catch (error) {
       console.error(`Error processing URL for cell ${cell}:`, error);
       return null; // Return null if there's an error
