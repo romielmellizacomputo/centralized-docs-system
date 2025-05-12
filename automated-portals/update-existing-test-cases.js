@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const SHEET_NAME = 'Board Test Cases'; //Fetch from "Board Test Cases"
+const SHEET_NAME = 'Boards Test Cases'; //Fetch from "Boards Test Cases"
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_URLS = 20;
 const RATE_LIMIT_DELAY = 5000; // 5 seconds delay between requests
@@ -15,7 +15,7 @@ const auth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
 });
 
-// Fetch URLs from the D column of "Board Test Cases"
+// Fetch URLs from the D column of "Boards Test Cases"
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
   const range = `${SHEET_NAME}!D3:D`; // Changed to D column
