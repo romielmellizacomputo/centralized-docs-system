@@ -140,13 +140,13 @@ async function validateAndInsertData(auth, data) {
 
     if (existingC3Index !== -1) {
       await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'U' : 'T');
+      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
       processed = true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertRowWithFormat(auth, sheetTitle, lastC24Index);
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'U' : 'T');
+      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
       processed = true;
     }
@@ -210,8 +210,6 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
     '',
     data.C11,
     data.C32,
-    '',
-    '',
     data.C15,
     data.C13,
     data.C14,
@@ -287,7 +285,7 @@ async function updateTestCasesInLibrary() {
     } catch (error) {
       if (error.message.includes('Quota exceeded')) {
         await logData(authClient, `Quota exceeded for URL: ${url}. Retrying...`);
-        await new Promise(resolve => setTimeout(resolve, 60000)); // Wait for 1 minute before retrying
+        await new Promise(resolve => setTimeout(resolve, 90000)); // Wait for 1.5 minute before retrying
         try {
           await processUrl(url, authClient);
         } catch (retryError) {
