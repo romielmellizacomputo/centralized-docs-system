@@ -25,18 +25,32 @@ async function fetchUrls(auth) {
   const urls = await Promise.all(values.map(async (row, index) => {
     const cell = `D${index + 3}`;
     if (index + 3 > 17) return null; // Skip if index exceeds max rows
-    const linkResponse = await sheets.spreadsheets.get({
-      spreadsheetId: SHEET_ID,
-      ranges: [cell],
-      fields: 'sheets.data.rowData.values.hyperlink'
-    });
-    const hyperlink = linkResponse.data.sheets[0].data[0].rowData[0]?.values[0]?.hyperlink || row[0];
-    return { url: hyperlink, rowIndex: index + 3 };
+
+    try {
+      const linkResponse = await sheets.spreadsheets.get({
+        spreadsheetId: SHEET_ID,
+        ranges: [cell],
+        fields: 'sheets.data.rowData.values.hyperlink'
+      });
+
+      // Check if the response contains the expected data structure
+      const hyperlink = linkResponse.data.sheets && 
+                        linkResponse.data.sheets[0] && 
+                        linkResponse.data.sheets[0].data[0] && 
+                        linkResponse.data.sheets[0].data[0].rowData[0] && 
+                        linkResponse.data.sheets[0].data[0].rowData[0].values[0] && 
+                        linkResponse.data.sheets[0].data[0].rowData[0].values[0].hyperlink
+                        || row[0];
+
+      return { url: hyperlink, rowIndex: index + 3 };
+    } catch (error) {
+      console.error(`Error fetching hyperlink for cell ${cell}:`, error);
+      return null; // Return null if there's an error
+    }
   }));
 
   return urls.filter(entry => entry && entry.url);
 }
-
 
 async function logData(auth, message) {
   const sheets = google.sheets({ version: 'v4', auth });
