@@ -1,38 +1,40 @@
 import { google } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
 import dotenv from 'dotenv';
+import pLimit from 'p-limit';
 
 dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const SHEET_NAME = 'Boards Test Cases'; //Fetch from "Boards Test Cases"
-const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
-const MAX_URLS = 20;
-const RATE_LIMIT_DELAY = 5000; // 5 seconds delay between requests
+const SHEET_NAME = 'Boards Test Cases';
+const MAX_CONCURRENT_REQUESTS = 3;
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
   scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
 });
 
-// Fetch URLs from the D column of "Boards Test Cases"
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${SHEET_NAME}!D3:D17`;
+
+  // Dynamically fetch all values from column D (starting row 3 to end)
+  const range = `${SHEET_NAME}!D3:D`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   const values = response.data.values || [];
 
-  const urls = await Promise.all(values.map(async (row, index) => {
+  const limit = pLimit(MAX_CONCURRENT_REQUESTS);
+
+  const tasks = values.map((row, index) => limit(async () => {
     const rowIndex = index + 3;
+    const text = row[0] || null;
+    if (!text) {
+      console.error(`No text found for cell D${rowIndex}`);
+      return null;
+    }
+
     const cellRange = `${SHEET_NAME}!D${rowIndex}`;
 
     try {
-      const text = row[0] || null;
-      if (!text) {
-        console.error(`No text found for cell D${rowIndex}`);
-        return null;
-      }
-
       const linkResponse = await sheets.spreadsheets.get({
         spreadsheetId: SHEET_ID,
         ranges: [cellRange],
@@ -41,29 +43,29 @@ async function fetchUrls(auth) {
       });
 
       const hyperlink = linkResponse.data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values?.[0]?.hyperlink;
-
       if (hyperlink) {
         return { url: hyperlink, rowIndex };
       }
 
-      const urlRegex = /https?:\/\/\S+/;
-      const match = text.match(urlRegex);
-      const url = match ? match[0] : null;
+      const urlMatch = text.match(/https?:\/\/\S+/);
+      return urlMatch ? { url: urlMatch[0], rowIndex } : null;
 
-      if (!url) {
-        console.error(`No URL found in text for cell D${rowIndex}`);
-        return null;
-      }
-
-      return { url, rowIndex };
     } catch (error) {
-      console.error(`Error processing URL for cell D${rowIndex}:`, error);
+      console.error(`Error processing cell D${rowIndex}:`, error.message);
       return null;
     }
   }));
 
-  return urls.filter(entry => entry && entry.url);
+  const results = await Promise.all(tasks);
+  return results.filter(Boolean);
 }
+
+// Entry point
+(async () => {
+  const client = await auth.getClient();
+  const urls = await fetchUrls(client);
+  console.log(`✅ Fetched ${urls.length} URLs`);
+})();
 
 async function logData(auth, message) {
   const sheets = google.sheets({ version: 'v4', auth });
