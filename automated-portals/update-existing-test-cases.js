@@ -20,7 +20,7 @@ async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
 
   // Dynamically fetch all values from column D (starting row 3 to end)
-  const range = ${SHEET_NAME}!D3:D;
+  const range = `${SHEET_NAME}!D3:D`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   const values = response.data.values || [];
 
@@ -30,11 +30,11 @@ async function fetchUrls(auth) {
     const rowIndex = index + 3;
     const text = row[0] || null;
     if (!text) {
-      console.error(No text found for cell D${rowIndex});
+      console.error(`No text found for cell D${rowIndex}`);
       return null;
     }
 
-    const cellRange = ${SHEET_NAME}!D${rowIndex};
+    const cellRange = `${SHEET_NAME}!D${rowIndex}`;
 
     try {
       const linkResponse = await sheets.spreadsheets.get({
@@ -53,14 +53,27 @@ async function fetchUrls(auth) {
       return urlMatch ? { url: urlMatch[0], rowIndex } : null;
 
     } catch (error) {
-      console.error(Error processing cell D${rowIndex}:, error.message);
+      console.error(`Error processing cell D${rowIndex}:`, error.message);
       return null;
     }
   }));
 
   const results = await Promise.all(tasks);
-  return results.filter(Boolean);
+  const filteredResults = results.filter(Boolean);
+
+  // Remove duplicate URLs
+  const seenUrls = new Set();
+  const uniqueResults = [];
+  for (const item of filteredResults) {
+    if (!seenUrls.has(item.url)) {
+      seenUrls.add(item.url);
+      uniqueResults.push(item);
+    }
+  }
+
+  return uniqueResults;
 }
+
 
 // Entry point
 (async () => {
