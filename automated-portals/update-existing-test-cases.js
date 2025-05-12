@@ -33,7 +33,29 @@ async function fetchUrls(auth) {
         return null; // Return null if no text is found
       }
 
-      // Use a regular expression to extract the URL from the text
+      // Use the Google Sheets API to fetch the hyperlink data
+      const linkResponse = await sheets.spreadsheets.get({
+        spreadsheetId: SHEET_ID,
+        ranges: [cell],
+        fields: 'sheets.data.rowData.values.hyperlink'
+      });
+
+      const hyperlink = linkResponse.data.sheets &&
+                        linkResponse.data.sheets[0] &&
+                        linkResponse.data.sheets[0].data &&
+                        linkResponse.data.sheets[0].data[0] &&
+                        linkResponse.data.sheets[0].data[0].rowData &&
+                        linkResponse.data.sheets[0].data[0].rowData[0] &&
+                        linkResponse.data.sheets[0].data[0].rowData[0].values &&
+                        linkResponse.data.sheets[0].data[0].rowData[0].values[0] &&
+                        linkResponse.data.sheets[0].data[0].rowData[0].values[0].hyperlink;
+
+      // If a hyperlink is found, use it as the URL
+      if (hyperlink) {
+        return { url: hyperlink, rowIndex: index + 3 };
+      }
+
+      // If no hyperlink is found, try to extract the URL from the text
       const urlRegex = /https?:\/\/\S+/;
       const match = text.match(urlRegex);
       const url = match ? match[0] : null;
