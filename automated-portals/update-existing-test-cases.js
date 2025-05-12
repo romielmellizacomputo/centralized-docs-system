@@ -6,9 +6,8 @@ import pLimit from 'p-limit';
 dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const SHEET_NAME = 'Boards Test Cases';  // Change to the actual sheet name
-const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues']; // Skip sheets that you don't need to process
-const MAX_CONCURRENT_REQUESTS = 3;  // Max concurrent requests
+const SHEET_NAME = 'Boards Test Cases'; // Change to the actual sheet name
+const MAX_CONCURRENT_REQUESTS = 3; // Max concurrent requests
 const RATE_LIMIT_DELAY = 3000; // 3 seconds delay between requests
 
 // Set up Google Auth
@@ -27,7 +26,7 @@ async function fetchUrls(auth) {
   const limit = pLimit(MAX_CONCURRENT_REQUESTS);
 
   const tasks = values.map((row, index) => limit(async () => {
-    const rowIndex = index + 3;
+    const rowIndex = index + 3; // Adjust for the starting row
     const text = row[0] || null;
     if (!text) return null;
 
@@ -53,89 +52,75 @@ async function fetchUrls(auth) {
   }));
 
   const results = await Promise.all(tasks);
-  const filteredResults = results.filter(Boolean);
-  const seen = new Set();
-  return filteredResults.filter(({ url }) => {
-    if (seen.has(url)) return false;
-    seen.add(url);
-    return true;
-  });
+  return results.filter(Boolean);
 }
 
-// Log data back into the sheet (e.g., to update test coverage stats)
-async function logData(auth, message) {
+// Insert data back into the sheet
+async function insertData(auth, rowIndex, data) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const logCell = 'B1';
+  const values = [
+    data.C24,
+    data.C3,
+    `=HYPERLINK("${data.url}", "${data.C4}")`, // Embed the hyperlink
+    data.B27,
+    data.C5,
+    data.C6,
+    data.C7,
+    '',
+    data.C11,
+    data.C32,
+    data.C15,
+    data.C13,
+    data.C14,
+    data.C18,
+    data.C19,
+    data.C20,
+    data.C21
+  ];
+
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!${logCell}`,
+    range: `${SHEET_NAME}!B${rowIndex}:R${rowIndex}`, // Insert data in the same row
     valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [[message]] }
+    resource: { values: [values] },
   });
-  console.log(message);
 }
 
-// Process a specific sheet to count test cases and valid cases
-async function processSheet(sheetName, auth) {
+// Process the fetched URLs and insert data into the sheet
+async function processUrls(auth) {
+  const urls = await fetchUrls(auth);
   const sheets = google.sheets({ version: 'v4', auth });
-  try {
-    const { data } = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: `${sheetName}!A1:Z`
-    });
 
-    const header = data.values?.[0] || [];
-    const testCaseColumnIndex = header.findIndex(val => val === 'Test Case');
-    const statusColumnIndex = header.findIndex(val => val === 'Status');
-
-    if (testCaseColumnIndex === -1 || statusColumnIndex === -1) {
-      return { sheetName, validCases: 0, totalCases: 0 };
-    }
-
-    const rows = data.values.slice(1);
-    const totalCases = rows.length;
-    const validCases = rows.reduce((count, row) => {
-      const status = row[statusColumnIndex]?.toLowerCase();
-      return (status === 'pass' || status === 'fail') ? count + 1 : count;
-    }, 0);
-
-    return { sheetName, validCases, totalCases };
-  } catch (error) {
-    console.error(`Failed to process sheet "${sheetName}": ${error.message}`);
-    return { sheetName, validCases: 0, totalCases: 0 };
+  const limit = pLimit(MAX_CONCURRENT_REQUESTS);
+  for (const { url, rowIndex } of urls) {
+    const data = await fetchDataFromCells(sheets, rowIndex); // Fetch data from specified cells
+    await limit(() => insertData(auth, rowIndex, data)); // Insert data into the same row
+    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY)); // Rate limit delay
   }
+}
+
+// Fetch data from specified cells
+async function fetchDataFromCells(sheets, rowIndex) {
+  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'B27', 'C32', 'C11'];
+  const requests = cellRefs.map(ref => `${SHEET_NAME}!${ref}${rowIndex}`);
+  const response = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId: SHEET_ID,
+    ranges: requests,
+  });
+
+  const data = {};
+  response.data.valueRanges.forEach((range, index) => {
+    data[cellRefs[index]] = range.values ? range.values[0][0] : null;
+  });
+
+  return data;
 }
 
 // Main execution function
 async function main() {
   try {
     const authClient = await auth.getClient();
-    const urls = await fetchUrls(authClient);
-
-    const sheets = google.sheets({ version: 'v4', auth: authClient });
-    const { data: meta } = await sheets.spreadsheets.get({
-      spreadsheetId: SHEET_ID,
-      fields: 'sheets.properties.title'
-    });
-
-    const sheetNames = meta.sheets
-      .map(sheet => sheet.properties.title)
-      .filter(name => !SHEETS_TO_SKIP.includes(name));
-
-    const limit = pLimit(MAX_CONCURRENT_REQUESTS);
-    const results = [];
-
-    for (const sheetName of sheetNames) {
-      const result = await limit(() => processSheet(sheetName, authClient));
-      results.push(result);
-      await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-    }
-
-    const totalCases = results.reduce((acc, val) => acc + val.totalCases, 0);
-    const validCases = results.reduce((acc, val) => acc + val.validCases, 0);
-    const coverage = totalCases ? ((validCases / totalCases) * 100).toFixed(2) : '0.00';
-
-    await logData(authClient, `Test Coverage: ${coverage}% (${validCases}/${totalCases})`);
+    await processUrls(authClient);
   } catch (error) {
     console.error('Fatal error:', error.message);
   }
