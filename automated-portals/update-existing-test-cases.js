@@ -7,59 +7,42 @@ dotenv.config();
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
-  scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly'],
+  scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
 });
 
-const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24', 'B27', 'C32', 'C11'];
+const sheets = google.sheets({ version: 'v4', auth });
+const sheetId = process.env.CDS_PORTAL_SPREADSHEET_ID; // Set your spreadsheet ID here
+const sheetTitle = "Boards Test Cases"; // The title of the sheet to work with
 
-const limit = pLimit(1); // 1 concurrent task
-const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'B27', 'C32', 'C11'];
 
-async function getSheetData(sheetId, range) {
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range });
-  return res.data.values?.[0]?.[0] || '';
-}
-
-async function extractHyperlinkFormula(sheetId, range) {
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
-  const res = await sheets.spreadsheets.get({
+async function fetchDataFromSheet() {
+  const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
-    ranges: [range],
-    includeGridData: true,
+    range: `${sheetTitle}!D:D`, // Fetching URLs from column D
   });
 
-  const cell = res.data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values?.[0];
-  const formula = cell?.userEnteredValue?.formulaValue;
-  if (!formula) return null;
-
-  const match = formula.match(/=HYPERLINK\("([^"]+)"/);
-  return match ? match[1] : null;
+  return response.data.values || [];
 }
 
-async function fetchAndMapData(sheetUrl) {
-  const match = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (!match) return null;
+async function fetchDataFromCells(rowIndex) {
+  const requests = cellRefs.map(ref => `${sheetTitle}!${ref}${rowIndex}`);
+  const response = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId: sheetId,
+    ranges: requests,
+  });
 
-  const sheetId = match[1];
-  const cellValues = {};
-  for (const cell of cellRefs) {
-    const val = await getSheetData(sheetId, cell);
-    cellValues[cell] = val;
-  }
+  const data = {};
+  response.data.valueRanges.forEach((range, index) => {
+    data[cellRefs[index]] = range.values ? range.values[0][0] : null;
+  });
 
-  return {
-    sheetUrl,
-    ...cellValues,
-  };
+  // Extract the embedded Google Sheet URL from the hyperlink text in D column
+  const sheetUrl = data.C4 ? data.C4.match(/https?:\/\/[^"]+/)[0] : null;
+  return { ...data, sheetUrl };
 }
 
-async function insertDataInRow(auth, sheetId, row, data) {
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
-
+async function insertDataInRow(row, data) {
   const values = [
     data.C24,
     data.C3,
@@ -80,53 +63,26 @@ async function insertDataInRow(auth, sheetId, row, data) {
     data.C21
   ];
 
-  const range = `Boards Test Cases!B${row}:R${row}`;
-
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range,
+    range: `${sheetTitle}!B${row}:R${row}`,
     valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [values] },
+    resource: { values: [values] },
   });
 }
 
 async function processSheet() {
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
+  const urls = await fetchDataFromSheet();
 
-  const sheetId = process.env.CDS_PORTAL_SPREADSHEET_ID;
-  const readRange = 'Boards Test Cases!D2:D';
-
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: readRange,
-  });
-
-  const rows = res.data.values || [];
-
-  for (let i = 0; i < rows.length; i++) {
-    const rowNumber = i + 2; // accounting for starting at row 2
-    const value = rows[i][0];
-
-    if (!value) continue;
-
-    const sheetUrl = await extractHyperlinkFormula(sheetId, `Boards Test Cases!D${rowNumber}`);
-    if (!sheetUrl) continue;
-
-    try {
-      const data = await fetchAndMapData(sheetUrl);
-      if (data) {
-        await insertDataInRow(auth, sheetId, rowNumber, data);
-        console.log(`✅ Row ${rowNumber} processed.`);
-      }
-    } catch (err) {
-      console.error(`❌ Failed to process row ${rowNumber}:`, err.message);
+  const limit = pLimit(1); // Limit to 1 concurrent request
+  for (let rowIndex = 1; rowIndex <= urls.length; rowIndex++) { // Start from 1 to skip header
+    const url = urls[rowIndex - 1][0]; // Get URL from the D column
+    if (url) {
+      const data = await fetchDataFromCells(rowIndex + 1); // Fetch data from specified cells
+      await limit(() => insertDataInRow(rowIndex + 1, data)); // Insert data into the same row
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Delay to avoid hitting API quota
     }
-
-    await delay(1000); // 1 second delay to avoid hitting API limits
   }
-
-  console.log('✅ All rows processed.');
 }
 
-processSheet();
+processSheet().catch(console.error);
