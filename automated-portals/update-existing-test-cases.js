@@ -18,57 +18,47 @@ const auth = new GoogleAuth({
 // Fetch URLs from the D column of "Boards Test Cases"
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${SHEET_NAME}!D3:D`;
+  const range = `${SHEET_NAME}!D3:D17`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   const values = response.data.values || [];
 
   const urls = await Promise.all(values.map(async (row, index) => {
-    const cell = `D${index + 3}`;
-    if (index + 3 > 17) return null; // Skip if index exceeds max rows
+    const rowIndex = index + 3;
+    const cellRange = `${SHEET_NAME}!D${rowIndex}`;
 
     try {
-      const text = row[0] || null; // Get the text from the row
+      const text = row[0] || null;
       if (!text) {
-        console.error(`No text found for cell ${cell}`);
-        return null; // Return null if no text is found
+        console.error(`No text found for cell D${rowIndex}`);
+        return null;
       }
 
-      // Use the Google Sheets API to fetch the hyperlink data
       const linkResponse = await sheets.spreadsheets.get({
         spreadsheetId: SHEET_ID,
-        ranges: [cell],
+        ranges: [cellRange],
+        includeGridData: true,
         fields: 'sheets.data.rowData.values.hyperlink'
       });
 
-      const hyperlink = linkResponse.data.sheets &&
-                        linkResponse.data.sheets[0] &&
-                        linkResponse.data.sheets[0].data &&
-                        linkResponse.data.sheets[0].data[0] &&
-                        linkResponse.data.sheets[0].data[0].rowData &&
-                        linkResponse.data.sheets[0].data[0].rowData[0] &&
-                        linkResponse.data.sheets[0].data[0].rowData[0].values &&
-                        linkResponse.data.sheets[0].data[0].rowData[0].values[0] &&
-                        linkResponse.data.sheets[0].data[0].rowData[0].values[0].hyperlink;
+      const hyperlink = linkResponse.data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values?.[0]?.hyperlink;
 
-      // If a hyperlink is found, use it as the URL
       if (hyperlink) {
-        return { url: hyperlink, rowIndex: index + 3 };
+        return { url: hyperlink, rowIndex };
       }
 
-      // If no hyperlink is found, try to extract the URL from the text
       const urlRegex = /https?:\/\/\S+/;
       const match = text.match(urlRegex);
       const url = match ? match[0] : null;
 
       if (!url) {
-        console.error(`No URL found in text for cell ${cell}`);
-        return null; // Return null if no URL is found
+        console.error(`No URL found in text for cell D${rowIndex}`);
+        return null;
       }
 
-      return { url, rowIndex: index + 3 };
+      return { url, rowIndex };
     } catch (error) {
-      console.error(`Error processing URL for cell ${cell}:`, error);
-      return null; // Return null if there's an error
+      console.error(`Error processing URL for cell D${rowIndex}:`, error);
+      return null;
     }
   }));
 
