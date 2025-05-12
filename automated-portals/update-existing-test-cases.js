@@ -62,7 +62,6 @@ async function fetchUrls(auth) {
   return urls.filter(entry => entry && entry.url);
 }
 
-
 async function logData(auth, message) {
   const sheets = google.sheets({ version: 'v4', auth });
   const logCell = 'B1'; // Reference to cell B1 for logging
