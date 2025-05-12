@@ -12,6 +12,7 @@ const EXCLUDED_SHEETS = [
   'Metrics Comparison',
   'Test Scenario Portal',
   'Scenario Extractor',
+  'Case Extractor',
   'TEMPLATE',
   'Template',
   'Help',
