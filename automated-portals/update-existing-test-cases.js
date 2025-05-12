@@ -116,6 +116,7 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     C18: data['C18'],
     C19: data['C19'],
     C20: data['C20'],
+    C21: data['C21'],
     sheetUrl,
     sheetName: sheetTitle
   };
@@ -244,7 +245,8 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
     data.C14,
     data.C18,
     data.C19,
-    data.C20
+    data.C20,
+    data.C21
   ];
 
   if (isAllTestCases) {
