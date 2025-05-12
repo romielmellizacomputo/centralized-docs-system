@@ -5,9 +5,7 @@ import pLimit from 'p-limit';
 
 dotenv.config();
 
-const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const RATE_LIMIT_DELAY = 5000; // Delay in milliseconds (e.g., 5000ms = 5 second)
-const SHEET_NAME = 'Boards Test Cases'; // You may want to update this with the actual sheet where the URL exists
+const RATE_LIMIT_DELAY = 5000; // Delay in milliseconds (e.g., 5000ms = 5 seconds)
 const MAX_CONCURRENT_REQUESTS = 3;
 
 const auth = new GoogleAuth({
@@ -15,12 +13,18 @@ const auth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
 });
 
+// Fetch the sheet ID (gid) directly from the URL
+function extractGidFromUrl(url) {
+  const match = url.match(/gid=(\d+)/);
+  return match ? match[1] : null;
+}
+
 // Fetches the URLs present in a specific column (e.g., column D)
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
 
-  const range = `${SHEET_NAME}!D3:D`;
-  const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
+  const range = 'Boards Test Cases!D3:D'; // You may want to update this if your column or sheet name is different
+  const response = await sheets.spreadsheets.values.get({ spreadsheetId: process.env.CDS_PORTAL_SPREADSHEET_ID, range });
   const values = response.data.values || [];
 
   const limit = pLimit(MAX_CONCURRENT_REQUESTS);
@@ -33,11 +37,11 @@ async function fetchUrls(auth) {
       return null;
     }
 
-    const cellRange = `${SHEET_NAME}!D${rowIndex}`;
+    const cellRange = `Boards Test Cases!D${rowIndex}`;
 
     try {
       const linkResponse = await sheets.spreadsheets.get({
-        spreadsheetId: SHEET_ID,
+        spreadsheetId: process.env.CDS_PORTAL_SPREADSHEET_ID,
         ranges: [cellRange],
         includeGridData: true,
         fields: 'sheets.data.rowData.values.hyperlink'
@@ -65,33 +69,29 @@ async function fetchUrls(auth) {
 
 // Processes a single URL from the fetched list
 async function processUrl(url, auth) {
-  const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
-  const sheets = google.sheets({ version: 'v4', auth });
-
-  // Get metadata of the spreadsheet
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
-  const sheetTitles = meta.data.sheets
-    .map(s => s.properties.title)
-    .filter(title => title === 'Boards Test Cases'); // Process only the sheet you need
-
-  if (sheetTitles.length === 0) {
-    console.error(`No target sheet found in the spreadsheet with ID: ${targetSpreadsheetId}`);
+  const gid = extractGidFromUrl(url);
+  if (!gid) {
+    console.error(`Invalid URL or missing gid: ${url}`);
     return;
   }
 
-  const collectedData = await collectSheetData(auth, targetSpreadsheetId, sheetTitles[0]);
+  const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // Fetch data directly from the specified sheet using gid
+  const collectedData = await collectSheetData(auth, targetSpreadsheetId, gid);
 
   if (collectedData) {
-    await logData(auth, `Fetched data from sheet: ${sheetTitles[0]}`);
+    await logData(auth, `Fetched data from sheet with gid: ${gid}`);
     await validateAndInsertData(auth, collectedData);
   }
 }
 
-// Collects specific data from the sheet, adjusting to only fetch necessary rows
-async function collectSheetData(auth, spreadsheetId, sheetTitle) {
+// Collects specific data from the sheet based on gid
+async function collectSheetData(auth, spreadsheetId, gid) {
   const sheets = google.sheets({ version: 'v4', auth });
   const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24', 'B27', 'C32', 'C11'];
-  const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
+  const ranges = cellRefs.map(ref => `gid=${gid}!${ref}`);
 
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId,
@@ -107,8 +107,8 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   if (!data['C24']) return null;
 
   const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const sheet = meta.data.sheets.find(s => s.properties.title === sheetTitle);
-  const sheetId = sheet.properties.sheetId;
+  const sheet = meta.data.sheets.find(s => s.properties.sheetId == gid);
+  const sheetId = sheet?.properties.sheetId;
   const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
 
   return {
@@ -119,6 +119,7 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     C5: data['C5'],
     C6: data['C6'],
     C7: data['C7'],
+    '',
     C11: data['C11'],
     C32: data['C32'],
     C13: data['C13'],
@@ -129,11 +130,22 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     C20: data['C20'],
     C21: data['C21'],
     sheetUrl,
-    sheetName: sheetTitle
   };
 }
 
-// Entry point to process the URLs
+async function logData(auth, message) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const logCell = 'B1'; // Reference to cell B1 for logging
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: process.env.CDS_PORTAL_SPREADSHEET_ID,
+    range: `Boards Test Cases!${logCell}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [[message]] }
+  });
+  console.log(message);
+}
+
+// Main processing function
 (async () => {
   const client = await auth.getClient();
   const urls = await fetchUrls(client);
@@ -153,19 +165,6 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     }
   }
 })();
-
-async function logData(auth, message) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const logCell = 'B1'; // Reference to cell B1 for logging
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!${logCell}`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [[message]] }
-  });
-  console.log(message);
-}
-
 
 async function validateAndInsertData(auth, data) {
   const sheets = google.sheets({ version: 'v4', auth });
