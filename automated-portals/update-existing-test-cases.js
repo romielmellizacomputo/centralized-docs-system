@@ -6,6 +6,7 @@ import pLimit from 'p-limit';
 dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
+const RATE_LIMIT_DELAY = 5000; // Delay in milliseconds (e.g., 5000ms = 5 second)
 const SHEET_NAME = 'Boards Test Cases';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_CONCURRENT_REQUESTS = 3;
