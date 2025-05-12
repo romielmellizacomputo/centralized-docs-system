@@ -8,7 +8,7 @@ const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Logs';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
 const MAX_URLS = 20;
-const RATE_LIMIT_DELAY = 2000; // 2 seconds delay between requests
+const RATE_LIMIT_DELAY = 5000; // 5 seconds delay between requests
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
