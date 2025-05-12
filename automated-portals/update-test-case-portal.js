@@ -72,7 +72,7 @@ async function fetchSheetData(sheets, sheetName) {
 }
 
 async function clearTargetSheet(sheets) {
-  const range = `${DEST_SHEET}!B3:Y`;
+  const range = `${DEST_SHEET}!B3:W`;
   await sheets.spreadsheets.values.clear({
     spreadsheetId: SHEET_ID,
     range
@@ -118,7 +118,7 @@ async function main() {
 
   // Clear the sheet only if we have data to insert
   await clearTargetSheet(sheets);
-  console.log('Target sheet cleared from B3 to Y.');
+  console.log('Target sheet cleared from B3 to W.');
 
   await insertBatchData(sheets, allRows);
   console.log('Data successfully inserted into Test Case Portal.');
