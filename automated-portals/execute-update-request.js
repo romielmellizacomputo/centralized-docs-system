@@ -140,13 +140,13 @@ async function validateAndInsertData(auth, data) {
 
     if (existingC3Index !== -1) {
       await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
+      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'U' : 'T');
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
       processed = true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
       await insertRowWithFormat(auth, sheetTitle, lastC24Index);
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'T' : 'S');
+      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'U' : 'T');
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
       processed = true;
     }
