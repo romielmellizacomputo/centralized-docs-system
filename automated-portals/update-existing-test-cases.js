@@ -46,7 +46,7 @@ async function insertDataInRow(row, data) {
   const values = [
     data.C24,
     data.C3,
-    `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
+    `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`, // Correctly embedding the link
     data.B27,
     data.C5,
     data.C6,
@@ -65,7 +65,7 @@ async function insertDataInRow(row, data) {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${sheetTitle}!B${row}:R${row}`,
+    range: `${sheetTitle}!B${row}:R${row}`, // Inserting data in the same row
     valueInputOption: 'USER_ENTERED',
     resource: { values: [values] },
   });
@@ -79,7 +79,7 @@ async function processSheet() {
     const url = urls[rowIndex - 1][0]; // Get URL from the D column
     if (url) {
       const data = await fetchDataFromCells(rowIndex + 1); // Fetch data from specified cells
-      await limit(() => insertDataInRow(rowIndex + 1, data)); // Insert data into the same row
+      await limit(() => insertDataInRow(rowIndex + 1, data)); // Insert data into the same row where the URL was taken
       await new Promise(resolve => setTimeout(resolve, 1000)); // Delay to avoid hitting API quota
     }
   }
