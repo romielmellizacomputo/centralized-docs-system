@@ -80,7 +80,6 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
     C5: data['C5'],
     C6: data['C6'],
     C7: data['C7'],
-    '',
     data.C11,
     data.C32,
     data.C15,
