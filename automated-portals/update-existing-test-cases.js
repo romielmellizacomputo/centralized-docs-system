@@ -7,8 +7,7 @@ dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const RATE_LIMIT_DELAY = 5000; // Delay in milliseconds (e.g., 5000ms = 5 second)
-const SHEET_NAME = 'Boards Test Cases';
-const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
+const SHEET_NAME = 'Boards Test Cases'; // You may want to update this with the actual sheet where the URL exists
 const MAX_CONCURRENT_REQUESTS = 3;
 
 const auth = new GoogleAuth({
@@ -16,10 +15,10 @@ const auth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.readonly']
 });
 
+// Fetches the URLs present in a specific column (e.g., column D)
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
 
-  // Dynamically fetch all values from column D (starting row 3 to end)
   const range = `${SHEET_NAME}!D3:D`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   const values = response.data.values || [];
@@ -61,38 +60,34 @@ async function fetchUrls(auth) {
   const results = await Promise.all(tasks);
   const filteredResults = results.filter(Boolean);
 
-  // Remove duplicate URLs
-  const seenUrls = new Set();
-  const uniqueResults = [];
-  for (const item of filteredResults) {
-    if (!seenUrls.has(item.url)) {
-      seenUrls.add(item.url);
-      uniqueResults.push(item);
-    }
+  return filteredResults;
+}
+
+// Processes a single URL from the fetched list
+async function processUrl(url, auth) {
+  const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
+  const sheets = google.sheets({ version: 'v4', auth });
+
+  // Get metadata of the spreadsheet
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
+  const sheetTitles = meta.data.sheets
+    .map(s => s.properties.title)
+    .filter(title => title === 'Boards Test Cases'); // Process only the sheet you need
+
+  if (sheetTitles.length === 0) {
+    console.error(`No target sheet found in the spreadsheet with ID: ${targetSpreadsheetId}`);
+    return;
   }
 
-  return uniqueResults;
+  const collectedData = await collectSheetData(auth, targetSpreadsheetId, sheetTitles[0]);
+
+  if (collectedData) {
+    await logData(auth, `Fetched data from sheet: ${sheetTitles[0]}`);
+    await validateAndInsertData(auth, collectedData);
+  }
 }
 
-// Entry point
-(async () => {
-  const client = await auth.getClient();
-  const urls = await fetchUrls(client);
-  console.log(`✅ Fetched ${urls.length} URLs`);
-})();
-
-async function logData(auth, message) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const logCell = 'B1'; // Reference to cell B1 for logging
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!${logCell}`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [[message]] }
-  });
-  console.log(message);
-}
-
+// Collects specific data from the sheet, adjusting to only fetch necessary rows
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   const sheets = google.sheets({ version: 'v4', auth });
   const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24', 'B27', 'C32', 'C11'];
@@ -138,25 +133,39 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   };
 }
 
-async function processUrl(url, auth) {
-  const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
-  const sheets = google.sheets({ version: 'v4', auth });
+// Entry point to process the URLs
+(async () => {
+  const client = await auth.getClient();
+  const urls = await fetchUrls(client);
+  console.log(`✅ Fetched ${urls.length} URLs`);
 
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
-  const sheetTitles = meta.data.sheets
-    .map(s => s.properties.title)
-    .filter(title => !SHEETS_TO_SKIP.includes(title));
-
-  const dataPromises = sheetTitles.map(sheetTitle => collectSheetData(auth, targetSpreadsheetId, sheetTitle));
-  const collectedData = await Promise.all(dataPromises);
-
-  const validData = collectedData.filter(data => data !== null && Object.values(data).some(v => v !== null && v !== ''));
-
-  for (const data of validData) {
-    await logData(auth, `Fetched data from sheet: ${data.sheetName}`);
-    await validateAndInsertData(auth, data);
+  if (!urls.length) {
+    await logData(client, 'No URLs to process.');
+    return;
   }
+
+  for (const { url } of urls) {
+    console.log(`Processing URL: ${url}`);
+    try {
+      await processUrl(url, client);
+    } catch (error) {
+      console.error(`Error processing URL ${url}:`, error.message);
+    }
+  }
+})();
+
+async function logData(auth, message) {
+  const sheets = google.sheets({ version: 'v4', auth });
+  const logCell = 'B1'; // Reference to cell B1 for logging
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `${SHEET_NAME}!${logCell}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [[message]] }
+  });
+  console.log(message);
 }
+
 
 async function validateAndInsertData(auth, data) {
   const sheets = google.sheets({ version: 'v4', auth });
