@@ -58,7 +58,7 @@ function detectHyperlinks(row) {
 }
 
 async function fetchSheetData(sheets, sheetName) {
-  const range = `${sheetName}!B3:X`; 
+  const range = `${sheetName}!B3:V`; 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range,
