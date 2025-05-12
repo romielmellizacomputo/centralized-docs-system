@@ -90,8 +90,19 @@ async function processUrl(url, auth) {
 // Collects specific data from the sheet based on gid
 async function collectSheetData(auth, spreadsheetId, gid) {
   const sheets = google.sheets({ version: 'v4', auth });
+
+  // Get the sheet metadata to resolve sheet title from gid
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = meta.data.sheets.find(s => s.properties.sheetId == gid);
+  if (!sheet) {
+    console.error(`No sheet found with gid=${gid}`);
+    return null;
+  }
+
+  const sheetTitle = sheet.properties.title;
+
   const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24', 'B27', 'C32', 'C11'];
-  const ranges = cellRefs.map(ref => `gid=${gid}!${ref}`);
+  const ranges = cellRefs.map(ref => `'${sheetTitle}'!${ref}`);
 
   const res = await sheets.spreadsheets.values.batchGet({
     spreadsheetId,
@@ -106,10 +117,7 @@ async function collectSheetData(auth, spreadsheetId, gid) {
 
   if (!data['C24']) return null;
 
-  const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const sheet = meta.data.sheets.find(s => s.properties.sheetId == gid);
-  const sheetId = sheet?.properties.sheetId;
-  const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
+  const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${gid}`;
 
   return {
     C24: data['C24'],
