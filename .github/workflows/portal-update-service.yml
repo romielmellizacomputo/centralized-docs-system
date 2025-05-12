@@ -1,4 +1,4 @@
-name: CDS Portals Update Service
+name: Run Test Case Update Requests
 
 on:
   workflow_dispatch:  # allows manual triggering
