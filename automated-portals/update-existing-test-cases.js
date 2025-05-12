@@ -18,13 +18,13 @@ const auth = new GoogleAuth({
 // Fetch URLs from the D column of "Boards Test Cases"
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${SHEET_NAME}!D3:D`; // Changed to D column
+  const range = `${SHEET_NAME}!D3:D`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   const values = response.data.values || [];
 
-  // Extracting hyperlinks from the D column
   const urls = await Promise.all(values.map(async (row, index) => {
     const cell = `D${index + 3}`;
+    if (index + 3 > 17) return null; // Skip if index exceeds max rows
     const linkResponse = await sheets.spreadsheets.get({
       spreadsheetId: SHEET_ID,
       ranges: [cell],
@@ -34,8 +34,9 @@ async function fetchUrls(auth) {
     return { url: hyperlink, rowIndex: index + 3 };
   }));
 
-  return urls.filter(entry => entry.url);
+  return urls.filter(entry => entry && entry.url);
 }
+
 
 async function logData(auth, message) {
   const sheets = google.sheets({ version: 'v4', auth });
