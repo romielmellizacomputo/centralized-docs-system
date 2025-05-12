@@ -34,11 +34,14 @@ async function fetchUrls(auth) {
       });
 
       // Check if the response contains the expected data structure
-      const hyperlink = linkResponse.data.sheets && 
-                        linkResponse.data.sheets[0] && 
-                        linkResponse.data.sheets[0].data[0] && 
-                        linkResponse.data.sheets[0].data[0].rowData[0] && 
-                        linkResponse.data.sheets[0].data[0].rowData[0].values[0] && 
+      const hyperlink = linkResponse.data.sheets &&
+                        linkResponse.data.sheets[0] &&
+                        linkResponse.data.sheets[0].data &&
+                        linkResponse.data.sheets[0].data[0] &&
+                        linkResponse.data.sheets[0].data[0].rowData &&
+                        linkResponse.data.sheets[0].data[0].rowData[0] &&
+                        linkResponse.data.sheets[0].data[0].rowData[0].values &&
+                        linkResponse.data.sheets[0].data[0].rowData[0].values[0] &&
                         linkResponse.data.sheets[0].data[0].rowData[0].values[0].hyperlink
                         || row[0];
 
