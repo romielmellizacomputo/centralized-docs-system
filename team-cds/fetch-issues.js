@@ -1,12 +1,11 @@
 import { google } from 'googleapis';
 
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
-const G_MILESTONES = 'G-Milestones';
 const G_ISSUES_SHEET = 'G-Issues';
 const DASHBOARD_SHEET = 'Dashboard';
 
-const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:O'; 
+const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:O';
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -32,14 +31,6 @@ async function getAllTeamCDSSheetIds(sheets) {
   return data.values?.flat().filter(Boolean) || [];
 }
 
-async function getSelectedMilestones(sheets, sheetId) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `${G_MILESTONES}!G4:G`,
-  });
-  return data.values?.flat().filter(Boolean) || [];
-}
-
 async function getAllIssues(sheets) {
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
@@ -50,7 +41,7 @@ async function getAllIssues(sheets) {
     throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
   }
 
-  return data.values;
+  return data.values.map(row => row.slice(0, 12)); // Get columns C to N
 }
 
 async function clearGIssues(sheets, sheetId) {
@@ -99,32 +90,20 @@ async function main() {
       return;
     }
 
+    const issuesData = await getAllIssues(sheets); // Fetch once and reuse
+
     for (const sheetId of sheetIds) {
       try {
         console.log(`🔄 Processing: ${sheetId}`);
 
         const sheetTitles = await getSheetTitles(sheets, sheetId);
-
-        if (!sheetTitles.includes(G_MILESTONES)) {
-          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MILESTONES}' sheet`);
-          continue;
-        }
-
         if (!sheetTitles.includes(G_ISSUES_SHEET)) {
           console.warn(`⚠️ Skipping ${sheetId} — missing '${G_ISSUES_SHEET}' sheet`);
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([ 
-          getSelectedMilestones(sheets, sheetId),
-          getAllIssues(sheets),
-        ]);
-
-        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
-        const processedData = filtered.map(row => row.slice(0, 12));
-
         await clearGIssues(sheets, sheetId);
-        await insertDataToGIssues(sheets, sheetId, processedData);
+        await insertDataToGIssues(sheets, sheetId, issuesData);
         await updateTimestamp(sheets, sheetId);
 
         console.log(`✅ Finished: ${sheetId}`);
