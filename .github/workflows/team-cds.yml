@@ -36,31 +36,4 @@ jobs:
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
 
-  run-self-hosted:
-    runs-on: self-hosted
-
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 18
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run fetch-issues.js
-        run: node team-cds/fetch-issues.js
-        env:
-          TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
-
-      - name: Run fetch-mr.js
-        run: node team-cds/fetch-mr.js
-        env:
-          TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
-
-      - name: Run fetch-ntc.js
-        run: node team-cds/fetch-ntc.js
-        env:
-          TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
+  
