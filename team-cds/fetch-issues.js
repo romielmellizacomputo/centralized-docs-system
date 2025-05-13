@@ -1,6 +1,5 @@
 import { google } from 'googleapis';
 
-// Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const G_MILESTONES = 'G-Milestones';
 const G_ISSUES_SHEET = 'G-Issues';
@@ -92,10 +91,8 @@ async function main() {
     const auth = await authenticate();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Confirm correct sheet titles
     await getSheetTitles(sheets, UTILS_SHEET_ID);
 
-    // Get list of Google Sheet IDs from UTILS!B2:B
     const sheetIds = await getAllTeamCDSSheetIds(sheets);
     if (!sheetIds.length) {
       console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
