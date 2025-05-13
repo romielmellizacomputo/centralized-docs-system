@@ -1,8 +1,8 @@
 import { google } from 'googleapis';
 
-const sheetData = JSON.parse(process.env.SHEET_DATA); // Can be an array or single entry
-const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON); // Service account credentials
-const targetSpreadsheetId = process.env.AUTOMATED_PORTALS; // Destination spreadsheet for logs
+const sheetData = JSON.parse(process.env.SHEET_DATA); 
+const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON); 
+const targetSpreadsheetId = process.env.AUTOMATED_PORTALS; 
 
 async function sendUpdateSignal() {
   try {
