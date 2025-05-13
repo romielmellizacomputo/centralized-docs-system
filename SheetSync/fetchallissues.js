@@ -2,7 +2,6 @@ import { config } from 'dotenv';
 import { google } from 'googleapis';
 import axios from 'axios';
 
-// Load environment variables (only useful if not using GitHub secrets)
 config();
 
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
@@ -151,14 +150,13 @@ async function fetchAndUpdateIssuesForAllProjects() {
 
   console.log('🔄 Fetching issues for all projects...');
 
-  // Fetch issues for all projects in parallel
   const issuesPromises = Object.keys(PROJECT_CONFIG).map(async projectId => {
     const config = PROJECT_CONFIG[projectId];
     return fetchIssuesForProject(projectId, config, existingIssues);
   });
 
   const allIssuesResults = await Promise.all(issuesPromises);
-  let allIssues = allIssuesResults.flat(); // Flatten the array of results
+  let allIssues = allIssuesResults.flat(); 
 
   const updatedRows = Array.from(existingIssues.values());
 
