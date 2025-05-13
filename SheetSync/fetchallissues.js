@@ -63,30 +63,7 @@ function formatDate(dateString) {
   }).format(date);
 }
 
-async function fetchExistingIssueKeys(sheets) {
-  try {
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'ALL ISSUES!C4:N',
-    });
-
-    const rows = res.data.values || [];
-    const issueKeys = new Map();
-    for (const row of rows) {
-      const id = row[0]?.trim();
-      const iid = row[1]?.trim();
-      if (id && iid) {
-        issueKeys.set(`${id}_${iid}`, row);
-      }
-    }
-    return issueKeys;
-  } catch (err) {
-    console.error('❌ Failed to read existing issues from sheet:', err.message);
-    return new Map();
-  }
-}
-
-async function fetchIssuesForProject(projectId, config, existingIssues) {
+async function fetchIssuesForProject(projectId, config) {
   let page = 1;
   let issues = [];
   console.log(`🔄 Fetching issues for ${config.name}...`);
@@ -107,10 +84,7 @@ async function fetchIssuesForProject(projectId, config, existingIssues) {
     const fetchedIssues = response.data;
     if (fetchedIssues.length === 0) break;
 
-    fetchedIssues.forEach(issue => {
-      const key = `${issue.id}_${issue.iid}`;
-      const existingIssue = existingIssues.get(key);
-
+    fetchedIssues.forEach((issue) => {
       const issueData = [
         issue.id ?? '',
         issue.iid ?? '',
@@ -128,11 +102,7 @@ async function fetchIssuesForProject(projectId, config, existingIssues) {
         config.name,
       ];
 
-      if (existingIssue) {
-        existingIssues.set(key, issueData);
-      } else {
-        issues.push(issueData);
-      }
+      issues.push(issueData);
     });
 
     console.log(`✅ Page ${page} fetched (${fetchedIssues.length} issues) for ${config.name}`);
@@ -146,26 +116,25 @@ async function fetchAndUpdateIssuesForAllProjects() {
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  const existingIssues = await fetchExistingIssueKeys(sheets);
-
   console.log('🔄 Fetching issues for all projects...');
 
-  const issuesPromises = Object.keys(PROJECT_CONFIG).map(async projectId => {
+  const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (projectId) => {
     const config = PROJECT_CONFIG[projectId];
-    return fetchIssuesForProject(projectId, config, existingIssues);
+    return fetchIssuesForProject(projectId, config);
   });
 
   const allIssuesResults = await Promise.all(issuesPromises);
-  let allIssues = allIssuesResults.flat(); 
+  const allIssues = allIssuesResults.flat();
 
-  const updatedRows = Array.from(existingIssues.values());
-
-  if (updatedRows.length > 0) {
-    const safeRows = updatedRows.map(row =>
-      row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
+  if (allIssues.length > 0) {
+    const safeRows = allIssues.map((row) =>
+      row.map((cell) =>
+        cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)
+      )
     );
 
     try {
+      // Overwrite the target sheet starting from C4
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: 'ALL ISSUES!C4',
@@ -173,34 +142,12 @@ async function fetchAndUpdateIssuesForAllProjects() {
         resource: { values: safeRows },
       });
 
-      console.log(`✅ Updated ${safeRows.length} issues.`);
+      console.log(`✅ Cleared and inserted ${safeRows.length} issues.`);
     } catch (err) {
-      console.error('❌ Error updating data:', err.stack || err.message);
+      console.error('❌ Error writing to sheet:', err.stack || err.message);
     }
   } else {
-    console.log('ℹ️ No updates to existing issues.');
-  }
-
-  if (allIssues.length > 0) {
-    const safeNewRows = allIssues.map(row =>
-      row.map(cell => (cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)))
-    );
-
-    try {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'ALL ISSUES!C4',
-        valueInputOption: 'USER_ENTERED',
-        insertDataOption: 'INSERT_ROWS',
-        resource: { values: safeNewRows },
-      });
-
-      console.log(`✅ Inserted ${safeNewRows.length} new issues.`);
-    } catch (err) {
-      console.error('❌ Error inserting new issues:', err.stack || err.message);
-    }
-  } else {
-    console.log('ℹ️ No new issues to insert.');
+    console.log('ℹ️ No issues to insert.');
   }
 }
 
