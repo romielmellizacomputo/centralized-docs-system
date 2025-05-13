@@ -68,30 +68,7 @@ function formatDate(dateString) {
   }).format(date);
 }
 
-async function fetchExistingMergeRequestKeys(sheets) {
-  try {
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'ALL MRs!C4:O',
-    });
-
-    const rows = res.data.values || [];
-    const mrKeys = new Map();
-    for (const row of rows) {
-      const id = row[0]?.trim();
-      const iid = row[1]?.trim();
-      if (id && iid) {
-        mrKeys.set(`${id}_${iid}`, row);
-      }
-    }
-    return mrKeys;
-  } catch (err) {
-    console.error('❌ Failed to read existing MRs from sheet:', err.message);
-    return new Map();
-  }
-}
-
-async function fetchMRsForProject(projectId, config, existingMRs) {
+async function fetchMRsForProject(projectId, config) {
   let page = 1;
   const allProjectMRs = [];
 
@@ -113,10 +90,9 @@ async function fetchMRsForProject(projectId, config, existingMRs) {
       if (mrs.length === 0) break;
 
       for (const mr of mrs) {
-        const key = `${mr.id}_${mr.iid}`;
         const reviewers = (mr.reviewers || []).map(r => r.name).join(', ') || 'Unassigned';
 
-        const mrData = [
+        allProjectMRs.push([
           mr.id ?? '',
           mr.iid ?? '',
           mr.title && mr.web_url
@@ -132,13 +108,7 @@ async function fetchMRsForProject(projectId, config, existingMRs) {
           formatDate(mr.closed_at),
           formatDate(mr.merged_at),
           config.name,
-        ];
-
-        if (existingMRs.has(key)) {
-          existingMRs.set(key, mrData);
-        } else {
-          allProjectMRs.push(mrData);
-        }
+        ]);
       }
 
       console.log(`✅ Page ${page} fetched (${mrs.length} MRs) for ${config.name}`);
@@ -152,21 +122,17 @@ async function fetchMRsForProject(projectId, config, existingMRs) {
   return allProjectMRs;
 }
 
-async function fetchAndUpdateMRsForAllProjects() {
+async function fetchAndReplaceAllMRs() {
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  const existingMRs = await fetchExistingMergeRequestKeys(sheets);
   console.log('🔄 Fetching merge requests for all projects in parallel...');
-
   const fetchPromises = Object.entries(PROJECT_CONFIG).map(([projectId, config]) =>
-    fetchMRsForProject(projectId, config, existingMRs)
+    fetchMRsForProject(projectId, config)
   );
 
   const results = await Promise.all(fetchPromises);
-  const allNewMRs = results.flat();
-
-  const updatedRows = Array.from(existingMRs.values());
+  const allMRs = results.flat();
 
   const cleanData = (rows) =>
     rows.map((row) =>
@@ -177,35 +143,30 @@ async function fetchAndUpdateMRsForAllProjects() {
       })
     );
 
-  if (updatedRows.length > 0) {
+  if (allMRs.length > 0) {
     try {
+      console.log('🧹 Clearing existing MR data in sheet...');
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'ALL MRs!C4:O',
+      });
+
+      console.log(`📤 Inserting ${allMRs.length} MRs into the sheet...`);
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: 'ALL MRs!C4',
         valueInputOption: 'USER_ENTERED',
-        resource: { values: cleanData(updatedRows) },
+        resource: { values: cleanData(allMRs) },
       });
-      console.log(`✅ Updated ${updatedRows.length} merge requests.`);
-    } catch (err) {
-      console.error('❌ Error updating data:', err.stack || err.message);
-    }
-  }
 
-  if (allNewMRs.length > 0) {
-    try {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'ALL MRs!C4',
-        valueInputOption: 'USER_ENTERED',
-        insertDataOption: 'INSERT_ROWS',
-        resource: { values: cleanData(allNewMRs) },
-      });
-      console.log(`✅ Inserted ${allNewMRs.length} new merge requests.`);
+      console.log(`✅ Inserted ${allMRs.length} merge requests successfully.`);
     } catch (err) {
-      console.error('❌ Error inserting new merge requests:', err.stack || err.message);
+      console.error('❌ Error inserting data into sheet:', err.stack || err.message);
     }
+  } else {
+    console.log('⚠️ No merge requests found. Sheet was not cleared.');
   }
 }
 
 // Run
-fetchAndUpdateMRsForAllProjects();
+fetchAndReplaceAllMRs();
