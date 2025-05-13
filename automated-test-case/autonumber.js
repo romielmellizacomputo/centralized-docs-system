@@ -41,7 +41,6 @@ async function main() {
       while (row < rows.length) {
         const absRow = row + startRow;
 
-        // Check for merge in column F
         const fMerge = merges.find(m =>
           m.startRowIndex === absRow - 1 &&
           m.startColumnIndex === 5 &&
@@ -62,7 +61,6 @@ async function main() {
         const fValue = (rows[row] && rows[row][1])?.trim();
         const eValue = (rows[row] && rows[row][0])?.trim();
 
-        // Check if E is incorrectly merged or needs merging
         const eMerge = merges.find(m =>
           m.startRowIndex === mergeStart - 1 &&
           m.endRowIndex === mergeEnd - 1 &&
@@ -74,7 +72,6 @@ async function main() {
           // Fill number
           values[row] = [number.toString()];
 
-          // Merge E if F is merged and E isn't
           if (isMergedInF && !eMerge) {
             requests.push({
               mergeCells: {
@@ -90,7 +87,6 @@ async function main() {
             });
           }
 
-          // Unmerge E if F is not merged but E is
           if (!isMergedInF && eMerge) {
             requests.push({
               unmergeCells: {
@@ -111,10 +107,8 @@ async function main() {
         row += mergeLength;
       }
 
-      // Update values in column E
       await updateValuesWithRetry(sheets, spreadsheetId, `'${name}'!E12:E${startRow + values.length - 1}`, values);
 
-      // Apply merge/unmerge requests in batches
       if (requests.length > 0) {
         await sheets.spreadsheets.batchUpdate({
           spreadsheetId,
@@ -133,7 +127,7 @@ async function main() {
 async function updateValuesWithRetry(sheets, spreadsheetId, range, values) {
   let attempts = 0;
 
-  while (true) { // Infinite loop for retries
+  while (true) { 
     try {
       await sheets.spreadsheets.values.update({
         spreadsheetId,
@@ -141,7 +135,7 @@ async function updateValuesWithRetry(sheets, spreadsheetId, range, values) {
         valueInputOption: 'USER_ENTERED',
         requestBody: { values },
       });
-      return; // Success, exit the function
+      return; 
     } catch (error) {
       if (error.response && error.response.status === 429) {
         // Quota exceeded error, apply exponential backoff
@@ -150,7 +144,7 @@ async function updateValuesWithRetry(sheets, spreadsheetId, range, values) {
         console.log(`Quota exceeded. Retrying in ${waitTime / 1000} seconds...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
-        throw error; // Rethrow other errors
+        throw error; 
       }
     }
   }
