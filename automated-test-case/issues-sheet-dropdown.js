@@ -1,6 +1,5 @@
 import { google } from 'googleapis';
 
-// If using Node.js v18 or newer, fetch is globally available:
 const fetch = global.fetch;
 
 const skipSheets = ['ToC', 'Issues', 'Roster'];
@@ -47,7 +46,6 @@ async function refreshDropdown() {
     const issuesSheet = sheets.find(s => s.properties.title === ISSUES_SHEET);
     if (!issuesSheet) throw new Error(`Sheet "${ISSUES_SHEET}" not found`);
 
-    // 1. Apply dropdown validation
     const dropdownRule = {
       requests: [{
         setDataValidation: {
@@ -84,7 +82,6 @@ async function refreshDropdown() {
 
     const values = getRes.data.values || [];
 
-    // 3. Replace with =HYPERLINK formulas if matching a valid sheet name
     const updatedValues = values.map(row => {
       const val = row[0]?.trim();
       if (sheetNameToGid[val]) {
