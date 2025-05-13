@@ -1,6 +1,5 @@
 import { google } from 'googleapis';
 
-// Google Sheets constants
 const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const G_MILESTONES = 'G-Milestones';
 const NTC_SHEET = 'NTC'; 
@@ -96,10 +95,8 @@ async function main() {
     const auth = await authenticate();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Confirm correct sheet titles
     await getSheetTitles(sheets, UTILS_SHEET_ID);
 
-    // Get list of Google Sheet IDs from UTILS!B2:B
     const sheetIds = await getAllTeamCDSSheetIds(sheets);
     if (!sheetIds.length) {
       console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
@@ -127,18 +124,15 @@ async function main() {
           getAllIssues(sheets),
         ]);
 
-        // Filter issues based on milestones and label conditions
         const filtered = issuesData.filter(row => {
-          const milestoneMatches = milestones.includes(row[6]); // Column G (index 6) for selected milestone
+          const milestoneMatches = milestones.includes(row[6]);
 
-          const labelsRaw = row[5] || '';  // Column H (index 5) for labels (H4:H)
-          const labels = labelsRaw.split(',').map(label => label.trim().toLowerCase());  // Split and trim
+          const labelsRaw = row[5] || '';  
+          const labels = labelsRaw.split(',').map(label => label.trim().toLowerCase());
 
-          // Log to debug the raw and processed labels
           console.log(`Raw labels for row: ${labelsRaw}`);
           console.log(`Processed labels for row: ${labels}`);
 
-          // Check for any of the required labels
           const labelsMatch = labels.some(label => 
             ["needs test case", "needs test scenario", "test case needs update"].includes(label)
           );
@@ -147,7 +141,6 @@ async function main() {
         });
 
         if (filtered.length > 0) {
-          // Map filtered data to C4:N (columns C to N)
           const processedData = filtered.map(row => row.slice(0, 12)); 
 
           await clearNTCSheet(sheets, sheetId);
