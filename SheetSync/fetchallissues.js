@@ -4,7 +4,7 @@ import axios from 'axios';
 
 config();
 
-const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
+const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'SHEET_SYNC_SAJ'];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
     console.error(`❌ Missing required environment variable: ${key}`);
@@ -28,15 +28,15 @@ const PROJECT_CONFIG = {
 };
 
 function loadServiceAccount() {
-  if (process.env.GITHUB_ACTIONS && process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+  if (process.env.GITHUB_ACTIONS && process.env.SHEET_SYNC_SAJ) {
     try {
-      return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      return JSON.parse(process.env.SHEET_SYNC_SAJ);
     } catch (error) {
       console.error('❌ Error parsing service account JSON:', error.message);
       throw error;
     }
   } else {
-    console.error('❌ Script must run in GitHub Actions with GOOGLE_SERVICE_ACCOUNT_JSON');
+    console.error('❌ Script must run in GitHub Actions with SHEET_SYNC_SAJ');
     process.exit(1);
   }
 }
