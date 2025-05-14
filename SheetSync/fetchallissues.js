@@ -4,7 +4,7 @@ import axios from 'axios';
 
 config();
 
-const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'SHEET_SYNC_SAJ'];
+const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SHEET_SYNC_SID', 'SHEET_SYNC_SAJ'];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
     console.error(`❌ Missing required environment variable: ${key}`);
@@ -14,7 +14,7 @@ requiredEnv.forEach((key) => {
 
 const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const SPREADSHEET_ID = process.env.SHEET_SYNC_SID;
 
 const PROJECT_CONFIG = {
   155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
