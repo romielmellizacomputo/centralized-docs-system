@@ -136,7 +136,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
     try {
       // Overwrite the target sheet starting from C4
       await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: SHEET_SYNC_SID,
         range: 'ALL ISSUES!C4',
         valueInputOption: 'USER_ENTERED',
         resource: { values: safeRows },
