@@ -1,119 +1,140 @@
-import { google as 𝓰𝓸𝓸𝓰𝓁𝓮 } from 'googleapis';
+import { google } from 'googleapis';
 
-const 𝓐𝟏 = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
-const 𝓑𝟏 = 'G-Milestones';
-const 𝓒𝟏 = 'G-Issues';
-const 𝓓𝟏 = 'Dashboard';
+const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
+const G_MILESTONES = 'G-Milestones';
+const G_ISSUES_SHEET = 'G-Issues';
+const DASHBOARD_SHEET = 'Dashboard';
 
-const 𝓔𝟏 = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';
-const 𝓕𝟏 = 'ALL ISSUES!C4:O';
+const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:O'; 
 
-async function 𝒂𝒖𝒕𝒉𝒙() {
-  const 𝓳𝓼 = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
-  const 𝓪 = new 𝓰𝓸𝓸𝓰𝓁𝓮.auth.GoogleAuth({
-    credentials: 𝓳𝓼,
+async function authenticate() {
+  const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
+  const auth = new google.auth.GoogleAuth({
+    credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  return 𝓪;
+  return auth;
 }
 
-async function 𝒙𝒚𝒛(𝓈, 𝓲𝓭) {
-  const 𝓻 = await 𝓈.spreadsheets.get({ spreadsheetId: 𝓲𝓭 });
-  return 𝓻.data.sheets.map(𝓼𝓱 => 𝓼𝓱.properties.title);
+async function getSheetTitles(sheets, spreadsheetId) {
+  const res = await sheets.spreadsheets.get({ spreadsheetId });
+  const titles = res.data.sheets.map(sheet => sheet.properties.title);
+  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
+  return titles;
 }
 
-async function 𝓼𝓲𝓭𝓼(𝓈) {
-  const { data } = await 𝓈.spreadsheets.values.get({
-    spreadsheetId: 𝓐𝟏,
+async function getAllTeamCDSSheetIds(sheets) {
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: UTILS_SHEET_ID,
     range: 'UTILS!B2:B',
   });
   return data.values?.flat().filter(Boolean) || [];
 }
 
-async function 𝓶𝓲𝓵𝓮𝓼(𝓈, 𝓲𝓭) {
-  const { data } = await 𝓈.spreadsheets.values.get({
-    spreadsheetId: 𝓲𝓭,
-    range: `${𝓑𝟏}!G4:G`,
+async function getSelectedMilestones(sheets, sheetId) {
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `${G_MILESTONES}!G4:G`,
   });
   return data.values?.flat().filter(Boolean) || [];
 }
 
-async function 𝓲𝓼𝓼𝓾𝓮𝓼(𝓈) {
-  const { data } = await 𝓈.spreadsheets.values.get({
-    spreadsheetId: 𝓔𝟏,
-    range: 𝓕𝟏,
+async function getAllIssues(sheets) {
+  const { data } = await sheets.spreadsheets.values.get({
+    spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
+    range: ALL_ISSUES_RANGE,
   });
 
   if (!data.values || data.values.length === 0) {
-    throw new Error(`No data found in range ${𝓕𝟏}`);
+    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
   }
 
   return data.values;
 }
 
-async function 𝓬𝓵𝓮𝓪𝓻(𝓈, 𝓲𝓭) {
-  await 𝓈.spreadsheets.values.clear({
-    spreadsheetId: 𝓲𝓭,
-    range: `${𝓒𝟏}!C4:N`,
+async function clearGIssues(sheets, sheetId) {
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: sheetId,
+    range: `${G_ISSUES_SHEET}!C4:N`,
   });
 }
 
-async function 𝓲𝓷𝓼𝓮𝓻𝓽(𝓈, 𝓲𝓭, 𝓭𝓪𝓽𝓪) {
-  await 𝓈.spreadsheets.values.update({
-    spreadsheetId: 𝓲𝓭,
-    range: `${𝓒𝟏}!C4`,
+async function insertDataToGIssues(sheets, sheetId, data) {
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `${G_ISSUES_SHEET}!C4`,
     valueInputOption: 'RAW',
-    requestBody: { values: 𝓭𝓪𝓽𝓪 },
+    requestBody: { values: data },
   });
 }
 
-async function 𝓽𝓲𝓶𝓮𝓼(𝓈, 𝓲𝓭) {
-  const 𝓷 = new Date();
-  const 𝓽 = `Sync on ${𝓷.toLocaleDateString('en-US', {
+async function updateTimestamp(sheets, sheetId) {
+  const now = new Date();
+  const formatted = `Sync on ${now.toLocaleDateString('en-US', {
     weekday: 'short',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  })} at ${𝓷.toLocaleTimeString('en-US')}`;
+  })} at ${now.toLocaleTimeString('en-US')}`;
 
-  await 𝓈.spreadsheets.values.update({
-    spreadsheetId: 𝓲𝓭,
-    range: `${𝓓𝟏}!X6`,
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `${DASHBOARD_SHEET}!X6`,
     valueInputOption: 'RAW',
-    requestBody: { values: [[𝓽]] },
+    requestBody: { values: [[formatted]] },
   });
 }
 
-async function 𝓶𝓪𝓲𝓷𝒇() {
+async function main() {
   try {
-    const 𝓪𝓾 = await 𝒂𝒖𝒕𝒉𝒙();
-    const 𝓼𝓱𝓮𝓮𝓽𝓼 = 𝓰𝓸𝓸𝓰𝓁𝓮.sheets({ version: 'v4', auth: 𝓪𝓾 });
+    const auth = await authenticate();
+    const sheets = google.sheets({ version: 'v4', auth });
 
-    await 𝒙𝒚𝒛(𝓼𝓱𝓮𝓮𝓽𝓼, 𝓐𝟏);
+    await getSheetTitles(sheets, UTILS_SHEET_ID);
 
-    const 𝓲𝓭𝓼 = await 𝓼𝓲𝓭𝓼(𝓼𝓱𝓮𝓮𝓽𝓼);
-    if (!𝓲𝓭𝓼.length) return;
+    const sheetIds = await getAllTeamCDSSheetIds(sheets);
+    if (!sheetIds.length) {
+      console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
+      return;
+    }
 
-    for (const 𝓲𝓭 of 𝓲𝓭𝓼) {
+    for (const sheetId of sheetIds) {
       try {
-        const 𝓽𝓲𝓽𝓵 = await 𝒙𝒚𝒛(𝓼𝓱𝓮𝓮𝓽𝓼, 𝓲𝓭);
-        if (!𝓽𝓲𝓽𝓵.includes(𝓑𝟏)) continue;
-        if (!𝓽𝓲𝓽𝓵.includes(𝓒𝟏)) continue;
+        console.log(`🔄 Processing: ${sheetId}`);
 
-        const [𝓶𝓲𝓵, 𝓲𝓼𝓼] = await Promise.all([
-          𝓶𝓲𝓵𝓮𝓼(𝓼𝓱𝓮𝓮𝓽𝓼, 𝓲𝓭),
-          𝓲𝓼𝓼𝓾𝓮𝓼(𝓼𝓱𝓮𝓮𝓽𝓼),
+        const sheetTitles = await getSheetTitles(sheets, sheetId);
+
+        if (!sheetTitles.includes(G_MILESTONES)) {
+          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MILESTONES}' sheet`);
+          continue;
+        }
+
+        if (!sheetTitles.includes(G_ISSUES_SHEET)) {
+          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_ISSUES_SHEET}' sheet`);
+          continue;
+        }
+
+        const [milestones, issuesData] = await Promise.all([ 
+          getSelectedMilestones(sheets, sheetId),
+          getAllIssues(sheets),
         ]);
 
-        const 𝓯𝓲𝓵𝓽 = 𝓲𝓼𝓼.filter(r => 𝓶𝓲𝓵.includes(r[6]));
-        const 𝓼𝓵𝓲𝓬𝓮𝓭 = 𝓯𝓲𝓵𝓽.map(r => r.slice(0, 12));
+        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
+        const processedData = filtered.map(row => row.slice(0, 12));
 
-        await 𝓬𝓵𝓮𝓪𝓻(𝓼𝓱𝓮𝓮𝓽𝓼, 𝓲𝓭);
-        await 𝓲𝓷𝓼𝓮𝓻𝓽(𝓼𝓱𝓮𝓮𝓽𝓼, 𝓲𝓭, 𝓼𝓵𝓲𝓬𝓮𝓭);
-        await 𝓽𝓲𝓶𝓮𝓼(𝓼𝓱𝓮𝓮𝓽𝓼, 𝓲𝓭);
-      } catch (𝓮) {}
+        await clearGIssues(sheets, sheetId);
+        await insertDataToGIssues(sheets, sheetId, processedData);
+        await updateTimestamp(sheets, sheetId);
+
+        console.log(`✅ Finished: ${sheetId}`);
+      } catch (err) {
+        console.error(`❌ Error processing ${sheetId}: ${err.message}`);
+      }
     }
-  } catch (𝓮) {}
+  } catch (err) {
+    console.error(`❌ Main failure: ${err.message}`);
+  }
 }
 
-𝓶𝓪𝓲𝓷𝒇();
+main();
