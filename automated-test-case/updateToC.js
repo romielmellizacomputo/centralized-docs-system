@@ -1,98 +1,108 @@
-import { google as ǥǥ } from 'googleapis';
-import axios as άχ from 'axios';
+import { google } from 'googleapis';
+import axios from 'axios';
 
-const ϟϟ = JSON.parse(process.env.SHEET_DATA);
-const ζζ = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
+const sheetData = JSON.parse(process.env.SHEET_DATA);
+const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
 
-async function ϯϯ() {
-  const ωω = ϟϟ.spreadsheetUrl;
-  const ππ = ωω.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
+async function updateToC() {
+  const spreadsheetUrl = sheetData.spreadsheetUrl;
+  const spreadsheetId = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
 
-  const αα = new ǥǥ.auth.GoogleAuth({
-    credentials: ζζ,
+  const auth = new google.auth.GoogleAuth({
+    credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
-  const δδ = ǥǥ.sheets({ version: 'v4', auth: αα });
+  const sheets = google.sheets({ version: 'v4', auth });
 
-  const μμ = ['ToC', 'Issues', 'Roster'];
+  const skip = ['ToC', 'Issues', 'Roster'];
 
   try {
-    const φφ = await δδ.spreadsheets.get({ spreadsheetId: ππ });
-    const ηη = φφ.data.sheets || [];
-    const ττ = ηη.find(ςς => ςς.properties.title === 'ToC');
+    const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+    const allSheets = metadata.data.sheets || [];
+    const tocSheet = allSheets.find(s => s.properties.title === 'ToC');
 
-    if (!ττ) return;
-
-    const ρρ = ττ.properties.title;
-
-    await δδ.spreadsheets.values.clear({
-      spreadsheetId: ππ,
-      range: `${ρρ}!A2:A`,
-    });
-
-    await δδ.spreadsheets.values.clear({
-      spreadsheetId: ππ,
-      range: `${ρρ}!B2:K`,
-    });
-
-    let ξξ = [];
-    for (const νν of ηη) {
-      const ιι = νν.properties.title;
-      if (μμ.includes(ιι)) continue;
-
-      const ψψ = `'${ιι}'!C4`;
-      const υυ = await δδ.spreadsheets.values.get({
-        spreadsheetId: ππ,
-        range: ψψ,
-      });
-
-      const χχ = υυ.data.values?.[0]?.[0];
-      if (!χχ) continue;
-
-      if (ξξ.some(λλ => λλ[0].includes(χχ))) continue;
-
-      const σσ = νν.properties.sheetId;
-      const ββ = `=HYPERLINK("${ωω}#gid=${σσ}", "${χχ}")`;
-
-      const γγ = ['C5', 'C7', 'C15', 'C18', 'C19', 'C20', 'C21', 'C14', 'C13', 'C6'];
-      const κκ = γγ.map(δδ => `'${ιι}'!${δδ}`);
-
-      const θθ = await δδ.spreadsheets.values.batchGet({
-        spreadsheetId: ππ,
-        ranges: κκ,
-      });
-
-      const ωχ = θθ.data.valueRanges.map(ϑϑ => ϑϑ.values?.[0]?.[0] || '');
-
-      ξξ.push([ββ, ...ωχ]);
+    if (!tocSheet) {
+      console.error("ToC sheet not found.");
+      return;
     }
 
-    if (ξξ.length > 0) {
-      await δδ.spreadsheets.values.update({
-        spreadsheetId: ππ,
-        range: `${ρρ}!A2:K${ξξ.length + 1}`,
+    const tocTitle = tocSheet.properties.title;
+
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `${tocTitle}!A2:A`,
+    });
+
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `${tocTitle}!B2:K`,
+    });
+
+    let tocRows = [];
+    for (const sheet of allSheets) {
+      const name = sheet.properties.title;
+      if (skip.includes(name)) continue;
+
+      // Read value in C4
+      const c4Range = `'${name}'!C4`;
+      const c4Res = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: c4Range,
+      });
+
+      const c4Value = c4Res.data.values?.[0]?.[0];
+      if (!c4Value) continue;
+
+      if (tocRows.some(row => row[0].includes(c4Value))) continue;
+
+      const sheetId = sheet.properties.sheetId;
+      const hyperlink = `=HYPERLINK("${spreadsheetUrl}#gid=${sheetId}", "${c4Value}")`;
+
+      const cellsToRead = ['C5', 'C7', 'C15', 'C18', 'C19', 'C20', 'C21', 'C14', 'C13', 'C6'];
+      const batchRanges = cellsToRead.map(cell => `'${name}'!${cell}`);
+
+      const dataRes = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId,
+        ranges: batchRanges,
+      });
+
+      const values = dataRes.data.valueRanges.map(r => r.values?.[0]?.[0] || '');
+
+      tocRows.push([hyperlink, ...values]);
+      console.log(`Inserted hyperlink for: ${c4Value}`);
+    }
+
+    if (tocRows.length > 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${tocTitle}!A2:K${tocRows.length + 1}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
-          values: ξξ,
+          values: tocRows,
         },
       });
     }
 
     try {
-      const ϰϰ = 'https://script.google.com/macros/s/AKfycbzR3hWvfItvEOKjadlrVRx5vNTz4QH04WZbz2ufL8fAdbiZVsJbkzueKfmMCfGsAO62/exec';
+      const webAppUrl = 'https://script.google.com/macros/s/AKfycbzR3hWvfItvEOKjadlrVRx5vNTz4QH04WZbz2ufL8fAdbiZVsJbkzueKfmMCfGsAO62/exec';
 
-      await άχ.post(ϰϰ, {
-        sheetUrl: ωω,
+      await axios.post(webAppUrl, {
+        sheetUrl: spreadsheetUrl,
       }, {
         headers: {
           'Content-Type': 'application/json',
         },
       });
-    } catch (ψψψ) {}
-  } catch (ψψψ) {
+
+      console.log("POST request sent to web app.");
+    } catch (err) {
+      console.error("Error sending POST request:", err.message);
+    }
+  } catch (err) {
+    console.error("ERROR:", err.message);
     process.exit(1);
   }
 }
 
-ϯϯ();
+updateToC();
