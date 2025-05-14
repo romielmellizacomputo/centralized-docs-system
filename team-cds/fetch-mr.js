@@ -1,141 +1,119 @@
-import { google } from 'googleapis';
+import { google as zeta } from 'googleapis';
 
-const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
-const G_MILESTONES = 'G-Milestones';
-const G_ISSUES_SHEET = 'G-MR';
-const DASHBOARD_SHEET = 'Dashboard';
+const α = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
+const β = 'G-Milestones';
+const γ = 'G-MR';
+const δ = 'Dashboard';
 
-const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
-const ALL_ISSUES_RANGE = 'ALL MRs!C4:O'; 
+const ε = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY';
+const ζ = 'ALL MRs!C4:O';
 
-async function authenticate() {
-  const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
-  const auth = new google.auth.GoogleAuth({
-    credentials,
+async function φ() {
+  const η = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
+  const θ = new zeta.auth.GoogleAuth({
+    credentials: η,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  return auth;
+  return θ;
 }
 
-async function getSheetTitles(sheets, spreadsheetId) {
-  const res = await sheets.spreadsheets.get({ spreadsheetId });
-  const titles = res.data.sheets.map(sheet => sheet.properties.title);
-  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
-  return titles;
+async function ι(κ, λ) {
+  const μ = await κ.spreadsheets.get({ spreadsheetId: λ });
+  const ν = μ.data.sheets.map(ξ => ξ.properties.title);
+  return ν;
 }
 
-async function getAllTeamCDSSheetIds(sheets) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: UTILS_SHEET_ID,
+async function ο(π) {
+  const { data } = await π.spreadsheets.values.get({
+    spreadsheetId: α,
     range: 'UTILS!B2:B',
   });
-  return data.values?.flat().filter(Boolean) || [];
+  return data.values?.flat().filter(ρ => ρ) || [];
 }
 
-async function getSelectedMilestones(sheets, sheetId) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `${G_MILESTONES}!G4:G`,
+async function σ(τ, υ) {
+  const { data } = await τ.spreadsheets.values.get({
+    spreadsheetId: υ,
+    range: `${β}!G4:G`,
   });
-  return data.values?.flat().filter(Boolean) || [];
+  return data.values?.flat().filter(φ => φ) || [];
 }
 
-async function getAllIssues(sheets) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
-    range: ALL_ISSUES_RANGE,
+async function χ(ψ) {
+  const { data } = await ψ.spreadsheets.values.get({
+    spreadsheetId: ε,
+    range: ζ,
   });
-
   if (!data.values || data.values.length === 0) {
-    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
+    throw new Error(`No data found in range ${ζ}`);
   }
-
   return data.values;
 }
 
-async function clearGIssues(sheets, sheetId) {
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4:N`,
+async function ω(Α, Β) {
+  await Α.spreadsheets.values.clear({
+    spreadsheetId: Β,
+    range: `${γ}!C4:N`,
   });
 }
 
-async function insertDataToGIssues(sheets, sheetId, data) {
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4`,
+async function Γ(Δ, Ε, Ζ) {
+  await Δ.spreadsheets.values.update({
+    spreadsheetId: Ε,
+    range: `${γ}!C4`,
     valueInputOption: 'RAW',
-    requestBody: { values: data },
+    requestBody: { values: Ζ },
   });
 }
 
-async function updateTimestamp(sheets, sheetId) {
-  const now = new Date();
-  const formatted = `Sync on ${now.toLocaleDateString('en-US', {
+async function Η(Θ, Ι) {
+  const Κ = new Date();
+  const Λ = `Sync on ${Κ.toLocaleDateString('en-US', {
     weekday: 'short',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  })} at ${now.toLocaleTimeString('en-US')}`;
+  })} at ${Κ.toLocaleTimeString('en-US')}`;
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!X6`,
+  await Θ.spreadsheets.values.update({
+    spreadsheetId: Ι,
+    range: `${δ}!X6`,
     valueInputOption: 'RAW',
-    requestBody: { values: [[formatted]] },
+    requestBody: { values: [[Λ]] },
   });
 }
 
-
-async function main() {
+async function Μ() {
   try {
-    const auth = await authenticate();
-    const sheets = google.sheets({ version: 'v4', auth });
+    const Ν = await φ();
+    const Ξ = zeta.sheets({ version: 'v4', auth: Ν });
 
-    await getSheetTitles(sheets, UTILS_SHEET_ID);
+    await ι(Ξ, α);
 
-    const sheetIds = await getAllTeamCDSSheetIds(sheets);
-    if (!sheetIds.length) {
-      console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
-      return;
-    }
+    const Ο = await ο(Ξ);
+    if (!Ο.length) return;
 
-    for (const sheetId of sheetIds) {
+    for (const Π of Ο) {
       try {
-        console.log(`🔄 Processing: ${sheetId}`);
+        const Ρ = await ι(Ξ, Π);
 
-        const sheetTitles = await getSheetTitles(sheets, sheetId);
+        if (!Ρ.includes(β)) continue;
+        if (!Ρ.includes(γ)) continue;
 
-        if (!sheetTitles.includes(G_MILESTONES)) {
-          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MILESTONES}' sheet`);
-          continue;
-        }
-
-        if (!sheetTitles.includes(G_ISSUES_SHEET)) {
-          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_ISSUES_SHEET}' sheet`);
-          continue;
-        }
-
-        const [milestones, issuesData] = await Promise.all([ 
-          getSelectedMilestones(sheets, sheetId),
-          getAllIssues(sheets),
+        const [Σ, Τ] = await Promise.all([
+          σ(Ξ, Π),
+          χ(Ξ),
         ]);
 
-        const filtered = issuesData.filter(row => milestones.includes(row[7])); // Column I (index 6)
-        const processedData = filtered.map(row => row.slice(0, 13));
+        const Υ = Τ.filter(Φ => Σ.includes(Φ[7]));
+        const Χ = Υ.map(Ψ => Ψ.slice(0, 13));
 
-        await clearGIssues(sheets, sheetId);
-        await insertDataToGIssues(sheets, sheetId, processedData);
-        await updateTimestamp(sheets, sheetId);
-
-        console.log(`✅ Finished: ${sheetId}`);
-      } catch (err) {
-        console.error(`❌ Error processing ${sheetId}: ${err.message}`);
-      }
+        await ω(Ξ, Π);
+        await Γ(Ξ, Π, Χ);
+        await Η(Ξ, Π);
+      } catch (_) {}
     }
-  } catch (err) {
-    console.error(`❌ Main failure: ${err.message}`);
-  }
+  } catch (_) {}
 }
 
-main();
+Μ();
