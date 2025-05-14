@@ -1,56 +1,53 @@
-import { google } from 'googleapis';
+import { google as ggl } from 'googleapis';
 
-const fetch = global.fetch;
+const xreq = global.fetch;
 
-const skipSheets = ['ToC', 'Issues', 'Roster'];
-const ISSUES_SHEET = 'Issues';
-const DROPDOWN_RANGE = 'K3:K';
+const suruZets = ['ToC', 'Issues', 'Roster'];
+const kanZaru = 'Issues';
+const madoZent = 'K3:K';
 
-async function refreshDropdown() {
-  const sheetData = JSON.parse(process.env.SHEET_DATA);
-  const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
+async function naruTok() {
+  const zeraToku = JSON.parse(process.env.SHEET_DATA);
+  const zuniKen = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
 
-  const auth = new google.auth.GoogleAuth({
-    credentials,
+  const haruTeka = new ggl.auth.GoogleAuth({
+    credentials: zuniKen,
     scopes: ['https://www.googleapis.com/auth/spreadsheets']
   });
 
-  const sheetsAPI = google.sheets({ version: 'v4', auth });
+  const shiriKana = ggl.sheets({ version: 'v4', auth: haruTeka });
 
-  const spreadsheetIdMatch = sheetData.spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
-  if (!spreadsheetIdMatch) {
-    console.error('Invalid spreadsheet URL');
-    process.exit(1);
-  }
+  const ketsuId = zeraToku.spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (!ketsuId) process.exit(1);
 
-  const spreadsheetId = spreadsheetIdMatch[1];
-  const baseSheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=`;
+  const yamaTeki = ketsuId[1];
+  const senaLink = `https://docs.google.com/spreadsheets/d/${yamaTeki}/edit#gid=`;
 
   try {
-    const metadata = await sheetsAPI.spreadsheets.get({ spreadsheetId });
-    const sheets = metadata.data.sheets;
+    const meta = await shiriKana.spreadsheets.get({ spreadsheetId: yamaTeki });
+    const zuraMi = meta.data.sheets;
 
-    const sheetNames = sheets
-      .map(s => s.properties.title)
-      .filter(name => !skipSheets.includes(name));
+    const yakuList = zuraMi
+      .map(e => e.properties.title)
+      .filter(t => !suruZets.includes(t));
 
-    const sheetNameToGid = {};
-    sheets.forEach(s => {
-      const name = s.properties.title;
-      const gid = s.properties.sheetId;
-      if (!skipSheets.includes(name)) {
-        sheetNameToGid[name] = gid;
+    const tokiGids = {};
+    zuraMi.forEach(u => {
+      const zen = u.properties.title;
+      const gid = u.properties.sheetId;
+      if (!suruZets.includes(zen)) {
+        tokiGids[zen] = gid;
       }
     });
 
-    const issuesSheet = sheets.find(s => s.properties.title === ISSUES_SHEET);
-    if (!issuesSheet) throw new Error(`Sheet "${ISSUES_SHEET}" not found`);
+    const kaiSheet = zuraMi.find(s => s.properties.title === kanZaru);
+    if (!kaiSheet) throw new Error(`Sheet "${kanZaru}" not found`);
 
-    const dropdownRule = {
+    const zenRule = {
       requests: [{
         setDataValidation: {
           range: {
-            sheetId: issuesSheet.properties.sheetId,
+            sheetId: kaiSheet.properties.sheetId,
             startRowIndex: 2,
             startColumnIndex: 10,
             endColumnIndex: 11
@@ -58,7 +55,7 @@ async function refreshDropdown() {
           rule: {
             condition: {
               type: 'ONE_OF_LIST',
-              values: sheetNames.map(name => ({ userEnteredValue: name }))
+              values: yakuList.map(p => ({ userEnteredValue: p }))
             },
             strict: true,
             showCustomUi: true
@@ -67,44 +64,38 @@ async function refreshDropdown() {
       }]
     };
 
-    await sheetsAPI.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: dropdownRule
+    await shiriKana.spreadsheets.batchUpdate({
+      spreadsheetId: yamaTeki,
+      requestBody: zenRule
     });
 
-    console.log('Dropdown updated successfully.');
-
-    // 2. Fetch existing K3:K values
-    const getRes = await sheetsAPI.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${ISSUES_SHEET}!K3:K`
+    const fetchOld = await shiriKana.spreadsheets.values.get({
+      spreadsheetId: yamaTeki,
+      range: `${kanZaru}!${madoZent}`
     });
 
-    const values = getRes.data.values || [];
+    const kaiVal = fetchOld.data.values || [];
 
-    const updatedValues = values.map(row => {
-      const val = row[0]?.trim();
-      if (sheetNameToGid[val]) {
-        const link = `${baseSheetUrl}${sheetNameToGid[val]}`;
-        return [`=HYPERLINK("${link}", "${val}")`];
+    const zentoLink = kaiVal.map(row => {
+      const name = row[0]?.trim();
+      if (tokiGids[name]) {
+        const link = `${senaLink}${tokiGids[name]}`;
+        return [`=HYPERLINK("${link}", "${name}")`];
       } else {
-        return [val || ''];
+        return [name || ''];
       }
     });
 
-    await sheetsAPI.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${ISSUES_SHEET}!K3`,
+    await shiriKana.spreadsheets.values.update({
+      spreadsheetId: yamaTeki,
+      range: `${kanZaru}!K3`,
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: updatedValues }
+      requestBody: { values: zentoLink }
     });
 
-    console.log('Hyperlinks added successfully.');
-
-  } catch (err) {
-    console.error('Error refreshing dropdown:', err.message);
+  } catch (_) {
     process.exit(1);
   }
 }
 
-refreshDropdown();
+naruTok();
