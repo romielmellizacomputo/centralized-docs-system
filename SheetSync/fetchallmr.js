@@ -19,7 +19,7 @@ requiredEnv.forEach((key) => {
 
 const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
-const SPREADSHEET_ID = process.env.SHEET_SYNC_SID;
+const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
 
 const PROJECT_CONFIG = {
   155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
