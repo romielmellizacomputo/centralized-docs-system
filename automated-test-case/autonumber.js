@@ -1,83 +1,84 @@
-import { google as ζ } from 'googleapis';
+import { google } from 'googleapis';
 
-const λ = JSON.parse(process.env.SHEET_DATA);
+const sheetData = JSON.parse(process.env.SHEET_DATA);
 
-async function ϟ() {
-  const δ = λ.spreadsheetUrl;
-  const β = δ.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
+async function main() {
+  const spreadsheetUrl = sheetData.spreadsheetUrl;
+  const spreadsheetId = spreadsheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/)[1];
 
-  const γ = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
+  const credentials = JSON.parse(process.env.TEST_CASE_SERVICE_ACCOUNT_JSON);
 
-  const θ = new ζ.auth.GoogleAuth({
-    credentials: γ,
+  const auth = new google.auth.GoogleAuth({
+    credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
-  const η = ζ.sheets({ version: 'v4', auth: θ });
+  const sheets = google.sheets({ version: 'v4', auth });
 
-  const σ = ['ToC', 'Roster', 'Issues'];
+  const skip = ['ToC', 'Roster', 'Issues'];
 
   try {
-    const ϕ = await η.spreadsheets.get({ spreadsheetId: β });
-    const ψ = ϕ.data.sheets.map(ξ => ξ.properties.title);
+    const metadata = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheetNames = metadata.data.sheets.map(s => s.properties.title);
 
-    for (const ω of ψ) {
-      if (σ.includes(ω)) continue;
+    for (const name of sheetNames) {
+      if (skip.includes(name)) continue;
 
-      const χ = ϕ.data.sheets.find(μ => μ.properties.title === ω);
-      const υ = χ.properties.sheetId;
-      const π = χ.merges || [];
+      const sheetMeta = metadata.data.sheets.find(s => s.properties.title === name);
+      const sheetId = sheetMeta.properties.sheetId;
+      const merges = sheetMeta.merges || [];
 
-      const τ = `'${ω}'!E12:F`;
-      const ν = await η.spreadsheets.values.get({ spreadsheetId: β, range: τ });
-      const ρ = ν.data.values || [];
-      const ε = 12;
+      const range = `'${name}'!E12:F`;
+      const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+      const rows = res.data.values || [];
+      const startRow = 12;
 
-      const ζϝ = [];
-      const α = Array(ρ.length).fill(['']);
-      let κ = 1;
-      let ξ = 0;
+      const requests = [];
+      const values = Array(rows.length).fill(['']);
+      let number = 1;
+      let row = 0;
 
-      while (ξ < ρ.length) {
-        const ι = ξ + ε;
+      while (row < rows.length) {
+        const absRow = row + startRow;
 
-        const ο = π.find(δϟ =>
-          δϟ.startRowIndex === ι - 1 &&
-          δϟ.startColumnIndex === 5 &&
-          δϟ.endColumnIndex === 6
+        const fMerge = merges.find(m =>
+          m.startRowIndex === absRow - 1 &&
+          m.startColumnIndex === 5 &&
+          m.endColumnIndex === 6
         );
 
-        let υϕ = ι;
-        let ωϕ = ι + 1;
+        let mergeStart = absRow;
+        let mergeEnd = absRow + 1;
 
-        if (ο) {
-          υϕ = ο.startRowIndex + 1;
-          ωϕ = ο.endRowIndex + 1;
+        if (fMerge) {
+          mergeStart = fMerge.startRowIndex + 1;
+          mergeEnd = fMerge.endRowIndex + 1;
         }
 
-        const ζμ = ωϕ > υϕ;
-        const φκ = ωϕ - υϕ;
+        const isMergedInF = mergeEnd > mergeStart;
+        const mergeLength = mergeEnd - mergeStart;
 
-        const φλ = (ρ[ξ] && ρ[ξ][1])?.trim();
-        const πϕ = (ρ[ξ] && ρ[ξ][0])?.trim();
+        const fValue = (rows[row] && rows[row][1])?.trim();
+        const eValue = (rows[row] && rows[row][0])?.trim();
 
-        const χλ = π.find(ψλ =>
-          ψλ.startRowIndex === υϕ - 1 &&
-          ψλ.endRowIndex === ωϕ - 1 &&
-          ψλ.startColumnIndex === 4 &&
-          ψλ.endColumnIndex === 5
+        const eMerge = merges.find(m =>
+          m.startRowIndex === mergeStart - 1 &&
+          m.endRowIndex === mergeEnd - 1 &&
+          m.startColumnIndex === 4 &&
+          m.endColumnIndex === 5
         );
 
-        if (φλ) {
-          α[ξ] = [κ.toString()];
+        if (fValue) {
+          // Fill number
+          values[row] = [number.toString()];
 
-          if (ζμ && !χλ) {
-            ζϝ.push({
+          if (isMergedInF && !eMerge) {
+            requests.push({
               mergeCells: {
                 range: {
-                  sheetId: υ,
-                  startRowIndex: υϕ - 1,
-                  endRowIndex: ωϕ - 1,
+                  sheetId,
+                  startRowIndex: mergeStart - 1,
+                  endRowIndex: mergeEnd - 1,
                   startColumnIndex: 4,
                   endColumnIndex: 5,
                 },
@@ -86,13 +87,13 @@ async function ϟ() {
             });
           }
 
-          if (!ζμ && χλ) {
-            ζϝ.push({
+          if (!isMergedInF && eMerge) {
+            requests.push({
               unmergeCells: {
                 range: {
-                  sheetId: υ,
-                  startRowIndex: χλ.startRowIndex,
-                  endRowIndex: χλ.endRowIndex,
+                  sheetId,
+                  startRowIndex: eMerge.startRowIndex,
+                  endRowIndex: eMerge.endRowIndex,
                   startColumnIndex: 4,
                   endColumnIndex: 5,
                 }
@@ -100,48 +101,53 @@ async function ϟ() {
             });
           }
 
-          κ++;
+          number++;
         }
 
-        ξ += φκ;
+        row += mergeLength;
       }
 
-      await Ω(η, β, `'${ω}'!E12:E${ε + α.length - 1}`, α);
+      await updateValuesWithRetry(sheets, spreadsheetId, `'${name}'!E12:E${startRow + values.length - 1}`, values);
 
-      if (ζϝ.length > 0) {
-        await η.spreadsheets.batchUpdate({
-          spreadsheetId: β,
-          requestBody: { requests: ζϝ },
+      if (requests.length > 0) {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: { requests },
         });
       }
+
+      console.log(`✅ Updated: ${name}`);
     }
-  } catch (_) {
+  } catch (err) {
+    console.error('❌ ERROR:', err);
     process.exit(1);
   }
 }
 
-async function Ω(η, β, τ, α) {
-  let ι = 0;
+async function updateValuesWithRetry(sheets, spreadsheetId, range, values) {
+  let attempts = 0;
 
   while (true) { 
     try {
-      await η.spreadsheets.values.update({
-        spreadsheetId: β,
-        range: τ,
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range,
         valueInputOption: 'USER_ENTERED',
-        requestBody: { values: α },
+        requestBody: { values },
       });
       return; 
-    } catch (δϟ) {
-      if (δϟ.response && δϟ.response.status === 429) {
-        ι++;
-        const μϕ = Math.pow(2, ι) * 1000;
-        await new Promise(ω => setTimeout(ω, μϕ));
+    } catch (error) {
+      if (error.response && error.response.status === 429) {
+        // Quota exceeded error, apply exponential backoff
+        attempts++;
+        const waitTime = Math.pow(2, attempts) * 1000; // Exponential backoff
+        console.log(`Quota exceeded. Retrying in ${waitTime / 1000} seconds...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       } else {
-        throw δϟ; 
+        throw error; 
       }
     }
   }
 }
 
-ϟ();
+main();
