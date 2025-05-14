@@ -2,13 +2,13 @@ name: Team CDS Updater
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # every 10 minutes
-  workflow_dispatch:        # allows manual trigger from GitHub UI
+    - cron: '*/30 * * * *'  
+  workflow_dispatch:       
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    continue-on-error: true  # Allow this job to fail without failing the entire workflow
+    continue-on-error: true  
 
     steps:
       - uses: actions/checkout@v3
