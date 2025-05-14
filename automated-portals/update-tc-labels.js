@@ -5,29 +5,32 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 
-const _fxxl_ = fileURLToPath(import.meta.url);
-const _dxzl_ = path.dirname(_fxxl_);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
-const _zreq_ = [
+const requiredEnv = [
   'GITLAB_URL',
   'GITLAB_TOKEN',
   'CDS_PORTAL_SPREADSHEET_ID',
   'CDS_PORTALS_SERVICE_ACCOUNT_JSON',
 ];
-_zreq_.forEach((k) => {
-  if (!process.env[k]) {
+requiredEnv.forEach((key) => {
+  if (!process.env[key]) {
+    console.error(`❌ Missing required environment variable: ${key}`);
     process.exit(1);
   }
 });
 
-const _gurl_ = process.env.GITLAB_URL;
-const _gtok_ = process.env.GITLAB_TOKEN;
-const _ssid_ = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const _svcjson_ = JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON);
+const GITLAB_URL = process.env.GITLAB_URL;
+const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
+const SPREADSHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 
-const _labx_ = [
+// Parse the service account JSON from the environment variable
+const SERVICE_ACCOUNT = JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON);
+
+const LABELS_TO_PROCESS = [
   'To Do',
   'Doing',
   'Changes Requested',
@@ -40,7 +43,7 @@ const _labx_ = [
   'Automation Team For Review',
 ];
 
-const _pidmap_ = {
+const PROJECT_IDS = {
   155: 'HQZen',
   23: 'Backend',
   124: 'Android',
@@ -51,7 +54,7 @@ const _pidmap_ = {
   89: 'BPOSeats.com',
 };
 
-const _exsheets_ = [
+const EXCLUDED_SHEETS = [
   'Metrics Comparison',
   'Test Scenario Portal',
   'Test Case Portal',
@@ -64,131 +67,153 @@ const _exsheets_ = [
   'UTILS',
 ];
 
-async function _gcreds_() {
-  const _auth_ = new google.auth.GoogleAuth({
-    credentials: _svcjson_,
+async function authorizeGoogle() {
+  const auth = new google.auth.GoogleAuth({
+    credentials: SERVICE_ACCOUNT,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  return _auth_.getClient();
+  return auth.getClient();
 }
 
-function _pxid_(u) {
-  const _u_ = u.split('/');
-  const _pname_ = _u_[4];
+function extractProjectIdFromUrl(url) {
+  const urlParts = url.split('/');
+  const projectName = urlParts[4];
 
-  for (const [i, n] of Object.entries(_pidmap_)) {
-    if (_pname_.toLowerCase().includes(n.toLowerCase())) {
-      return { id: i, name: n };
+  for (const [id, name] of Object.entries(PROJECT_IDS)) {
+    if (projectName.toLowerCase().includes(name.toLowerCase())) {
+      return { id, name };
     }
   }
   return null;
 }
 
-async function _fissue_(pid, iid) {
-  const _url_ = `${_gurl_}api/v4/projects/${pid}/issues/${iid}`;
-  const _res_ = await axios.get(_url_, {
+async function fetchIssue(projectId, issueId) {
+  const apiUrl = `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}`;
+  const res = await axios.get(apiUrl, {
     headers: {
-      'PRIVATE-TOKEN': _gtok_,
+      'PRIVATE-TOKEN': GITLAB_TOKEN,
     },
   });
-  return _res_.data;
+  return res.data;
 }
 
-async function _fnotes_(pid, iid) {
-  const _url_ = `${_gurl_}api/v4/projects/${pid}/issues/${iid}/notes`;
-  const _res_ = await axios.get(_url_, {
+async function fetchIssueNotes(projectId, issueId) {
+  const apiUrl = `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`;
+  const res = await axios.get(apiUrl, {
     headers: {
-      'PRIVATE-TOKEN': _gtok_,
+      'PRIVATE-TOKEN': GITLAB_TOKEN,
     },
   });
-  return _res_.data;
+  return res.data;
 }
 
-async function _revmet_() {
-  const _authc_ = await _gcreds_();
-  const _sheets_ = google.sheets({ version: 'v4', auth: _authc_ });
+async function reviewMetricsLabels() {
+  const authClient = await authorizeGoogle();
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  const _ss_ = await _sheets_.spreadsheets.get({
-    spreadsheetId: _ssid_,
+  // Get all sheet names
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
   });
-  const _titles_ = _ss_.data.sheets
-    .map((s) => s.properties.title)
-    .filter((t) => !_exsheets_.includes(t));
+  const sheetTitles = spreadsheet.data.sheets
+    .map((sheet) => sheet.properties.title)
+    .filter((title) => !EXCLUDED_SHEETS.includes(title));
 
-  for (const _t_ of _titles_) {
-    const _rng_ = `'${_t_}'!E3:E`;
-    const _res_ = await _sheets_.spreadsheets.values.get({
-      spreadsheetId: _ssid_,
-      range: _rng_,
+  for (const title of sheetTitles) {
+    console.log(`Processing sheet: ${title}`);
+    const range = `'${title}'!E3:E`;
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range,
     });
 
-    const _rows_ = _res_.data.values || [];
-    const _updates_ = [];
+    const rows = response.data.values || [];
+    const updates = [];
 
-    for (let i = 0; i < _rows_.length; i++) {
-      const _ridx_ = i + 3;
-      const _url_ = _rows_[i][0] || '';
+    for (let i = 0; i < rows.length; i++) {
+      const rowIndex = i + 3; // Adjusting for starting from row 3
+      const url = rows[i][0] || '';
 
-      if (!_url_ || !/^https:\/\/forge\.bposeats\.com\/[^\/]+\/[^\/]+\/-\/issues\/\d+$/.test(_url_)) {
+      if (!url || !/^https:\/\/forge\.bposeats\.com\/[^\/]+\/[^\/]+\/-\/issues\/\d+$/.test(url)) {
+        console.log(`Row ${rowIndex}: Skipped due to invalid or missing URL`);
         continue;
       }
 
-      const _iid_ = _url_.split('/').pop();
-      const _proj_ = _pxid_(_url_);
+      const issueId = url.split('/').pop();
+      const project = extractProjectIdFromUrl(url);
 
-      if (!_proj_) {
+      if (!project) {
+        console.log(`Row ${rowIndex}: Project not found for URL`);
         continue;
       }
 
       try {
-        const _iss_ = await _fissue_(_proj_.id, _iid_);
-        const _lab_ = _labx_.find((l) => _iss_.labels.includes(l));
+        const issue = await fetchIssue(project.id, issueId);
+        const label = LABELS_TO_PROCESS.find((l) => issue.labels.includes(l));
 
-        if (_lab_) {
-          const _notes_ = await _fnotes_(_proj_.id, _iid_);
-          const _last_ = _notes_.length > 0 ? _notes_[_notes_.length - 1] : null;
+        if (label) {
+          // Fetch the notes (comments) for the issue
+          const notes = await fetchIssueNotes(project.id, issueId);
+          const lastComment = notes.length > 0 ? notes[notes.length - 1] : null;
 
-          let _note_ = '';
-          if (_iss_.state === 'opened') {
-            _note_ += `The ticket was created by ${_iss_.author?.name || 'Unknown'}\n`;
-            _note_ += `The ticket is still open\n`;
-            _note_ += _iss_.assignee ? `${_iss_.assignee.name} is the current assignee\n` : `No assignee on the ticket\n`;
-          } else if (_iss_.state === 'closed') {
-            _note_ += `The ticket was created by ${_iss_.author?.name || 'Unknown'}\n`;
-            _note_ += `The ticket was closed\n`;
-            _note_ += _iss_.assignee ? `${_iss_.assignee.name} was the assignee\n` : `No assignee on the ticket\n`;
+          let note = '';
+          if (issue.state === 'opened') {
+            note += `The ticket was created by ${issue.author?.name || 'Unknown'}\n`;
+            note += `The ticket is still open\n`;
+            if (issue.assignee) {
+              note += `${issue.assignee.name} is the current assignee\n`;
+            } else {
+              note += `No assignee on the ticket\n`;
+            }
+          } else if (issue.state === 'closed') {
+            note += `The ticket was created by ${issue.author?.name || 'Unknown'}\n`;
+            note += `The ticket was closed\n`;
+            if (issue.assignee) {
+              note += `${issue.assignee.name} was the assignee\n`;
+            } else {
+              note += `No assignee on the ticket\n`;
+            }
           }
 
-          if (_last_) {
-            _note_ += `Last activity: ${_last_.body}\n`;
-            _note_ += `Commented by: ${_last_.author.name}\n`;
+          // Add the latest comment to the note if available
+          if (lastComment) {
+            note += `Last activity: ${lastComment.body}\n`;
+            note += `Commented by: ${lastComment.author.name}\n`;
           }
 
-          _updates_.push({
-            range: `'${_t_}'!I${_ridx_}`,
-            values: [[_lab_]],
+          updates.push({
+            range: `'${title}'!I${rowIndex}`,
+            values: [[label]],
           });
 
-          _updates_.push({
-            range: `'${_t_}'!E${_ridx_}`,
-            values: [[_url_]],
-            note: _note_,
+          // Add note directly in the same cell where label is placed
+          updates.push({
+            range: `'${title}'!E${rowIndex}`,
+            values: [[url]], // This keeps the URL in the cell
+            note: note, // Adding the note to the same cell
           });
+
+          console.log(`Row ${rowIndex}: Label set to "${label}" with note`);
         }
-      } catch {}
+      } catch (err) {
+        console.error(`Row ${rowIndex}: Error fetching issue - ${err.message}`);
+      }
     }
 
-    if (_updates_.length > 0) {
-      const _vals_ = _updates_.map(({ range, values }) => ({ range, values }));
-      await _sheets_.spreadsheets.values.batchUpdate({
-        spreadsheetId: _ssid_,
+    // Batch update values
+    if (updates.length > 0) {
+      const valueUpdates = updates.map(({ range, values }) => ({ range, values }));
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
         requestBody: {
           valueInputOption: 'USER_ENTERED',
-          data: _vals_,
+          data: valueUpdates,
         },
       });
     }
+
+    console.log(`✅ Finished processing sheet: ${title}`);
   }
 }
 
-_revmet_().catch(() => {});
+reviewMetricsLabels().catch((err) => console.error(`❌ Error: ${err.message}`));
