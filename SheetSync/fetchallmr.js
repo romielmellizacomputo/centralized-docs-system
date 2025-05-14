@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
-const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SPREADSHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
+const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SHEET_SYNC_SID', 'GOOGLE_SERVICE_ACCOUNT_JSON'];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
     console.error(`❌ Missing required environment variable: ${key}`);
@@ -19,7 +19,7 @@ requiredEnv.forEach((key) => {
 
 const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const SPREADSHEET_ID = process.env.SHEET_SYNC_SID;
 
 const PROJECT_CONFIG = {
   155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
