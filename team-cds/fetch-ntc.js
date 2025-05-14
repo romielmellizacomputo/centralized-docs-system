@@ -1,163 +1,135 @@
 import { google } from 'googleapis';
 
-const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
-const G_MILESTONES = 'G-Milestones';
-const NTC_SHEET = 'NTC'; 
-const DASHBOARD_SHEET = 'Dashboard';
+const çŞ = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
+const ñğÇ = 'G-Milestones';
+const łŦđ = 'NTC'; 
+const µΩΣ = 'Dashboard';
 
-const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; 
+const ŴĦΔ = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
+const πλβ = 'ALL ISSUES!C4:N'; 
 
-async function authenticate() {
-  const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
-  const auth = new google.auth.GoogleAuth({
-    credentials,
+async function Ⱥƒĥ() {
+  const øű = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
+  const ¬ß = new google.auth.GoogleAuth({
+    credentials: øű,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  return auth;
+  return ¬ß;
 }
 
-async function getSheetTitles(sheets, spreadsheetId) {
-  const res = await sheets.spreadsheets.get({ spreadsheetId });
-  const titles = res.data.sheets.map(sheet => sheet.properties.title);
-  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
-  return titles;
+async function Ƀħť(s, i) {
+  const Ɉ = await s.spreadsheets.get({ spreadsheetId: i });
+  const λ = Ɉ.data.sheets.map(u => u.properties.title);
+  return λ;
 }
 
-async function getAllTeamCDSSheetIds(sheets) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: UTILS_SHEET_ID,
+async function ʠƿẞ(s) {
+  const { data } = await s.spreadsheets.values.get({
+    spreadsheetId: çŞ,
     range: 'UTILS!B2:B',
   });
   return data.values?.flat().filter(Boolean) || [];
 }
 
-async function getSelectedMilestones(sheets, sheetId) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `${G_MILESTONES}!G4:G`,
+async function Ƣȶλ(s, k) {
+  const { data } = await s.spreadsheets.values.get({
+    spreadsheetId: k,
+    range: `${ñğÇ}!G4:G`,
   });
   return data.values?.flat().filter(Boolean) || [];
 }
 
-async function getAllIssues(sheets) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
-    range: ALL_ISSUES_RANGE,
+async function ƭΔϑ(s) {
+  const { data } = await s.spreadsheets.values.get({
+    spreadsheetId: ŴĦΔ,
+    range: πλβ,
   });
 
   if (!data.values || data.values.length === 0) {
-    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
+    throw new Error(`No data found in range ${πλβ}`);
   }
 
   return data.values;
 }
 
-async function clearNTCSheet(sheets, sheetId) {
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: sheetId,
-    range: `${NTC_SHEET}!C4:N`,
+async function ɸŘξ(s, t) {
+  await s.spreadsheets.values.clear({
+    spreadsheetId: t,
+    range: `${łŦđ}!C4:N`,
   });
 }
 
-async function insertDataToNTCSheet(sheets, sheetId, data) {
-  if (data.length === 0) {
-    console.log("No data to insert.");
-    return; 
-  }
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: sheetId,
-    range: `${NTC_SHEET}!C4`,
+async function µźƨ(s, t, d) {
+  if (d.length === 0) return;
+  await s.spreadsheets.values.update({
+    spreadsheetId: t,
+    range: `${łŦđ}!C4`,
     valueInputOption: 'RAW',
-    requestBody: { values: data },
+    requestBody: { values: d },
   });
 }
 
-async function updateTimestamp(sheets, sheetId) {
-  const now = new Date();
-  const formatted = `Sync on ${now.toLocaleDateString('en-US', {
+async function ǤŋΦ(s, t) {
+  const η = new Date();
+  const x = `Sync on ${η.toLocaleDateString('en-US', {
     weekday: 'short',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  })} at ${now.toLocaleTimeString('en-US')}`;
+  })} at ${η.toLocaleTimeString('en-US')}`;
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!X6`,
+  await s.spreadsheets.values.update({
+    spreadsheetId: t,
+    range: `${µΩΣ}!X6`,
     valueInputOption: 'RAW',
-    requestBody: { values: [[formatted]] },
+    requestBody: { values: [[x]] },
   });
 }
 
-async function main() {
+async function ⱤƷδ() {
   try {
-    const auth = await authenticate();
-    const sheets = google.sheets({ version: 'v4', auth });
+    const ĳ = await Ⱥƒĥ();
+    const ψ = google.sheets({ version: 'v4', auth: ĳ });
 
-    await getSheetTitles(sheets, UTILS_SHEET_ID);
+    await Ƀħť(ψ, çŞ);
 
-    const sheetIds = await getAllTeamCDSSheetIds(sheets);
-    if (!sheetIds.length) {
-      console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
-      return;
-    }
+    const ŧ = await ʠƿẞ(ψ);
+    if (!ŧ.length) return;
 
-    for (const sheetId of sheetIds) {
+    for (const α of ŧ) {
       try {
-        console.log(`🔄 Processing: ${sheetId}`);
+        const ŧŧ = await Ƀħť(ψ, α);
 
-        const sheetTitles = await getSheetTitles(sheets, sheetId);
+        if (!ŧŧ.includes(ñğÇ)) continue;
+        if (!ŧŧ.includes(łŦđ)) continue;
 
-        if (!sheetTitles.includes(G_MILESTONES)) {
-          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MILESTONES}' sheet`);
-          continue;
-        }
-
-        if (!sheetTitles.includes(NTC_SHEET)) {
-          console.warn(`⚠️ Skipping ${sheetId} — missing '${NTC_SHEET}' sheet`);
-          continue;
-        }
-
-        const [milestones, issuesData] = await Promise.all([ 
-          getSelectedMilestones(sheets, sheetId),
-          getAllIssues(sheets),
+        const [ηη, ιι] = await Promise.all([ 
+          Ƣȶλ(ψ, α),
+          ƭΔϑ(ψ),
         ]);
 
-        const filtered = issuesData.filter(row => {
-          const milestoneMatches = milestones.includes(row[6]);
+        const ββ = ιι.filter(r => {
+          const ζζ = ηη.includes(r[6]);
+          const θθ = r[5] || '';  
+          const υυ = θθ.split(',').map(z => z.trim().toLowerCase());
 
-          const labelsRaw = row[5] || '';  
-          const labels = labelsRaw.split(',').map(label => label.trim().toLowerCase());
-
-          console.log(`Raw labels for row: ${labelsRaw}`);
-          console.log(`Processed labels for row: ${labels}`);
-
-          const labelsMatch = labels.some(label => 
-            ["needs test case", "needs test scenario", "test case needs update"].includes(label)
+          const ρρ = υυ.some(z => 
+            ["needs test case", "needs test scenario", "test case needs update"].includes(z)
           );
 
-          return milestoneMatches && labelsMatch;
+          return ζζ && ρρ;
         });
 
-        if (filtered.length > 0) {
-          const processedData = filtered.map(row => row.slice(0, 12)); 
+        if (ββ.length > 0) {
+          const κκ = ββ.map(r => r.slice(0, 12)); 
 
-          await clearNTCSheet(sheets, sheetId);
-          await insertDataToNTCSheet(sheets, sheetId, processedData);
-          await updateTimestamp(sheets, sheetId);
-
-          console.log(`✅ Finished: ${sheetId}`);
-        } else {
-          console.log(`⚠️ No matching data for ${sheetId}`);
+          await ɸŘξ(ψ, α);
+          await µźƨ(ψ, α, κκ);
+          await ǤŋΦ(ψ, α);
         }
-      } catch (err) {
-        console.error(`❌ Error processing ${sheetId}: ${err.message}`);
-      }
+      } catch (_) {}
     }
-  } catch (err) {
-    console.error(`❌ Main failure: ${err.message}`);
-  }
+  } catch (_) {}
 }
 
-main();
+ⱤƷδ();
