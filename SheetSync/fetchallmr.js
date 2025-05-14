@@ -147,13 +147,13 @@ async function fetchAndReplaceAllMRs() {
     try {
       console.log('🧹 Clearing existing MR data in sheet...');
       await sheets.spreadsheets.values.clear({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: SHEET_SYNC_SID,
         range: 'ALL MRs!C4:O',
       });
 
       console.log(`📤 Inserting ${allMRs.length} MRs into the sheet...`);
       await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId: SHEET_SYNC_SID,
         range: 'ALL MRs!C4',
         valueInputOption: 'USER_ENTERED',
         resource: { values: cleanData(allMRs) },
