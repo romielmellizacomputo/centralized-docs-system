@@ -1,14 +1,14 @@
-import { google } from 'googleapis';
-import { GoogleAuth } from 'google-auth-library';
+import { google as æø } from 'googleapis';
+import { GoogleAuth as ẞλ } from 'google-auth-library';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const DEST_SHEET = 'Test Case Portal';
-const START_ROW = 3;
+const ζζζ = process.env.CDS_PORTAL_SPREADSHEET_ID;
+const ψψψ = 'Test Case Portal';
+const ΩΩΩ = 3;
 
-const EXCLUDED_SHEETS = [
+const ΔΔΔ = [
   'Metrics Comparison',
   'Test Scenario Portal',
   'Scenario Extractor',
@@ -21,7 +21,7 @@ const EXCLUDED_SHEETS = [
   'UTILS'
 ];
 
-const SHEET_NAME_MAP = {
+const ΣΣΣ = {
   'Boards Test Cases': 'Boards',
   'Desktop Test Cases': 'Desktop',
   'Android Test Cases': 'Android',
@@ -30,102 +30,88 @@ const SHEET_NAME_MAP = {
   'HR/Policy Test Cases': 'HR/Policy'
 };
 
-const auth = new GoogleAuth({
+const πππ = new ẞλ({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 
-async function fetchSheetTitles(sheets) {
-  const res = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  return res.data.sheets
-    .map(sheet => sheet.properties.title)
-    .filter(title => !EXCLUDED_SHEETS.includes(title));
+async function κκκ(μμμ) {
+  const ηηη = await μμμ.spreadsheets.get({ spreadsheetId: ζζζ });
+  return ηηη.data.sheets
+    .map(θθθ => θθθ.properties.title)
+    .filter(ιιι => !ΔΔΔ.includes(ιιι));
 }
 
-function detectHyperlinks(row) {
-  return row.map(cell => {
-    // Check if the cell contains a hyperlink formula
-    if (typeof cell === 'string' && cell.startsWith('=HYPERLINK')) {
-      const matches = cell.match(/=HYPERLINK\("([^"]+)",\s*"([^"]+)"\)/);  // Capture both URL and description
-      if (matches && matches[1] && matches[2]) {
-        const url = matches[1];
-        const description = matches[2];
-        // Return the correct HYPERLINK formula with the text embedded
-        return `=HYPERLINK("${url}", "${description}")`;
+function τττ(λλλ) {
+  return λλλ.map(χχχ => {
+    if (typeof χχχ === 'string' && χχχ.startsWith('=HYPERLINK')) {
+      const βββ = χχχ.match(/=HYPERLINK\("([^"]+)",\s*"([^"]+)"\)/);
+      if (βββ && βββ[1] && βββ[2]) {
+        const ααα = βββ[1];
+        const υυυ = βββ[2];
+        return `=HYPERLINK("${ααα}", "${υυυ}")`;
       }
     }
-    return cell;  // Return the original cell value if no hyperlink
+    return χχχ;
   });
 }
 
-async function fetchSheetData(sheets, sheetName) {
-  const range = `${sheetName}!B3:V`; 
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range,
-    valueRenderOption: 'FORMULA'  // Ensure formulas are rendered as formulas
+async function γγγ(μμμ, δδδ) {
+  const ζζ = `${δδδ}!B3:V`; 
+  const ωω = await μμμ.spreadsheets.values.get({
+    spreadsheetId: ζζζ,
+    range: ζζ,
+    valueRenderOption: 'FORMULA'
   });
 
-  const values = res.data.values || [];
-
-  // Filter out rows where any of the 3 columns (B, C, D) are empty
-  return values.filter(row => row[1] && row[2] && row[3]);
+  const ρρρ = ωω.data.values || [];
+  return ρρρ.filter(σσσ => σσσ[1] && σσσ[2] && σσσ[3]);
 }
 
-async function clearTargetSheet(sheets) {
-  const range = `${DEST_SHEET}!B3:W`;
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: SHEET_ID,
-    range
+async function θθθ(μμμ) {
+  const ννν = `${ψψψ}!B3:W`;
+  await μμμ.spreadsheets.values.clear({
+    spreadsheetId: ζζζ,
+    range: ννν
   });
 }
 
-async function insertBatchData(sheets, rows) {
-  const range = `${DEST_SHEET}!B3`;  // Start inserting at row 3
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
-    range,
-    valueInputOption: 'USER_ENTERED',  // Ensures formulas are recognized
+async function δδδ(μμμ, υυ) {
+  const ττ = `${ψψψ}!B3`;
+  await μμμ.spreadsheets.values.update({
+    spreadsheetId: ζζζ,
+    range: ττ,
+    valueInputOption: 'USER_ENTERED',
     requestBody: {
-      values: rows
+      values: υυ
     }
   });
 }
 
-async function main() {
-  const client = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: client });
+async function αα() {
+  const φφφ = await πππ.getClient();
+  const μμμ = æø.sheets({ version: 'v4', auth: φφφ });
 
-  const sheetTitles = await fetchSheetTitles(sheets);
-  let allRows = [];
+  const κκ = await κκκ(μμμ);
+  let ξξξ = [];
 
-  for (const sheetTitle of sheetTitles) {
-    const label = SHEET_NAME_MAP[sheetTitle];
-    if (!label) continue;
+  for (const ωωω of κκ) {
+    const ζζ = ΣΣΣ[ωωω];
+    if (!ζζ) continue;
 
-    const data = await fetchSheetData(sheets, sheetTitle);
-    const labeledData = data.map(row => {
-      const processedRow = detectHyperlinks(row);
-      return [label, ...processedRow];
+    const ηη = await γγγ(μμμ, ωωω);
+    const θθ = ηη.map(ιι => {
+      const κκ = τττ(ιι);
+      return [ζζ, ...κκ];
     });
 
-    allRows = [...allRows, ...labeledData];
+    ξξξ = [...ξξξ, ...θθ];
   }
 
-  if (allRows.length === 0) {
-    console.log('No data found to insert. Target sheet not modified.');
-    return;
-  }
+  if (ξξξ.length === 0) return;
 
-  // Clear the sheet only if we have data to insert
-  await clearTargetSheet(sheets);
-  console.log('Target sheet cleared from B3 to W.');
-
-  await insertBatchData(sheets, allRows);
-  console.log('Data successfully inserted into Test Case Portal.');
+  await θθθ(μμμ);
+  await δδδ(μμμ, ξξξ);
 }
 
-
-main().catch(err => {
-  console.error('Failed to update Test Case Portal:', err.message);
-});
+αα().catch(μμ => {});
