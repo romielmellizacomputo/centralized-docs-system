@@ -74,32 +74,44 @@ async function insertDataToNTCSheet(sheets, sheetId, data) {
 }
 
 async function updateTimestamp(sheets, sheetId) {
-  try {
-    const now = new Date();
-    const timeZoneEAT = 'Africa/Nairobi';
-    const timeZonePHT = 'Asia/Manila';
+  const now = new Date();
+  const timeZoneEAT = 'Africa/Nairobi'; // East Africa Time
+  const timeZonePHT = 'Asia/Manila'; // Philippine Time
 
-    const optionsDate = { year: 'numeric', month: 'long', day: 'numeric' };
-    const optionsTime = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+  const optionsDate = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  };
 
-    const formattedDate = now.toLocaleDateString('en-US', optionsDate);
-    const formattedEAT = new Intl.DateTimeFormat('en-US', { ...optionsTime, timeZone: timeZoneEAT }).format(now);
-    const formattedPHT = new Intl.DateTimeFormat('en-US', { ...optionsTime, timeZone: timeZonePHT }).format(now);
+  const optionsTime = {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  };
 
-    const formatted = `Sync on ${formattedDate}, ${formattedEAT} (EAT) / ${formattedDate}, ${formattedPHT} (PHT)`;
+  const formattedDate = now.toLocaleDateString('en-US', optionsDate);
+  const formattedEAT = new Intl.DateTimeFormat('en-US', { 
+    ...optionsTime, 
+    timeZone: timeZoneEAT 
+  }).format(now);
+  
+  const formattedPHT = new Intl.DateTimeFormat('en-US', { 
+    ...optionsTime, 
+    timeZone: timeZonePHT 
+  }).format(now);
 
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: sheetId,
-      range: `${DASHBOARD_SHEET}!AB6`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [[formatted]] },
-    });
+  const formatted = `Sync on ${formattedDate}, ${formattedEAT} (EAT) / ${formattedDate}, ${formattedPHT} (PHT)`;
 
-    console.log(`🕒 Timestamp updated for ${sheetId}: ${formatted}`);
-  } catch (err) {
-    console.error(`❌ Failed to update timestamp for ${sheetId}: ${err.message}`);
-  }
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: sheetId,
+    range: `${DASHBOARD_SHEET}!W6`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[formatted]] },
+  });
 }
+
 
 async function main() {
   try {
