@@ -74,35 +74,31 @@ async function updateTimestamp(sheets, sheetId) {
   const timeZoneEAT = 'Africa/Nairobi'; // East Africa Time
   const timeZonePHT = 'Asia/Manila'; // Philippine Time
 
-  const options = {
-    weekday: 'short',
+  const optionsDate = {
     year: 'numeric',
-    month: 'short',
+    month: 'long',
     day: 'numeric',
+  };
+
+  const optionsTime = {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: true,
   };
 
+  const formattedDate = now.toLocaleDateString('en-US', optionsDate);
   const formattedEAT = new Intl.DateTimeFormat('en-US', { 
-    ...options, 
+    ...optionsTime, 
     timeZone: timeZoneEAT 
   }).format(now);
   
   const formattedPHT = new Intl.DateTimeFormat('en-US', { 
-    ...options, 
+    ...optionsTime, 
     timeZone: timeZonePHT 
   }).format(now);
 
-  const formattedDate = now.toLocaleDateString('en-US', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-
-  const formatted = `Sync on ${formattedDate} at ${formattedEAT} (EAT) / ${formattedPHT} (PHT)`;
+  const formatted = `Sync on ${formattedDate}, ${formattedEAT} (EAT) / ${formattedDate}, ${formattedPHT} (PHT)`;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
