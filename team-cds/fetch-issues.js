@@ -85,21 +85,28 @@ async function updateTimestamp(sheets, sheetId) {
     hour12: true,
   };
 
-  const formattedUTC = now.toLocaleString('en-US', options);
   const formattedEAT = new Intl.DateTimeFormat('en-US', { 
     ...options, 
     timeZone: timeZoneEAT 
   }).format(now);
+  
   const formattedPHT = new Intl.DateTimeFormat('en-US', { 
     ...options, 
     timeZone: timeZonePHT 
   }).format(now);
 
-  const formatted = `Sync on ${formattedUTC} (UTC) / ${formattedEAT} (EAT) / ${formattedPHT} (PHT)`;
+  const formattedDate = now.toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  const formatted = `Sync on ${formattedDate} at ${formattedEAT} (EAT) / ${formattedPHT} (PHT)`;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!AB6`,
+    range: `${DASHBOARD_SHEET}!X6`,
     valueInputOption: 'RAW',
     requestBody: { values: [[formatted]] },
   });
