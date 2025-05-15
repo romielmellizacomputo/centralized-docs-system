@@ -74,46 +74,32 @@ async function insertDataToNTCSheet(sheets, sheetId, data) {
 }
 
 async function updateTimestamp(sheets, sheetId) {
-  const now = new Date();
-  const timeZoneEAT = 'Africa/Nairobi'; // East Africa Time
-  const timeZonePHT = 'Asia/Manila'; // Philippine Time
+  try {
+    const now = new Date();
+    const timeZoneEAT = 'Africa/Nairobi';
+    const timeZonePHT = 'Asia/Manila';
 
-  const optionsDate = {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  };
+    const optionsDate = { year: 'numeric', month: 'long', day: 'numeric' };
+    const optionsTime = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
 
-  const optionsTime = {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-  };
+    const formattedDate = now.toLocaleDateString('en-US', optionsDate);
+    const formattedEAT = new Intl.DateTimeFormat('en-US', { ...optionsTime, timeZone: timeZoneEAT }).format(now);
+    const formattedPHT = new Intl.DateTimeFormat('en-US', { ...optionsTime, timeZone: timeZonePHT }).format(now);
 
-  const formattedDate = now.toLocaleDateString('en-US', optionsDate);
-  const formattedEAT = new Intl.DateTimeFormat('en-US', { 
-    ...optionsTime, 
-    timeZone: timeZoneEAT 
-  }).format(now);
-  
-  const formattedPHT = new Intl.DateTimeFormat('en-US', { 
-    ...optionsTime, 
-    timeZone: timeZonePHT 
-  }).format(now);
+    const formatted = `Sync on ${formattedDate}, ${formattedEAT} (EAT) / ${formattedDate}, ${formattedPHT} (PHT)`;
 
-  const formatted = `Sync on ${formattedDate}, ${formattedEAT} (EAT) / ${formattedDate}, ${formattedPHT} (PHT)`;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: `${DASHBOARD_SHEET}!AB6`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[formatted]] },
+    });
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!AB6`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [[formatted]] },
-  });
+    console.log(`🕒 Timestamp updated for ${sheetId}: ${formatted}`);
+  } catch (err) {
+    console.error(`❌ Failed to update timestamp for ${sheetId}: ${err.message}`);
+  }
 }
-
-
-
 
 async function main() {
   try {
