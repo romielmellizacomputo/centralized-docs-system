@@ -102,7 +102,7 @@ async function updateTimestamp(sheets, sheetId) {
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${DASHBOARD_SHEET}!AB6`,
+    range: `${DASHBOARD_SHEET}!W6`,
     valueInputOption: 'RAW',
     requestBody: { values: [[formatted]] },
   });
