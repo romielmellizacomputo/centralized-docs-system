@@ -71,12 +71,31 @@ async function insertDataToGIssues(sheets, sheetId, data) {
 
 async function updateTimestamp(sheets, sheetId) {
   const now = new Date();
-  const formatted = `Sync on ${now.toLocaleDateString('en-US', {
+  const timeZoneEAT = 'Africa/Nairobi'; // East Africa Time
+  const timeZonePHT = 'Asia/Manila'; // Philippine Time
+
+  const options = {
     weekday: 'short',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  })} at ${now.toLocaleTimeString('en-US')}`;
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  };
+
+  const formattedUTC = now.toLocaleString('en-US', options);
+  const formattedEAT = new Intl.DateTimeFormat('en-US', { 
+    ...options, 
+    timeZone: timeZoneEAT 
+  }).format(now);
+  const formattedPHT = new Intl.DateTimeFormat('en-US', { 
+    ...options, 
+    timeZone: timeZonePHT 
+  }).format(now);
+
+  const formatted = `Sync on ${formattedUTC} (UTC) / ${formattedEAT} (EAT) / ${formattedPHT} (PHT)`;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
@@ -85,6 +104,7 @@ async function updateTimestamp(sheets, sheetId) {
     requestBody: { values: [[formatted]] },
   });
 }
+
 
 async function main() {
   try {
