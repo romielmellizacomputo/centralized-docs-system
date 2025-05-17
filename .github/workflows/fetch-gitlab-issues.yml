@@ -36,15 +36,12 @@ jobs:
           node fetchallissues.js
 
       - name: Log results to Google Sheets
-        if: always()  # Ensure this runs even if the previous step fails
-        env:
-          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
-          SHEET_SYNC_SAJ: ${{ secrets.SHEET_SYNC_SAJ }}
+        if: always()
         run: |
           # Define the required variables
           JOB_NUMBER=${{ github.run_id }}
-          UPDATED_COUNT=$(node -p "require('./SheetSync/fetchallissues.js').updatedCount") # Adjust this line based on your actual implementation
-          INSERTED_COUNT=$(node -p "require('./SheetSync/fetchallissues.js').insertedCount") # Adjust this line based on your actual implementation
+          UPDATED_COUNT=$(node -e "import('./SheetSync/fetchallissues.js').then(module => console.log(module.updatedCount));") # Adjust based on your actual implementation
+          INSERTED_COUNT=$(node -e "import('./SheetSync/fetchallissues.js').then(module => console.log(module.insertedCount));") # Adjust based on your actual implementation
           
           # Get the current date and time in the desired format
           DATE_TIME=$(date +"%a, %b %d, %Y at %I:%M %p PHT")
@@ -56,7 +53,7 @@ jobs:
           elif [[ "${{ steps.fetch_issues.outcome }}" == "skipped" ]]; then
             STATUS="Cancelled"
           fi
-
+      
           # Log to Google Sheets using curl
           curl -X POST "https://sheets.googleapis.com/v4/spreadsheets/${SHEET_SYNC_SID}/values/Logs!B3:G3:append?valueInputOption=USER_ENTERED" \
           -H "Authorization: Bearer ${{ secrets.GOOGLE_SHEET_API_TOKEN }}" \
