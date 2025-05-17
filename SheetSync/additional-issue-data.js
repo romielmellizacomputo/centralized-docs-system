@@ -61,46 +61,47 @@ async function fetchIssuesFromSheet(authClient) {
 }
 
 async function fetchAdditionalDataForIssue(issue) {
-  const issueId = issue[1]; // Assuming the issue ID is in the second column (D)
+  const issueId = issue[1]; // Assuming the issue ID is in column D (index 1)
   const projectName = issue[11];
   const projectConfig = PROJECT_CONFIG[projectName];
 
   if (!projectConfig) {
     console.warn(`⚠️ Project config not found for ${projectName}, skipping issue ${issueId}`);
-    return ['', 'No', 'Unknown', ''];
+    return ['', 'No', 'Unknown', '', 'No Local Status', ''];
   }
 
   const projectId = projectConfig.id;
   try {
-    const commentsResponse = await axios.get(
-      `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`,
-      { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN } }
-    );
+    const [commentsResponse, issueDetailsResponse] = await Promise.all([
+      axios.get(`${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`, {
+        headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+      }),
+      axios.get(`${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}`, {
+        headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+      }),
+    ]);
 
     const comments = commentsResponse.data;
+    const issueDetails = issueDetailsResponse.data;
+
     let firstLgtmCommenter = '';
     let reopenedStatus = 'No';
     let lastReopenedBy = '';
     let lastReopenedAt = '';
 
-    // Filter and sort LGTM comments
     const lgtmComments = comments
-      .filter(comment =>
-        comment.body.match(/\b(?:\*\*LGTM\*\*|LGTM)\b/i)
-      )
+      .filter(comment => comment.body.match(/\b(?:\*\*LGTM\*\*|LGTM)\b/i))
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
     if (lgtmComments.length > 0) {
       firstLgtmCommenter = lgtmComments[0].author.name;
     }
 
-    // Check for "reopened" comments
     for (const comment of comments) {
       if (comment.body.toLowerCase().includes('reopened')) {
         reopenedStatus = 'Yes';
         lastReopenedBy = comment.author.name;
-        const dateObj = new Date(comment.created_at);
-        lastReopenedAt = dateObj.toLocaleDateString('en-US', {
+        lastReopenedAt = new Date(comment.created_at).toLocaleDateString('en-US', {
           weekday: 'short',
           year: 'numeric',
           month: 'short',
@@ -109,24 +110,48 @@ async function fetchAdditionalDataForIssue(issue) {
       }
     }
 
-    return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
+    // Label checks for column S and T
+    const labelEventsResponse = await axios.get(
+      `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/resource_label_events`,
+      { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN } }
+    );
+
+    const labelEvents = labelEventsResponse.data;
+    const targetLabels = ['Testing::Local::Passed', 'Testing::Epic::Passed'];
+
+    let statusLabel = 'No Local Status';
+    let labelAddedDate = '';
+
+    for (const target of targetLabels) {
+      const matched = labelEvents
+        .filter(e => e.label?.name === target && e.action === 'add')
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      if (matched.length > 0) {
+        statusLabel = target;
+        labelAddedDate = new Date(matched[0].created_at).toLocaleDateString('en-US', {
+          weekday: 'short',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
+        break;
+      }
+    }
+
+    return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt, statusLabel, labelAddedDate];
   } catch (error) {
-    console.error(`❌ Error fetching comments for issue ${issueId} in project ${projectName}:`, error.message);
-    return ['', 'Error', 'Error', 'Error'];
+    console.error(`❌ Error fetching data for issue ${issueId} in ${projectName}:`, error.message);
+    return ['', 'Error', 'Error', 'Error', 'Error', 'Error'];
   }
 }
 
-
-
 async function updateSheet(authClient, startRow, rows) {
-  console.log(`⏳ Updating sheet rows O${startRow}:R${startRow + rows.length - 1} with fetched data...`);
+  console.log(`⏳ Updating sheet rows O${startRow}:T${startRow + rows.length - 1}...`);
   const sheets = google.sheets({ version: 'v4', auth: authClient });
-  const resource = {
-    values: rows,
-  };
+  const resource = { values: rows };
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_SYNC_SID,
-    range: `ALL ISSUES!O${startRow}:R${startRow + rows.length - 1}`,
+    range: `ALL ISSUES!O${startRow}:T${startRow + rows.length - 1}`,
     valueInputOption: 'RAW',
     resource,
   });
@@ -134,7 +159,7 @@ async function updateSheet(authClient, startRow, rows) {
 }
 
 async function processBatch(authClient, issuesBatch, batchStartIndex) {
-  const limit = pLimit(5); // concurrency limit 5
+  const limit = pLimit(5);
   console.log(`⏳ Processing batch of ${issuesBatch.length} issues starting at row ${batchStartIndex + 4}...`);
 
   const results = await Promise.allSettled(
@@ -148,14 +173,12 @@ async function processBatch(authClient, issuesBatch, batchStartIndex) {
     )
   );
 
-  // Map results to data rows, default to empty arrays on failure
   const rows = results.map((res, i) => {
     if (res.status === 'fulfilled') return res.value;
     console.error(`❌ Failed to fetch data for issue ${batchStartIndex + i + 1}`, res.reason);
-    return ['', 'Error', 'Error', 'Error'];
+    return ['', 'Error', 'Error', 'Error', 'Error', 'Error'];
   });
 
-  // Update the sheet for this batch, adjusting the startRow for the spreadsheet
   await updateSheet(authClient, batchStartIndex + 4, rows);
 }
 
