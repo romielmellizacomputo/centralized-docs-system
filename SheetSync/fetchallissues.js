@@ -63,6 +63,18 @@ function formatDate(dateString) {
   }).format(date);
 }
 
+async function fetchCommentsForIssues(projectId, issues) {
+  const commentPromises = issues.map(issue => 
+    axios.get(`${GITLAB_URL}api/v4/projects/${projectId}/issues/${issue.iid}/notes`, {
+      headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+    })
+  );
+  
+  const commentsResponses = await Promise.all(commentPromises);
+
+  return commentsResponses.map(response => response.data);
+}
+
 async function fetchIssuesForProject(projectId, config) {
   let page = 1;
   let issues = [];
@@ -84,61 +96,7 @@ async function fetchIssuesForProject(projectId, config) {
     const fetchedIssues = response.data;
     if (fetchedIssues.length === 0) break;
 
-    for (const issue of fetchedIssues) {
-      // Fetch comments to find the first LGTM commenter
-      const commentsResponse = await axios.get(
-        `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issue.iid}/notes`,
-        {
-          headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-        }
-      );
-
-      let firstLgtmCommenter = 'Unknown';
-      let lastReopenedBy = 'Unknown';
-      let reopenedStatus = 'No';
-
-      for (const comment of commentsResponse.data) {
-        if (comment.body.includes('LGTM') && firstLgtmCommenter === 'Unknown') {
-          firstLgtmCommenter = comment.author.name;
-        }
-      }
-
-      // Check if the issue was reopened
-      if (issue.state === 'reopened') {
-        reopenedStatus = 'Yes';
-        lastReopenedBy = issue.reopened_by?.name ?? 'Unknown';
-      }
-
-      // Prepare labels
-      const labels = (issue.labels || []).map(label => {
-        if (label === 'Bug-issue') return 'Bug Issue';
-        if (label === 'Usability Suggestions') return 'Usability Suggestion';
-        return label;
-      }).join(', ');
-
-      const issueData = [
-        issue.id ?? '',
-        issue.iid ?? '',
-        issue.title && issue.web_url
-          ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
-          : 'No Title',
-        issue.author?.name ?? 'Unknown Author',
-        issue.assignee?.name ?? 'Unassigned',
-        labels,
-        issue.milestone?.title ?? 'No Milestone',
-        capitalize(issue.state ?? ''),
-        issue.created_at ? formatDate(issue.created_at) : '',
-        issue.closed_at ? formatDate(issue.closed_at) : '',
-        issue.closed_by?.name ?? '',
-        config.name,
-        firstLgtmCommenter,  // New field
-        reopenedStatus,       // New field
-        lastReopenedBy        // New field
-      ];
-
-      issues.push(issueData);
-    }
-
+    issues.push(...fetchedIssues);
     console.log(`✅ Page ${page} fetched (${fetchedIssues.length} issues) for ${config.name}`);
     page++;
   }
@@ -160,15 +118,60 @@ async function fetchAndUpdateIssuesForAllProjects() {
   const allIssuesResults = await Promise.all(issuesPromises);
   const allIssues = allIssuesResults.flat();
 
-  if (allIssues.length > 0) {
-    const safeRows = allIssues.map((row) =>
-      row.map((cell) =>
+  // Fetch comments for all issues in parallel
+  const comments = await fetchCommentsForIssues(projectId, allIssues);
+
+  const processedIssues = allIssues.map((issue, index) => {
+    let firstLgtmCommenter = 'Unknown';
+    let lastReopenedBy = 'Unknown';
+    let reopenedStatus = 'No';
+
+    comments[index].forEach(comment => {
+      if (comment.body.includes('LGTM') && firstLgtmCommenter === 'Unknown') {
+        firstLgtmCommenter = comment.author.name;
+      }
+    });
+
+    if (issue.state === 'reopened') {
+      reopenedStatus = 'Yes';
+      lastReopenedBy = issue.reopened_by?.name ?? 'Unknown';
+    }
+
+    const labels = (issue.labels || []).map(label => {
+      if (label === 'Bug-issue') return 'Bug Issue';
+      if (label === 'Usability Suggestions') return 'Usability Suggestion';
+      return label;
+    }).join(', ');
+
+    return [
+      issue.id ?? '',
+      issue.iid ?? '',
+      issue.title && issue.web_url
+        ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
+        : 'No Title',
+      issue.author?.name ?? 'Unknown Author',
+      issue.assignee?.name ?? 'Unassigned',
+      labels,
+      issue.milestone?.title ?? 'No Milestone',
+      capitalize(issue.state ?? ''),
+      issue.created_at ? formatDate(issue.created_at) : '',
+      issue.closed_at ? formatDate(issue.closed_at) : '',
+      issue.closed_by?.name ?? '',
+      PROJECT_CONFIG[issue.project_id]?.name ?? 'Unknown Project',
+      firstLgtmCommenter,
+      reopenedStatus,
+      lastReopenedBy
+    ];
+  });
+
+  if (processedIssues.length > 0) {
+    const safeRows = processedIssues.map(row =>
+      row.map(cell =>
         cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)
       )
     );
 
     try {
-      // Overwrite the target sheet starting from C4
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_SYNC_SID,
         range: 'ALL ISSUES!C4',
