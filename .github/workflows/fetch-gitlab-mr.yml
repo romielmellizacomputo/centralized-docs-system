@@ -1,4 +1,4 @@
-name: Fetch GitLab MRs Service
+name: Fetch GitLab MR Service
 
 on:
   schedule:
@@ -25,7 +25,6 @@ jobs:
           npm install
 
       - name: Run fetchallmr.js
-        id: fetch_mrs
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
@@ -34,49 +33,3 @@ jobs:
         run: |
           cd SheetSync
           node fetchallmr.js
-          
-      - name: Log results to Google Sheets
-        if: always()  # This step runs regardless of the previous step's outcome
-        env:
-          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}  # Add this secret
-          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}  # Add this secret
-        run: |
-          # Fetch the output from fetchallmr.js
-          UPDATED_COUNT=$(echo "${{ steps.fetch_mrs.outputs.updated_count }}" || 0)
-          INSERTED_COUNT=$(echo "${{ steps.fetch_mrs.outputs.inserted_count }}" || 0)
-          STATUS=$(if [ "${{ job.status }}" == "success" ]; then echo "Done"; elif [ "${{ job.status }}" == "cancelled" ]; then echo "Cancelled"; else echo "Failed"; fi)
-
-          # Get the current date and time
-          DATE_TIME=$(date +"%a, %b %d, %Y at %I:%M %p PHT")
-
-          # Log to Google Sheets using a Node.js script
-          node -e "
-          const { google } = require('googleapis');
-          const sheets = google.sheets('v4');
-
-          async function logToSheet() {
-            const auth = new google.auth.GoogleAuth({
-              credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-              scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-            });
-
-            const authClient = await auth.getClient();
-            const sheetId = process.env.GOOGLE_SHEET_ID;
-
-            const request = {
-              spreadsheetId: sheetId,
-              range: 'Logs!B3:G3',
-              valueInputOption: 'RAW',
-              resource: {
-                values: [[DATE_TIME, '${{ github.run_id }}', UPDATED_COUNT, INSERTED_COUNT, '', STATUS]],
-              },
-              auth: authClient,
-            };
-
-            await sheets.spreadsheets.values.append(request);
-            console.log('Logged to Google Sheets');
-          }
-
-          logToSheet().catch(console.error);
-          "
