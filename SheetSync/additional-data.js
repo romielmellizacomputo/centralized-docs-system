@@ -1,3 +1,4 @@
+import pLimit from 'p-limit';  // npm install p-limit
 import { config } from 'dotenv';
 import { google } from 'googleapis';
 import axios from 'axios';
@@ -48,78 +49,117 @@ const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-async function fetchIssuesFromSheet() {
-  const authClient = await auth.getClient();
+async function fetchIssuesFromSheet(authClient) {
+  console.log('⏳ Fetching issues from sheet...');
   const sheets = google.sheets({ version: 'v4', auth: authClient });
-
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_SYNC_SID,
-    range: 'ALL ISSUES!C4:N', // Adjust the range as needed
+    range: 'ALL ISSUES!C4:N',
   });
-
+  console.log(`✅ Fetched ${response.data.values?.length || 0} issues`);
   return response.data.values || [];
 }
 
 async function clearTargetColumns(authClient) {
+  console.log('⏳ Clearing target columns O:R...');
   const sheets = google.sheets({ version: 'v4', auth: authClient });
   await sheets.spreadsheets.values.clear({
     spreadsheetId: SHEET_SYNC_SID,
-    range: 'ALL ISSUES!O4:R', // Clear only O to R columns
+    range: 'ALL ISSUES!O4:R',
   });
+  console.log('✅ Cleared target columns');
 }
 
 async function fetchAdditionalDataForIssue(issue) {
   const issueId = issue[1]; // Assuming the issue ID is in the second column (D)
   const projectName = issue[11];
   const projectConfig = PROJECT_CONFIG[projectName];
-  
+
   if (!projectConfig) {
-    console.error(`❌ Project configuration not found for project ${projectName}`);
+    console.warn(`⚠️ Project config not found for ${projectName}, skipping issue ${issueId}`);
     return ['', 'No', 'Unknown', ''];
   }
-  
-  // Use projectConfig.id when you call GitLab API:
+
   const projectId = projectConfig.id;
-  
-  const commentsResponse = await axios.get(
-    `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`,
-    { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN } }
-  );
+  try {
+    const commentsResponse = await axios.get(
+      `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`,
+      { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN } }
+    );
 
+    const comments = commentsResponse.data;
+    let firstLgtmCommenter = '';
+    let reopenedStatus = 'No';
+    let lastReopenedBy = '';
+    let lastReopenedAt = '';
 
-  const comments = commentsResponse.data;
-  let firstLgtmCommenter = '';
-  let reopenedStatus = 'No';
-  let lastReopenedBy = '';
-  let lastReopenedAt = '';
-
-  // Process comments to find the required data
-  for (const comment of comments) {
-    if (firstLgtmCommenter === '' && (comment.body.includes('LGTM') || comment.body.includes('**LGTM**'))) {
-      firstLgtmCommenter = comment.author.name;
+    for (const comment of comments) {
+      if (
+        firstLgtmCommenter === '' &&
+        (comment.body.includes('LGTM') || comment.body.includes('**LGTM**'))
+      ) {
+        firstLgtmCommenter = comment.author.name;
+      }
+      if (comment.body.includes('reopened')) {
+        reopenedStatus = 'Yes';
+        lastReopenedBy = comment.author.name;
+        lastReopenedAt = comment.created_at;
+      }
     }
-    if (comment.body.includes('reopened')) {
-      reopenedStatus = 'Yes';
-      lastReopenedBy = comment.author.name;
-      lastReopenedAt = comment.created_at; // Assuming created_at is the date of the comment
-    }
+    return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
+  } catch (error) {
+    console.error(`❌ Error fetching comments for issue ${issueId} in project ${projectName}:`, error.message);
+    return ['', 'Error', 'Error', 'Error'];
   }
-
-  return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
 }
 
-// Main function to execute the process
+async function updateSheet(authClient, rows) {
+  console.log('⏳ Updating sheet with fetched data...');
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
+  // Prepare the data in the range O4:R
+  // Assuming rows.length matches the number of issues, and each row is an array of length 4
+  const resource = {
+    values: rows,
+  };
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_SYNC_SID,
+    range: `ALL ISSUES!O4:R${rows.length + 3}`, // 4th row is the first data row, so offset by 3
+    valueInputOption: 'RAW',
+    resource,
+  });
+  console.log('✅ Sheet updated');
+}
+
 async function main() {
   const authClient = await auth.getClient();
-  await clearTargetColumns(authClient); // Clear the target columns before inserting new data
-  const issues = await fetchIssuesFromSheet();
+  await clearTargetColumns(authClient);
+  const issues = await fetchIssuesFromSheet(authClient);
 
-  // Process each issue
-  for (const issue of issues) {
-    const additionalData = await fetchAdditionalDataForIssue(issue);
-    // Here you would insert the additionalData into the O to R columns
-    // Implement the logic to update the sheet with the new data
-  }
+  const limit = pLimit(5); // Limit concurrency to 5 requests at a time
+  console.log(`⏳ Processing ${issues.length} issues with concurrency limit 5`);
+
+  const results = await Promise.allSettled(
+    issues.map((issue, index) =>
+      limit(async () => {
+        console.log(`🛠️ Processing issue ${index + 1}/${issues.length} (ID: ${issue[1]})`);
+        const data = await fetchAdditionalDataForIssue(issue);
+        console.log(`✅ Completed issue ${index + 1} (ID: ${issue[1]})`);
+        return data;
+      })
+    )
+  );
+
+  // Map results to data rows, default to empty arrays on failure
+  const rows = results.map((res, i) => {
+    if (res.status === 'fulfilled') return res.value;
+    console.error(`❌ Failed to fetch data for issue ${i + 1}`, res.reason);
+    return ['', 'Error', 'Error', 'Error'];
+  });
+
+  await updateSheet(authClient, rows);
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error('❌ Fatal error:', error);
+  process.exit(1);
+});
