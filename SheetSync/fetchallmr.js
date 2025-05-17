@@ -55,7 +55,7 @@ function formatDate(dateString) {
 async function fetchMRsForProject(projectId, config) {
   let page = 1;
   let mrs = [];
-  console.log(`🔄 Fetching MRs for ${config.name}...`);
+  console.log(`🔄 Fetching issues for project ID ${projectId} (${config.name})...`);
 
   while (true) {
     const url = `${GITLAB_URL}api/v4/projects/${projectId}/merge_requests?state=all&per_page=100&page=${page}`;
