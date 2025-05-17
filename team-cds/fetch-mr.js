@@ -1,11 +1,11 @@
 import { google } from 'googleapis';
 
-const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
+const UTILS_SHEET_ID = process.env.LEADS_CDS_SID;
 const G_MILESTONES = 'G-Milestones';
 const G_ISSUES_SHEET = 'G-MR';
 const DASHBOARD_SHEET = 'Dashboard';
 
-const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
+const CENTRAL_ISSUE_SHEET_ID = process.env.SHEET_SYNC_SID;
 const ALL_ISSUES_RANGE = 'ALL MRs!C4:O'; 
 
 async function authenticate() {
