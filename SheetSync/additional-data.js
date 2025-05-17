@@ -59,7 +59,7 @@ function formatDate(dateString) {
   }).format(date);
 }
 
-async function fetchIssuesForProject(projectId, config) {
+async function fetchIssuesForProject(projectId) {
   const response = await axios.get(
     `${GITLAB_URL}api/v4/projects/${projectId}/issues`,
     {
@@ -81,8 +81,8 @@ async function fetchAdditionalDataForIssues(issues) {
     // Debug log to see the structure of the issue
     console.log('Issue:', issue);
 
-    const issueId = issue.id; // Assuming the issue ID is available directly
-    const projectName = issue.project_id; // Assuming the project ID is available directly
+    const issueId = issue.id; // Accessing the issue ID directly
+    const projectName = issue.project_id; // Change this line to access the correct project name
 
     // Find the project ID based on the project name
     const projectId = Object.keys(PROJECT_CONFIG).find(id => PROJECT_CONFIG[id].name === projectName);
@@ -147,8 +147,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
   console.log('🔄 Fetching issues for all projects...');
 
   const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (projectId) => {
-    const config = PROJECT_CONFIG[projectId];
-    const issues = await fetchIssuesForProject(projectId, config);
+    const issues = await fetchIssuesForProject(projectId);
     
     // Debug log to see the fetched issues
     console.log(`Fetched issues for project ${projectId}:`, issues);
