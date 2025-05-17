@@ -1,4 +1,4 @@
-name: Sheet Sync
+name: Fetch Additional Issue Info
 
 on:
   schedule:
