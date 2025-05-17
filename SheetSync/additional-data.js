@@ -4,6 +4,7 @@ import axios from 'axios';
 
 config();
 
+// Validate required environment variables
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SHEET_SYNC_SID', 'SHEET_SYNC_SAJ'];
 requiredEnv.forEach((key) => {
   if (!process.env[key]) {
@@ -12,10 +13,11 @@ requiredEnv.forEach((key) => {
   }
 });
 
-const BASE_URL = GITLAB_URL.endsWith('/') ? GITLAB_URL : GITLAB_URL + '/';
+// ✅ Define variables AFTER checking they're present
 const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
+const BASE_URL = GITLAB_URL.endsWith('/') ? GITLAB_URL : GITLAB_URL + '/';
 
 const PROJECT_CONFIG = {
   '155': { name: 'HQZen', path: 'bposeats/hqzen.com' },
@@ -55,14 +57,13 @@ async function fetchIssuesFromSheet() {
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_SYNC_SID,
-    range: 'ALL ISSUES!C4:N', // Adjust the range as needed
+    range: 'ALL ISSUES!C4:N',
   });
 
   return response.data.values || [];
 }
 
 function normalizeId(value) {
-  // Ensure the ID is preserved as a string (no numeric conversion)
   return (value ?? '').toString().trim();
 }
 
@@ -133,7 +134,6 @@ async function fetchAdditionalDataForIssue(issue) {
     return ['Error', 'Error', 'Error', 'Error'];
   }
 }
-
 
 async function updateSheetWithAdditionalData(updatedRows) {
   const authClient = await auth.getClient();
