@@ -1,6 +1,6 @@
 import { config } from 'dotenv';
-import { google } from 'googleapis';
 import axios from 'axios';
+import pLimit from 'p-limit';
 
 config();
 
@@ -63,15 +63,16 @@ function formatDate(dateString) {
   }).format(date);
 }
 
+const limit = pLimit(5); // Limit the number of concurrent requests
+
 async function fetchCommentsForIssues(projectId, issues) {
   const commentPromises = issues.map(issue => 
-    axios.get(`${GITLAB_URL}api/v4/projects/${projectId}/issues/${issue.iid}/notes`, {
+    limit(() => axios.get(`${GITLAB_URL}api/v4/projects/${projectId}/issues/${issue.iid}/notes`, {
       headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-    })
+    }))
   );
   
   const commentsResponses = await Promise.all(commentPromises);
-
   return commentsResponses.map(response => response.data);
 }
 
@@ -88,21 +89,31 @@ async function fetchIssuesForProject(projectId, config) {
       }
     );
 
-    if (response.status !== 200) {
-      console.error(`❌ Failed to fetch page ${page} for ${config.name}`);
-      break;
-    }
+    if (response.data.length === 0) break; // No more issues to fetch
 
-    const fetchedIssues = response.data;
-    if (fetchedIssues.length === 0) break;
-
-    issues.push(...fetchedIssues);
-    console.log(`✅ Page ${page} fetched (${fetchedIssues.length} issues) for ${config.name}`);
+    issues = issues.concat(response.data);
     page++;
   }
 
-  return issues;
+  // Fetch comments for all issues
+  const comments = await fetchCommentsForIssues(projectId, issues);
+  return { issues, comments };
 }
+
+async function main() {
+  for (const [projectId, config] of Object.entries(PROJECT_CONFIG)) {
+    const { issues, comments } = await fetchIssuesForProject(projectId, config);
+    
+    // Process issues and comments as needed
+    console.log(`🔍 Fetched ${issues.length} issues and ${comments.flat().length} comments for ${config.name}.`);
+  }
+}
+
+main().catch(error => {
+  console.error('❌ An error occurred:', error);
+  process.exit(1);
+});
+
 
 async function fetchAndUpdateIssuesForAllProjects() {
   const authClient = await auth.getClient();
