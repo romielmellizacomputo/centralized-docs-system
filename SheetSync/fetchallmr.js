@@ -73,7 +73,6 @@ import { google } from 'googleapis';
 import axios from 'axios';
 import auth from './auth.js'; // ensure your auth client setup is correct
 
-dotenv.config();
 
 async function fetchMRsForProject(projectId, config) {
   let page = 1;
