@@ -261,7 +261,7 @@ async function fetchAndUpdateMRsForAllProjects() {
     
   } catch (err) {
     console.error('❌ Error updating/inserting MRs:', err.stack || err.message);
-    await logToSheet(projectId, updates.length, inserts.length, 'Failed');
+    await logToSheet(jobNumber, updates.length, inserts.length, 'Failed');
   }
 }
 
