@@ -21,3 +21,46 @@ export const GITLAB_URL = process.env.GITLAB_URL.endsWith('/')
 
 export const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 export const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
+
+
+// Timestamp
+export function generateTimestampString() {
+  const now = new Date();
+  const timeZoneEAT = 'Africa/Nairobi';
+  const timeZonePHT = 'Asia/Manila';
+
+  const optionsDate = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  };
+
+  const optionsTime = {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  };
+
+  const formattedDateEAT = new Intl.DateTimeFormat('en-US', {
+    ...optionsDate,
+    timeZone: timeZoneEAT
+  }).format(now);
+
+  const formattedDatePHT = new Intl.DateTimeFormat('en-US', {
+    ...optionsDate,
+    timeZone: timeZonePHT
+  }).format(now);
+
+  const formattedEAT = new Intl.DateTimeFormat('en-US', {
+    ...optionsTime,
+    timeZone: timeZoneEAT
+  }).format(now);
+
+  const formattedPHT = new Intl.DateTimeFormat('en-US', {
+    ...optionsTime,
+    timeZone: timeZonePHT
+  }).format(now);
+
+  return `Sync on ${formattedDateEAT}, ${formattedEAT} (EAT) / ${formattedDatePHT}, ${formattedPHT} (PHT)`;
+}
