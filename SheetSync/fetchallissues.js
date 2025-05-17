@@ -137,7 +137,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
       // Clear the target range from C4 to N (to avoid affecting other columns)
       await sheets.spreadsheets.values.clear({
         spreadsheetId: SHEET_SYNC_SID,
-        range: 'ALL ISSUES!C4:N',
+        range: 'ALL ISSUES!C4:R',
       });
 
       // Overwrite the target sheet starting from C4
