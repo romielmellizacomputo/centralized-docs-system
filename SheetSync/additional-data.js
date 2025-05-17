@@ -17,14 +17,14 @@ const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
 
 const PROJECT_CONFIG = {
-  155: { name: 'HQZen', path: 'bposeats/hqzen.com' },
-  88: { name: 'ApplyBPO', path: 'bposeats/applybpo.com' },
-  23: { name: 'Backend', path: 'bposeats/bposeats' },
-  123: { name: 'Desktop', path: 'bposeats/bposeats-desktop' },
-  141: { name: 'Ministry', path: 'bposeats/ministry-vuejs' },
-  147: { name: 'Scalema', path: 'bposeats/scalema.com' },
-  89: { name: 'BPOSeats.com', path: 'bposeats/bposeats.com' },
-  124: { name: 'Android', path: 'bposeats/android-app' },
+  HQZen: { id: 155, path: 'bposeats/hqzen.com' },
+  ApplyBPO: { id: 88, path: 'bposeats/applybpo.com' },
+  Backend: { id: 23, path: 'bposeats/bposeats' },
+  Desktop: { id: 123, path: 'bposeats/bposeats-desktop' },
+  Ministry: { id: 141, path: 'bposeats/ministry-vuejs' },
+  Scalema: { id: 147, path: 'bposeats/scalema.com' },
+  'BPOSeats.com': { id: 89, path: 'bposeats/bposeats.com' },
+  Android: { id: 124, path: 'bposeats/android-app' },
 };
 
 function loadServiceAccount() {
@@ -70,22 +70,22 @@ async function clearTargetColumns(authClient) {
 
 async function fetchAdditionalDataForIssue(issue) {
   const issueId = issue[1]; // Assuming the issue ID is in the second column (D)
-  const projectId = issue[11]; // Assuming the project ID is in the second column (N)
-
-  // Find the project configuration based on the project ID
-  const projectConfig = PROJECT_CONFIG[projectId];
+  const projectName = issue[11];
+  const projectConfig = PROJECT_CONFIG[projectName];
+  
   if (!projectConfig) {
-    console.error(`❌ Project configuration not found for project ID ${projectId}`);
+    console.error(`❌ Project configuration not found for project ${projectName}`);
     return ['', 'No', 'Unknown', ''];
   }
-
-  // Fetch comments for the issue
+  
+  // Use projectConfig.id when you call GitLab API:
+  const projectId = projectConfig.id;
+  
   const commentsResponse = await axios.get(
     `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`,
-    {
-      headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-    }
+    { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN } }
   );
+
 
   const comments = commentsResponse.data;
   let firstLgtmCommenter = '';
