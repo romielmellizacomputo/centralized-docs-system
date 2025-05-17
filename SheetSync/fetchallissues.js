@@ -1,9 +1,7 @@
 import { config } from 'dotenv';
+import { google } from 'googleapis';
 import axios from 'axios';
-import pLimit from 'p-limit';
-import { google } from 'googleapis'; // Ensure you have this import for Google Auth
 
-// Load environment variables
 config();
 
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SHEET_SYNC_SID', 'SHEET_SYNC_SAJ'];
@@ -29,7 +27,6 @@ const PROJECT_CONFIG = {
   124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
 };
 
-// Load service account credentials
 function loadServiceAccount() {
   if (process.env.GITHUB_ACTIONS && process.env.SHEET_SYNC_SAJ) {
     try {
@@ -51,7 +48,6 @@ const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-// Utility functions
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
@@ -67,22 +63,6 @@ function formatDate(dateString) {
   }).format(date);
 }
 
-// Limit the number of concurrent requests
-const limit = pLimit(5);
-
-// Fetch comments for issues
-async function fetchCommentsForIssues(projectId, issues) {
-  const commentPromises = issues.map(issue => 
-    limit(() => axios.get(`${GITLAB_URL}api/v4/projects/${projectId}/issues/${issue.iid}/notes`, {
-      headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-    }))
-  );
-  
-  const commentsResponses = await Promise.all(commentPromises);
-  return commentsResponses.map(response => response.data);
-}
-
-// Fetch issues for a project
 async function fetchIssuesForProject(projectId, config) {
   let page = 1;
   let issues = [];
@@ -96,38 +76,71 @@ async function fetchIssuesForProject(projectId, config) {
       }
     );
 
-    if (response.data.length === 0) break; // No more issues to fetch
+    if (response.status !== 200) {
+      console.error(`❌ Failed to fetch page ${page} for ${config.name}`);
+      break;
+    }
 
-    issues = issues.concat(response.data);
+    const fetchedIssues = response.data;
+    if (fetchedIssues.length === 0) break;
+
+    // Collect issue IDs for batch comment fetching
+    const issueIds = fetchedIssues.map(issue => issue.iid);
+    const commentsResponses = await Promise.all(
+      issueIds.map(issueId =>
+        axios.get(`${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`, {
+          headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+        }).catch(err => ({ data: [] })) // Handle errors gracefully
+      )
+    );
+
+    for (let i = 0; i < fetchedIssues.length; i++) {
+      const issue = fetchedIssues[i];
+      const comments = commentsResponses[i].data;
+
+      // Find first LGTM commenter
+      const firstLgtmCommenter = comments.find(comment => comment.body.includes('LGTM'))?.author.name || 'Unknown';
+      
+      // Check if the issue was reopened
+      const reopenedStatus = issue.state === 'reopened' ? 'Yes' : 'No';
+      const lastReopenedBy = reopenedStatus === 'Yes' ? issue.reopened_by?.name || 'Unknown' : 'Unknown';
+
+      // Prepare labels
+      const labels = (issue.labels || []).map(label => {
+        if (label === 'Bug-issue') return 'Bug Issue';
+        if (label === 'Usability Suggestions') return 'Usability Suggestion';
+        return label;
+      }).join(', ');
+
+      const issueData = [
+        issue.id ?? '',
+        issue.iid ?? '',
+        issue.title && issue.web_url
+          ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
+          : 'No Title',
+        issue.author?.name ?? 'Unknown Author',
+        issue.assignee?.name ?? 'Unassigned',
+        labels,
+        issue.milestone?.title ?? 'No Milestone',
+        capitalize(issue.state ?? ''),
+        issue.created_at ? formatDate(issue.created_at) : '',
+        issue.closed_at ? formatDate(issue.closed_at) : '',
+        issue.closed_by?.name ?? '',
+        config.name,
+        firstLgtmCommenter,
+        reopenedStatus,
+        lastReopenedBy
+      ];
+
+      issues.push(issueData);
+    }
+
+    console.log(`✅ Page ${page} fetched (${fetchedIssues.length} issues) for ${config.name}`);
     page++;
   }
 
-  // Fetch comments for all issues
-  const comments = await fetchCommentsForIssues(projectId, issues);
-  return { issues, comments };
+  return issues;
 }
-
-// Main function
-async function main() {
-  for (const [projectId, config] of Object.entries(PROJECT_CONFIG)) {
-    try {
-      const { issues, comments } = await fetchIssuesForProject(projectId, config);
-      
-      // Process issues and comments as needed
-      console.log(`🔍 Fetched ${issues.length} issues and ${comments.flat().length} comments for ${config.name}.`);
-    } catch (error) {
-      console.error(`❌ Error fetching data for project ${config.name}:`, error);
-    }
-  }
-}
-
-// Execute main function
-main().catch(error => {
-  console.error('❌ An error occurred:', error);
-  process.exit(1);
-});
-
-
 
 async function fetchAndUpdateIssuesForAllProjects() {
   const authClient = await auth.getClient();
@@ -135,69 +148,23 @@ async function fetchAndUpdateIssuesForAllProjects() {
 
   console.log('🔄 Fetching issues for all projects...');
 
-  // Fetch issues for all projects
   const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (projectId) => {
     const config = PROJECT_CONFIG[projectId];
     return fetchIssuesForProject(projectId, config);
   });
 
-  const allIssuesResults = await Promise.all(issuesPromises);
-  const allIssues = allIssuesResults.flat();
+  const allIssuesResults = await Promise.allSettled(issuesPromises);
+  const allIssues = allIssuesResults.flatMap(result => result.status === 'fulfilled' ? result.value : []);
 
-  // Fetch comments for all issues in parallel
-  const comments = await fetchCommentsForIssues(allIssues.map(issue => issue.project_id), allIssues);
-
-  const processedIssues = allIssues.map((issue, index) => {
-    let firstLgtmCommenter = 'Unknown';
-    let lastReopenedBy = 'Unknown';
-    let reopenedStatus = 'No';
-
-    comments[index].forEach(comment => {
-      if (comment.body.includes('LGTM') && firstLgtmCommenter === 'Unknown') {
-        firstLgtmCommenter = comment.author.name;
-      }
-    });
-
-    if (issue.state === 'reopened') {
-      reopenedStatus = 'Yes';
-      lastReopenedBy = issue.reopened_by?.name ?? 'Unknown';
-    }
-
-    const labels = (issue.labels || []).map(label => {
-      if (label === 'Bug-issue') return 'Bug Issue';
-      if (label === 'Usability Suggestions') return 'Usability Suggestion';
-      return label;
-    }).join(', ');
-
-    return [
-      issue.id ?? '',
-      issue.iid ?? '',
-      issue.title && issue.web_url
-        ? `=HYPERLINK("${issue.web_url}", "${issue.title.replace(/"/g, '""')}")`
-        : 'No Title',
-      issue.author?.name ?? 'Unknown Author',
-      issue.assignee?.name ?? 'Unassigned',
-      labels,
-      issue.milestone?.title ?? 'No Milestone',
-      capitalize(issue.state ?? ''),
-      issue.created_at ? formatDate(issue.created_at) : '',
-      issue.closed_at ? formatDate(issue.closed_at) : '',
-      issue.closed_by?.name ?? '',
-      PROJECT_CONFIG[issue.project_id]?.name ?? 'Unknown Project',
-      firstLgtmCommenter,
-      reopenedStatus,
-      lastReopenedBy
-    ];
-  });
-
-  if (processedIssues.length > 0) {
-    const safeRows = processedIssues.map(row =>
-      row.map(cell =>
+  if (allIssues.length > 0) {
+    const safeRows = allIssues.map((row) =>
+      row.map((cell) =>
         cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)
       )
     );
 
     try {
+      // Overwrite the target sheet starting from C4
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_SYNC_SID,
         range: 'ALL ISSUES!C4',
