@@ -72,7 +72,7 @@ function formatDate(dateString) {
 }
 
 async function fetchAdditionalDataForIssue(issue) {
-  const issueIdRaw = issue[0]; // Column C
+  const issueIdRaw = issue[1]; // Column D
   const projectNameRaw = issue[11]; // Column N
 
   const issueId = normalizeId(issueIdRaw);
