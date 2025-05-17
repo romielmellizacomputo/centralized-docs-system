@@ -60,16 +60,6 @@ async function fetchIssuesFromSheet(authClient) {
   return response.data.values || [];
 }
 
-async function clearTargetColumns(authClient) {
-  console.log('⏳ Clearing target columns O:R...');
-  const sheets = google.sheets({ version: 'v4', auth: authClient });
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: SHEET_SYNC_SID,
-    range: 'ALL ISSUES!O4:R',
-  });
-  console.log('✅ Cleared target columns');
-}
-
 async function fetchAdditionalDataForIssue(issue) {
   const issueId = issue[1]; // Assuming the issue ID is in the second column (D)
   const projectName = issue[11];
@@ -113,37 +103,31 @@ async function fetchAdditionalDataForIssue(issue) {
   }
 }
 
-async function updateSheet(authClient, rows) {
-  console.log('⏳ Updating sheet with fetched data...');
+async function updateSheet(authClient, startRow, rows) {
+  console.log(`⏳ Updating sheet rows O${startRow}:R${startRow + rows.length - 1} with fetched data...`);
   const sheets = google.sheets({ version: 'v4', auth: authClient });
-  // Prepare the data in the range O4:R
-  // Assuming rows.length matches the number of issues, and each row is an array of length 4
   const resource = {
     values: rows,
   };
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_SYNC_SID,
-    range: `ALL ISSUES!O4:R${rows.length + 3}`, // 4th row is the first data row, so offset by 3
+    range: `ALL ISSUES!O${startRow}:R${startRow + rows.length - 1}`,
     valueInputOption: 'RAW',
     resource,
   });
   console.log('✅ Sheet updated');
 }
 
-async function main() {
-  const authClient = await auth.getClient();
-  await clearTargetColumns(authClient);
-  const issues = await fetchIssuesFromSheet(authClient);
-
-  const limit = pLimit(5); // Limit concurrency to 5 requests at a time
-  console.log(`⏳ Processing ${issues.length} issues with concurrency limit 5`);
+async function processBatch(authClient, issuesBatch, batchStartIndex) {
+  const limit = pLimit(5); // concurrency limit 5
+  console.log(`⏳ Processing batch of ${issuesBatch.length} issues starting at row ${batchStartIndex + 4}...`);
 
   const results = await Promise.allSettled(
-    issues.map((issue, index) =>
+    issuesBatch.map((issue, index) =>
       limit(async () => {
-        console.log(`🛠️ Processing issue ${index + 1}/${issues.length} (ID: ${issue[1]})`);
+        console.log(`🛠️ Processing issue ${batchStartIndex + index + 1} (ID: ${issue[1]})`);
         const data = await fetchAdditionalDataForIssue(issue);
-        console.log(`✅ Completed issue ${index + 1} (ID: ${issue[1]})`);
+        console.log(`✅ Completed issue ${batchStartIndex + index + 1} (ID: ${issue[1]})`);
         return data;
       })
     )
@@ -152,11 +136,23 @@ async function main() {
   // Map results to data rows, default to empty arrays on failure
   const rows = results.map((res, i) => {
     if (res.status === 'fulfilled') return res.value;
-    console.error(`❌ Failed to fetch data for issue ${i + 1}`, res.reason);
+    console.error(`❌ Failed to fetch data for issue ${batchStartIndex + i + 1}`, res.reason);
     return ['', 'Error', 'Error', 'Error'];
   });
 
-  await updateSheet(authClient, rows);
+  // Update the sheet for this batch, adjusting the startRow for the spreadsheet
+  await updateSheet(authClient, batchStartIndex + 4, rows);
+}
+
+async function main() {
+  const authClient = await auth.getClient();
+  const issues = await fetchIssuesFromSheet(authClient);
+
+  const batchSize = 1000;
+  for (let i = 0; i < issues.length; i += batchSize) {
+    const batch = issues.slice(i, i + batchSize);
+    await processBatch(authClient, batch, i);
+  }
 }
 
 main().catch((error) => {
