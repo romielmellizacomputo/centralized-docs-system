@@ -113,10 +113,12 @@ async function fetchAndUpdateIssuesForAllProjects() {
   console.log('🔄 Fetching issues for all projects...');
 
   // Fetch all new data first
-  const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (projectId) => {
-    const config = PROJECT_CONFIG[projectId];
+  const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (key) => {
+    const config = PROJECT_CONFIG[key];
+    const projectId = config.id;
     return fetchIssuesForProject(projectId, config);
   });
+
 
   const allIssuesResults = await Promise.all(issuesPromises);
   const allIssues = allIssuesResults.flat();
