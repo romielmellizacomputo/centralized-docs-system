@@ -60,7 +60,8 @@ function formatDate(dateString) {
 async function fetchIssuesForProject(projectId, config) {
   let page = 1;
   let issues = [];
-  console.log(`🔄 Fetching issues for project ID ${projectId}...`);
+  // Log the project name from the config object
+  console.log(`🔄 Fetching issues for project ID ${projectId} (${config.name})...`);
 
   while (true) {
     const response = await axios.get(
@@ -115,10 +116,11 @@ async function fetchAndUpdateIssuesForAllProjects() {
   // Fetch all new data first
   const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (key) => {
     const config = PROJECT_CONFIG[key];
+    // Add the name property here explicitly so config.name exists
+    config.name = key;
     const projectId = config.id;
     return fetchIssuesForProject(projectId, config);
   });
-
 
   const allIssuesResults = await Promise.all(issuesPromises);
   const allIssues = allIssuesResults.flat();
@@ -128,9 +130,6 @@ async function fetchAndUpdateIssuesForAllProjects() {
     return;
   }
 
-  // Step 1: Read existing data starting at row 4, columns C(3) to N(14) (to get ID, IID, Project)
-  // We'll read enough columns to update all data (columns C to N or beyond depending on data shape)
-  // Your data array length is 12 columns, indexes 0 to 11; columns C to N = 12 columns exactly
   const readRange = 'ALL ISSUES!C4:N';
 
   const existingResponse = await sheets.spreadsheets.values.get({
@@ -139,26 +138,16 @@ async function fetchAndUpdateIssuesForAllProjects() {
   });
 
   const existingValues = existingResponse.data.values || [];
-  // existingValues[0] corresponds to row 4
 
-  // Map existing rows by composite key "ID|IID|Project"
-  // Columns: ID in C (index 0), IID in D (1), Project in N (11)
-  // If any cell is missing, treat as empty string
   const existingMap = new Map();
   existingValues.forEach((row, i) => {
     const id = row[0] ? String(row[0]) : '';
     const iid = row[1] ? String(row[1]) : '';
     const project = row[11] ? String(row[11]) : '';
     const key = `${id}|${iid}|${project}`;
-    existingMap.set(key, i); // i = zero-based index of row in sheet starting at row 4
+    existingMap.set(key, i);
   });
 
-  // Step 2: Prepare batch updates and new inserts
-  // Each issueData = array with 12 columns: [ID, IID, Title(Hyperlink), Author, Assignee, Labels, Milestone, State, Created_at, Closed_at, Closed_by, Project]
-
-  // We'll build two lists:
-  // - updates: { rowIndex (sheet row number), values }
-  // - inserts: [values]
   const updates = [];
   const inserts = [];
 
@@ -169,18 +158,13 @@ async function fetchAndUpdateIssuesForAllProjects() {
     const key = `${id}|${iid}|${project}`;
 
     if (existingMap.has(key)) {
-      // update existing row
       const zeroBasedIndex = existingMap.get(key);
-      const sheetRowNumber = zeroBasedIndex + 4; // since existingValues[0] is row 4
+      const sheetRowNumber = zeroBasedIndex + 4;
       updates.push({ row: sheetRowNumber, values: issueData });
     } else {
-      // new data, insert below row 3 (means insert at row 4 always, shifting existing rows down)
       inserts.push(issueData);
     }
   });
-
-  // Step 3: Execute updates by batch updating each row in place
-  // We will send multiple update requests, one per row, or batch if possible
 
   const batchUpdateRequests = updates.map((update) => {
     return {
@@ -190,14 +174,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
   });
 
   try {
-    // 1) Batch update existing rows
     if (batchUpdateRequests.length > 0) {
-      // The Sheets API v4 batchUpdate for values is called `batchUpdate` or `batchUpdateValues`?
-
-      // Actually, Google Sheets API v4 has `batchUpdate` for sheet operations and
-      // `batchUpdate` for values is called `batchUpdate` through `spreadsheets.values.batchUpdate`
-
-      // Prepare the batch update request
       await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: SHEET_SYNC_SID,
         requestBody: {
@@ -211,14 +188,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
       console.log('ℹ️ No existing issues to update.');
     }
 
-    // 2) Insert new rows below row 3, and then write the new data in those rows
-    // Insert rows below row 3 (which is index 3, zero-based)
-
     if (inserts.length > 0) {
-      // Insert rows: number of inserts = inserts.length
-      // The Sheets API `insertDimension` request:
-      // Insert rows at index 3 (row 4), count = inserts.length
-
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: SHEET_SYNC_SID,
         requestBody: {
@@ -238,7 +208,6 @@ async function fetchAndUpdateIssuesForAllProjects() {
         },
       });
 
-      // Now write the inserted rows data starting at C4 (column 3), row 4
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_SYNC_SID,
         range: `ALL ISSUES!C4`,
@@ -257,7 +226,6 @@ async function fetchAndUpdateIssuesForAllProjects() {
   }
 }
 
-// Helper function to get sheetId by sheet name (needed for insertDimension)
 async function getSheetIdByName(sheets, spreadsheetId, sheetName) {
   const meta = await sheets.spreadsheets.get({
     spreadsheetId,
