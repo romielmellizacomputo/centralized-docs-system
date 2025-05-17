@@ -60,7 +60,7 @@ function formatDate(dateString) {
 async function fetchIssuesForProject(projectId, config) {
   let page = 1;
   let issues = [];
-  console.log(`🔄 Fetching issues for ${config.name}...`);
+  console.log(`🔄 Fetching issues for project ID ${projectId}...`);
 
   while (true) {
     const response = await axios.get(
