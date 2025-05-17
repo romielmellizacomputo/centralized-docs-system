@@ -1,6 +1,4 @@
 import { google } from 'googleapis';
-
-import { google } from 'googleapis';
 import {
   UTILS_SHEET_ID,
   G_MILESTONES,
