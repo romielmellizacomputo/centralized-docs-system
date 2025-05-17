@@ -68,11 +68,16 @@ function formatDate(dateString) {
   }).format(date);
 }
 
+import dotenv from 'dotenv';
+import { google } from 'googleapis';
+import axios from 'axios';
+import auth from './auth.js'; // ensure your auth client setup is correct
+
+dotenv.config();
+
 async function fetchMRsForProject(projectId, config) {
   let page = 1;
   const allProjectMRs = [];
-
-  console.log(`🔄 Fetching merge requests for ${config.name}...`);
 
   while (true) {
     try {
@@ -143,28 +148,55 @@ async function fetchAndReplaceAllMRs() {
       })
     );
 
-  if (allMRs.length > 0) {
-    try {
-      console.log('🧹 Clearing existing MR data in sheet...');
-      await sheets.spreadsheets.values.clear({
-        spreadsheetId: SHEET_SYNC_SID,
-        range: 'ALL MRs!C4:O',
-      });
+  try {
+    console.log('📥 Reading existing MR data...');
+    const existingRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_SYNC_SID,
+      range: 'ALL MRs!C4:O',
+    });
 
-      console.log(`📤 Inserting ${allMRs.length} MRs into the sheet...`);
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_SYNC_SID,
-        range: 'ALL MRs!C4',
-        valueInputOption: 'USER_ENTERED',
-        resource: { values: cleanData(allMRs) },
-      });
+    const existingRows = existingRes.data.values || [];
+    const updatedRows = [...existingRows];
+    const headerOffset = 4; // C4 = row index 4 (1-based)
 
-      console.log(`✅ Inserted ${allMRs.length} merge requests successfully.`);
-    } catch (err) {
-      console.error('❌ Error inserting data into sheet:', err.stack || err.message);
+    const matchedIndices = new Set();
+
+    for (const newRow of allMRs) {
+      const [id, iid, , , , , , , , , , , project] = newRow;
+      let found = false;
+
+      for (let i = 0; i < updatedRows.length; i++) {
+        const existingRow = updatedRows[i];
+        const existingId = existingRow[0];
+        const existingIid = existingRow[1];
+        const existingProject = existingRow[12];
+
+        if (existingId == id && existingIid == iid && existingProject == project) {
+          updatedRows[i] = newRow;
+          matchedIndices.add(i);
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
+        updatedRows.splice(0, 0, newRow); // insert after row 3
+      }
     }
-  } else {
-    console.log('⚠️ No merge requests found. Sheet was not cleared.');
+
+    console.log(`📤 Updating sheet with ${updatedRows.length} total rows...`);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_SYNC_SID,
+      range: 'ALL MRs!C4',
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: cleanData(updatedRows),
+      },
+    });
+
+    console.log(`✅ Merge request data updated successfully.`);
+  } catch (err) {
+    console.error('❌ Error reading or updating data:', err.stack || err.message);
   }
 }
 
