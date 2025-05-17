@@ -27,6 +27,11 @@ jobs:
 
       - name: Run fetchallissues.js
         id: fetch_issues
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}  # Google Sheet ID
+          SHEET_SYNC_SAJ: ${{ secrets.SHEET_SYNC_SAJ }}  # Google Sheets API service account key
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}  # GitLab URL secret
         run: |
           cd SheetSync
           # Run the script and output to both the console and output.log
