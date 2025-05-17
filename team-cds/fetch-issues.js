@@ -1,12 +1,14 @@
 import { google } from 'googleapis';
 
-const UTILS_SHEET_ID = process.env.LEADS_CDS_SID;
-const G_MILESTONES = 'G-Milestones';
-const G_ISSUES_SHEET = 'G-Issues';
-const DASHBOARD_SHEET = 'Dashboard';
-
-const CENTRAL_ISSUE_SHEET_ID = process.env.SHEET_SYNC_SID;
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:U';
+import { google } from 'googleapis';
+import {
+  UTILS_SHEET_ID,
+  G_MILESTONES,
+  G_ISSUES_SHEET,
+  DASHBOARD_SHEET,
+  CENTRAL_ISSUE_SHEET_ID,
+  ALL_ISSUES_RANGE,
+} from '../constants.js';
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
