@@ -15,6 +15,17 @@ export const G_MR_SHEET = 'G-MR';
 export const NTC_SHEET = 'NTC';
 
 // Platform & Database
+import { config } from 'dotenv';
+config();
+
+const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SHEET_SYNC_SID', 'SHEET_SYNC_SAJ', 'PROJECT_CONFIG'];
+requiredEnv.forEach((key) => {
+  if (!process.env[key]) {
+    console.error(`❌ Missing required environment variable: ${key}`);
+    process.exit(1);
+  }
+});
+
 export const GITLAB_URL = process.env.GITLAB_URL.endsWith('/')
   ? process.env.GITLAB_URL
   : process.env.GITLAB_URL + '/';
@@ -22,4 +33,21 @@ export const GITLAB_URL = process.env.GITLAB_URL.endsWith('/')
 export const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 export const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
 
-export const PROJECT_CONFIG = JSON.parse(process.env.PROJECT_CONFIG);
+export const PROJECT_CONFIG = (() => {
+  try {
+    return JSON.parse(process.env.PROJECT_CONFIG);
+  } catch (err) {
+    console.error('❌ Failed to parse PROJECT_CONFIG JSON from environment variable:', err);
+    process.exit(1);
+  }
+})();
+
+export function loadServiceAccount() {
+  try {
+    return JSON.parse(process.env.SHEET_SYNC_SAJ);
+  } catch (err) {
+    console.error('❌ Error parsing service account JSON:', err.message);
+    process.exit(1);
+  }
+}
+
