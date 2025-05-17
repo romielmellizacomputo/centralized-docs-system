@@ -78,9 +78,12 @@ async function fetchAdditionalDataForIssues(issues) {
   const additionalData = [];
 
   for (const issue of issues) {
-    const issueId = issue[0]; // Assuming the issue ID is in the first column (index 0)
-    const projectName = issue[12]; // Assuming the project name is in column N (index 12)
-    
+    // Debug log to see the structure of the issue
+    console.log('Issue:', issue);
+
+    const issueId = issue.id; // Assuming the issue ID is available directly
+    const projectName = issue.project_id; // Assuming the project ID is available directly
+
     // Find the project ID based on the project name
     const projectId = Object.keys(PROJECT_CONFIG).find(id => PROJECT_CONFIG[id].name === projectName);
     if (!projectId) {
@@ -146,9 +149,18 @@ async function fetchAndUpdateIssuesForAllProjects() {
   const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (projectId) => {
     const config = PROJECT_CONFIG[projectId];
     const issues = await fetchIssuesForProject(projectId, config);
+    
+    // Debug log to see the fetched issues
+    console.log(`Fetched issues for project ${projectId}:`, issues);
+
     const additionalData = await fetchAdditionalDataForIssues(issues);
 
     // Combine the original issues with additional data
+    if (issues.length === 0) {
+      console.log(`ℹ️ No issues found for project ${projectId}.`);
+      return;
+    }
+
     const combinedData = issues.map((issue, index) => [...issue, ...additionalData[index]]);
 
     if (combinedData.length > 0) {
