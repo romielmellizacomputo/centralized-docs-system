@@ -118,6 +118,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
 
   console.log('🔄 Fetching issues for all projects...');
 
+  // Fetch all new data first
   const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (projectId) => {
     const config = PROJECT_CONFIG[projectId];
     return fetchIssuesForProject(projectId, config);
@@ -126,35 +127,151 @@ async function fetchAndUpdateIssuesForAllProjects() {
   const allIssuesResults = await Promise.all(issuesPromises);
   const allIssues = allIssuesResults.flat();
 
-  if (allIssues.length > 0) {
-    const safeRows = allIssues.map((row) =>
-      row.map((cell) =>
-        cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)
-      )
-    );
+  if (allIssues.length === 0) {
+    console.log('ℹ️ No issues to insert or update.');
+    return;
+  }
 
-    try {
-      // Clear the target range from C4 to R (to avoid affecting other columns)
-      await sheets.spreadsheets.values.clear({
+  // Step 1: Read existing data starting at row 4, columns C(3) to N(14) (to get ID, IID, Project)
+  // We'll read enough columns to update all data (columns C to N or beyond depending on data shape)
+  // Your data array length is 12 columns, indexes 0 to 11; columns C to N = 12 columns exactly
+  const readRange = 'ALL ISSUES!C4:N';
+
+  const existingResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_SYNC_SID,
+    range: readRange,
+  });
+
+  const existingValues = existingResponse.data.values || [];
+  // existingValues[0] corresponds to row 4
+
+  // Map existing rows by composite key "ID|IID|Project"
+  // Columns: ID in C (index 0), IID in D (1), Project in N (11)
+  // If any cell is missing, treat as empty string
+  const existingMap = new Map();
+  existingValues.forEach((row, i) => {
+    const id = row[0] ? String(row[0]) : '';
+    const iid = row[1] ? String(row[1]) : '';
+    const project = row[11] ? String(row[11]) : '';
+    const key = `${id}|${iid}|${project}`;
+    existingMap.set(key, i); // i = zero-based index of row in sheet starting at row 4
+  });
+
+  // Step 2: Prepare batch updates and new inserts
+  // Each issueData = array with 12 columns: [ID, IID, Title(Hyperlink), Author, Assignee, Labels, Milestone, State, Created_at, Closed_at, Closed_by, Project]
+
+  // We'll build two lists:
+  // - updates: { rowIndex (sheet row number), values }
+  // - inserts: [values]
+  const updates = [];
+  const inserts = [];
+
+  allIssues.forEach((issueData) => {
+    const id = String(issueData[0] ?? '');
+    const iid = String(issueData[1] ?? '');
+    const project = String(issueData[11] ?? '');
+    const key = `${id}|${iid}|${project}`;
+
+    if (existingMap.has(key)) {
+      // update existing row
+      const zeroBasedIndex = existingMap.get(key);
+      const sheetRowNumber = zeroBasedIndex + 4; // since existingValues[0] is row 4
+      updates.push({ row: sheetRowNumber, values: issueData });
+    } else {
+      // new data, insert below row 3 (means insert at row 4 always, shifting existing rows down)
+      inserts.push(issueData);
+    }
+  });
+
+  // Step 3: Execute updates by batch updating each row in place
+  // We will send multiple update requests, one per row, or batch if possible
+
+  const batchUpdateRequests = updates.map((update) => {
+    return {
+      range: `ALL ISSUES!C${update.row}:N${update.row}`,
+      values: [update.values],
+    };
+  });
+
+  try {
+    // 1) Batch update existing rows
+    if (batchUpdateRequests.length > 0) {
+      // The Sheets API v4 batchUpdate for values is called `batchUpdate` or `batchUpdateValues`?
+
+      // Actually, Google Sheets API v4 has `batchUpdate` for sheet operations and
+      // `batchUpdate` for values is called `batchUpdate` through `spreadsheets.values.batchUpdate`
+
+      // Prepare the batch update request
+      await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: SHEET_SYNC_SID,
-        range: 'ALL ISSUES!C4:R',
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: batchUpdateRequests,
+        },
       });
 
-      // Overwrite the target sheet starting from C4
+      console.log(`✅ Updated ${batchUpdateRequests.length} existing issues.`);
+    } else {
+      console.log('ℹ️ No existing issues to update.');
+    }
+
+    // 2) Insert new rows below row 3, and then write the new data in those rows
+    // Insert rows below row 3 (which is index 3, zero-based)
+
+    if (inserts.length > 0) {
+      // Insert rows: number of inserts = inserts.length
+      // The Sheets API `insertDimension` request:
+      // Insert rows at index 3 (row 4), count = inserts.length
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SHEET_SYNC_SID,
+        requestBody: {
+          requests: [
+            {
+              insertDimension: {
+                range: {
+                  sheetId: await getSheetIdByName(sheets, SHEET_SYNC_SID, 'ALL ISSUES'),
+                  dimension: 'ROWS',
+                  startIndex: 3,
+                  endIndex: 3 + inserts.length,
+                },
+                inheritFromBefore: false,
+              },
+            },
+          ],
+        },
+      });
+
+      // Now write the inserted rows data starting at C4 (column 3), row 4
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_SYNC_SID,
-        range: 'ALL ISSUES!C4',
+        range: `ALL ISSUES!C4`,
         valueInputOption: 'USER_ENTERED',
-        resource: { values: safeRows },
+        resource: {
+          values: inserts,
+        },
       });
 
-      console.log(`✅ Cleared and inserted ${safeRows.length} issues.`);
-    } catch (err) {
-      console.error('❌ Error writing to sheet:', err.stack || err.message);
+      console.log(`✅ Inserted ${inserts.length} new issues.`);
+    } else {
+      console.log('ℹ️ No new issues to insert.');
     }
-  } else {
-    console.log('ℹ️ No issues to insert.');
+  } catch (err) {
+    console.error('❌ Error updating/inserting rows:', err.stack || err.message);
   }
+}
+
+// Helper function to get sheetId by sheet name (needed for insertDimension)
+async function getSheetIdByName(sheets, spreadsheetId, sheetName) {
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId,
+    includeGridData: false,
+  });
+  const sheet = meta.data.sheets.find((s) => s.properties.title === sheetName);
+  if (!sheet) {
+    throw new Error(`Sheet with name "${sheetName}" not found`);
+  }
+  return sheet.properties.sheetId;
 }
 
 fetchAndUpdateIssuesForAllProjects();
