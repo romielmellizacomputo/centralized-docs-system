@@ -80,17 +80,43 @@ async function insertDataToGIssues(sheets, sheetId, data) {
 
 async function updateTimestamp(sheets, sheetId) {
   const now = new Date();
-  const timeZoneEAT = 'Africa/Nairobi';
-  const timeZonePHT = 'Asia/Manila';
+  const timeZoneEAT = 'Africa/Nairobi'; // East Africa Time
+  const timeZonePHT = 'Asia/Manila';    // Philippine Time
 
-  const optionsDate = { year: 'numeric', month: 'long', day: 'numeric' };
-  const optionsTime = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+  const optionsDate = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  };
 
-  const formattedDate = now.toLocaleDateString('en-US', optionsDate);
-  const formattedEAT = new Intl.DateTimeFormat('en-US', { ...optionsTime, timeZone: timeZoneEAT }).format(now);
-  const formattedPHT = new Intl.DateTimeFormat('en-US', { ...optionsTime, timeZone: timeZonePHT }).format(now);
+  const optionsTime = {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  };
 
-  const formatted = `Sync on ${formattedDate}, ${formattedEAT} (EAT) / ${formattedDate}, ${formattedPHT} (PHT)`;
+  const formattedDateEAT = new Intl.DateTimeFormat('en-US', {
+    ...optionsDate,
+    timeZone: timeZoneEAT
+  }).format(now);
+
+  const formattedDatePHT = new Intl.DateTimeFormat('en-US', {
+    ...optionsDate,
+    timeZone: timeZonePHT
+  }).format(now);
+
+  const formattedEAT = new Intl.DateTimeFormat('en-US', {
+    ...optionsTime,
+    timeZone: timeZoneEAT
+  }).format(now);
+
+  const formattedPHT = new Intl.DateTimeFormat('en-US', {
+    ...optionsTime,
+    timeZone: timeZonePHT
+  }).format(now);
+
+  const formatted = `Sync on ${formattedDateEAT}, ${formattedEAT} (EAT) / ${formattedDatePHT}, ${formattedPHT} (PHT)`;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
@@ -99,6 +125,7 @@ async function updateTimestamp(sheets, sheetId) {
     requestBody: { values: [[formatted]] },
   });
 }
+
 
 async function main() {
   try {
