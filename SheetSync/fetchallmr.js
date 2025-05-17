@@ -194,5 +194,8 @@ async function fetchAndReplaceAllMRs() {
   }
 }
 
-// Run
-fetchAndReplaceAllMRs();
+(async () => {
+  console.log('🚀 Starting MR sync script...');
+  await fetchAndReplaceAllMRs();
+  console.log('✅ Finished one full run of MR sync.');
+})();
