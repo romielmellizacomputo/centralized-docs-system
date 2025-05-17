@@ -62,7 +62,7 @@ async function fetchIssuesFromSheet() {
 
 async function fetchAdditionalDataForIssue(issue) {
   const issueId = issue[0]; // Assuming the issue ID is in the first column (C)
-  const projectId = issue[1]; // Assuming the project ID is in the second column (D)
+  const projectId = issue[1]; // Change this if the project ID is in a different column
 
   // Find the project configuration based on the project ID
   const projectConfig = PROJECT_CONFIG[projectId];
