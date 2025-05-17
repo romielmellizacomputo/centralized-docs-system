@@ -12,7 +12,7 @@ requiredEnv.forEach((key) => {
   }
 });
 
-const GITLAB_URL = process.env.GITLAB_URL;
+const GITLAB_URL = process.env.GITLAB_URL.endsWith('/') ? process.env.GITLAB_URL : process.env.GITLAB_URL + '/';
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
 
@@ -63,20 +63,28 @@ async function fetchMRsForProject(projectId, config) {
   console.log(`🔄 Fetching MRs for ${config.name}...`);
 
   while (true) {
-    const response = await axios.get(
-      `${GITLAB_URL}api/v4/projects/${projectId}/merge_requests?state=all&per_page=100&page=${page}`,
-      {
+    const url = `${GITLAB_URL}api/v4/projects/${projectId}/merge_requests?state=all&per_page=100&page=${page}`;
+    let response;
+
+    try {
+      response = await axios.get(url, {
         headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-      }
-    );
+      });
+    } catch (error) {
+      console.error(`❌ Error fetching MRs for ${config.name} page ${page}:`, error.message);
+      break; // Stop on error
+    }
 
     if (response.status !== 200) {
-      console.error(`❌ Failed to fetch MRs for ${config.name} (page ${page})`);
+      console.error(`❌ Failed to fetch MRs for ${config.name} (page ${page}), status: ${response.status}`);
       break;
     }
 
     const fetchedMRs = response.data;
-    if (fetchedMRs.length === 0) break;
+    if (fetchedMRs.length === 0) {
+      // No more pages
+      break;
+    }
 
     for (const mr of fetchedMRs) {
       const reviewers = (mr.reviewers || []).map(r => r.name).join(', ') || 'Unassigned';
@@ -101,7 +109,13 @@ async function fetchMRsForProject(projectId, config) {
     }
 
     console.log(`✅ Page ${page} fetched (${fetchedMRs.length} MRs) for ${config.name}`);
-    page++;
+
+    // Use x-next-page header to decide if continue or stop
+    const nextPage = response.headers['x-next-page'];
+    if (!nextPage) break;
+
+    page = parseInt(nextPage, 10);
+    if (isNaN(page) || page === 0) break;
   }
 
   return mrs;
@@ -178,6 +192,7 @@ async function fetchAndUpdateMRsForAllProjects() {
     }
 
     if (inserts.length > 0) {
+      // Insert rows before updating values
       await sheets.spreadsheets.batchUpdate({
         spreadsheetId: SHEET_SYNC_SID,
         requestBody: {
@@ -187,7 +202,7 @@ async function fetchAndUpdateMRsForAllProjects() {
                 range: {
                   sheetId: await getSheetIdByName(sheets, SHEET_SYNC_SID, 'ALL MRs'),
                   dimension: 'ROWS',
-                  startIndex: 3,
+                  startIndex: 3, // Index is zero-based, row 4 = index 3
                   endIndex: 3 + inserts.length,
                 },
                 inheritFromBefore: false,
