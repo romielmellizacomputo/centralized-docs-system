@@ -72,19 +72,21 @@ def insert_data_to_ntc_sheet(sheets, sheet_id, data):
     ).execute()
 
 def update_timestamp(sheets, sheet_id):
-    now = datetime.utcnow()
+    now_utc = datetime.utcnow().replace(tzinfo=pytz.utc)
 
     tz_eat = pytz.timezone('Africa/Nairobi')
     tz_pht = pytz.timezone('Asia/Manila')
 
-    now_eat = now.astimezone(tz_eat)
-    now_pht = now.astimezone(tz_pht)
+    now_eat = now_utc.astimezone(tz_eat)
+    now_pht = now_utc.astimezone(tz_pht)
 
-    date_str = now.strftime('%B %d, %Y')
+    date_eat = now_eat.strftime('%B %d, %Y')
     time_eat = now_eat.strftime('%I:%M:%S %p')
+
+    date_pht = now_pht.strftime('%B %d, %Y')
     time_pht = now_pht.strftime('%I:%M:%S %p')
 
-    formatted = f"Sync on {date_str}, {time_eat} (EAT) / {date_str}, {time_pht} (PHT)"
+    formatted = f"Sync on {date_eat}, {time_eat} (EAT) / {date_pht}, {time_pht} (PHT)"
 
     sheets.spreadsheets().values().update(
         spreadsheetId=sheet_id,
