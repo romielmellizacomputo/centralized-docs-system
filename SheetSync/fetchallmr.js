@@ -57,6 +57,36 @@ function formatDate(dateString) {
   }).format(new Date(dateString));
 }
 
+async function logToSheet(jobNumber, totalUpdates, totalInserts, status) {
+  const date = new Date().toLocaleString('en-US', {
+    timeZone: 'Asia/Manila', // Adjust to your timezone
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const rowData = [[date, jobNumber, totalUpdates, totalInserts, status]];
+
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_SYNC_SID,
+      range: 'Logs!B3', // Starting point for appending
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: rowData,
+      },
+    });
+    console.log(`✅ Logged to the Logs sheet: ${status}`);
+  } catch (err) {
+    console.error('❌ Error logging to the Logs sheet:', err.stack || err.message);
+  }
+}
+
+
 async function fetchMRsForProject(projectId, config) {
   let page = 1;
   let mrs = [];
@@ -225,8 +255,13 @@ async function fetchAndUpdateMRsForAllProjects() {
     } else {
       console.log('ℹ️ No new MRs to insert.');
     }
+
+    // Log the results
+    await logToSheet(projectId, updates.length, inserts.length, 'Done');
+    
   } catch (err) {
     console.error('❌ Error updating/inserting MRs:', err.stack || err.message);
+    await logToSheet(projectId, updates.length, inserts.length, 'Failed');
   }
 }
 
