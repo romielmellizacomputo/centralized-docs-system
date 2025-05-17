@@ -1,0 +1,31 @@
+name: Sheet Sync
+
+on:
+  workflow_dispatch: # Allows manual triggering of the workflow
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '18' # Specify the Node.js version you want to use
+
+      - name: Install dependencies
+        run: |
+          npm install
+          # If you have a package-lock.json, you can use `npm ci` instead
+
+      - name: Run additional data script
+        env:
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
+          SHEET_SYNC_SAJ: ${{ secrets.SHEET_SYNC_SAJ }}
+        run: |
+          node SheetSync/additional-data.js
