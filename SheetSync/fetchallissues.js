@@ -16,16 +16,13 @@ const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
 
-const PROJECT_CONFIG = {
-  155: { name: 'HQZen', sheet: 'HQZEN', path: 'bposeats/hqzen.com' },
-  88: { name: 'ApplyBPO', sheet: 'APPLYBPO', path: 'bposeats/applybpo.com' },
-  23: { name: 'Backend', sheet: 'BACKEND', path: 'bposeats/bposeats' },
-  123: { name: 'Desktop', sheet: 'DESKTOP', path: 'bposeats/bposeats-desktop' },
-  141: { name: 'Ministry', sheet: 'MINISTRY', path: 'bposeats/ministry-vuejs' },
-  147: { name: 'Scalema', sheet: 'SCALEMA', path: 'bposeats/scalema.com' },
-  89: { name: 'BPOSeats.com', sheet: 'BPOSEATS', path: 'bposeats/bposeats.com' },
-  124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
-};
+let PROJECT_CONFIG;
+try {
+  PROJECT_CONFIG = JSON.parse(process.env.PROJECT_CONFIG);
+} catch (err) {
+  console.error('❌ Failed to parse PROJECT_CONFIG JSON from environment variable:', err);
+  process.exit(1);
+}
 
 function loadServiceAccount() {
   if (process.env.GITHUB_ACTIONS && process.env.SHEET_SYNC_SAJ) {
