@@ -48,152 +48,100 @@ const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-function formatDate(dateString) {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(date);
-}
-
-async function fetchIssuesForProject(projectId) {
-  const response = await axios.get(
-    `${GITLAB_URL}api/v4/projects/${projectId}/issues`,
-    {
-      headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-      params: {
-        per_page: 100, // Adjust as needed
-        page: 1,
-      },
-    }
-  );
-
-  return response.data;
-}
-
-async function fetchAdditionalDataForIssues(issues) {
-  const additionalData = [];
-
-  for (const issue of issues) {
-    // Debug log to see the structure of the issue
-    console.log('Issue:', issue);
-
-    const issueId = issue.id; // Accessing the issue ID directly
-    const projectName = issue.project_id; // Change this line to access the correct project name
-
-    // Find the project ID based on the project name
-    const projectId = Object.keys(PROJECT_CONFIG).find(id => PROJECT_CONFIG[id].name === projectName);
-    if (!projectId) {
-      console.error(`❌ Project not found for issue ID ${issueId} with project name ${projectName}`);
-      additionalData.push(['', 'No', '', '']);
-      continue;
-    }
-
-    // Fetch comments for the issue
-    const commentsResponse = await axios.get(
-      `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`,
-      {
-        headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-      }
-    );
-
-    const comments = commentsResponse.data;
-    let firstLgtmCommenter = '';
-    let reopenedStatus = 'No';
-    let lastReopenedBy = '';
-    let lastReopenedAt = '';
-
-    // Process comments to find the required data
-    for (const comment of comments) {
-      if (firstLgtmCommenter === '' && comment.body.includes('LGTM')) {
-        firstLgtmCommenter = comment.author.name;
-      }
-    }
-
-    // Fetch the issue details to check reopened status
-    const issueResponse = await axios.get(
-      `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}`,
-      {
-        headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-      }
-    );
-
-    const issueDetails = issueResponse.data;
-
-    if (issueDetails.reopened_at) {
-      reopenedStatus = 'Yes';
-      lastReopenedBy = issueDetails.reopened_by?.name ?? 'Unknown';
-      lastReopenedAt = formatDate(issueDetails.reopened_at);
-    }
-
-    additionalData.push([
-      firstLgtmCommenter,
-      reopenedStatus,
-      lastReopenedBy,
-      lastReopenedAt,
-    ]);
-  }
-
-  return additionalData;
-}
-
-async function fetchAndUpdateIssuesForAllProjects() {
+async function fetchIssuesFromSheet() {
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  console.log('🔄 Fetching issues for all projects...');
-
-  const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (projectId) => {
-    const issues = await fetchIssuesForProject(projectId);
-    
-    // Debug log to see the fetched issues
-    console.log(`Fetched issues for project ${projectId}:`, issues);
-
-    const additionalData = await fetchAdditionalDataForIssues(issues);
-
-    // Combine the original issues with additional data
-    if (issues.length === 0) {
-      console.log(`ℹ️ No issues found for project ${projectId}.`);
-      return;
-    }
-
-    const combinedData = issues.map((issue, index) => [...issue, ...additionalData[index]]);
-
-    if (combinedData.length > 0) {
-      const safeRows = combinedData.map((row) =>
-        row.map((cell) =>
-          cell == null ? '' : typeof cell === 'object' ? JSON.stringify(cell) : String(cell)
-        )
-      );
-
-      try {
-        // Clear the target range from C4 to R (to avoid affecting other columns)
-        await sheets.spreadsheets.values.clear({
-          spreadsheetId: SHEET_SYNC_SID,
-          range: 'ALL ISSUES!C4:R',
-        });
-
-        // Overwrite the target sheet starting from C4
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SHEET_SYNC_SID,
-          range: 'ALL ISSUES!C4',
-          valueInputOption: 'USER_ENTERED',
-          resource: { values: safeRows },
-        });
-
-        console.log(`✅ Cleared and inserted ${safeRows.length} issues with additional data.`);
-      } catch (err) {
-        console.error('❌ Error writing to sheet:', err.stack || err.message);
-      }
-    } else {
-      console.log('ℹ️ No issues to insert.');
-    }
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_SYNC_SID,
+    range: 'ALL ISSUES!C4:N', // Adjust the range as needed
   });
 
-  await Promise.all(issuesPromises);
+  return response.data.values || [];
 }
 
-fetchAndUpdateIssuesForAllProjects();
+async function fetchAdditionalDataForIssue(issue) {
+  const issueId = issue[0]; // Assuming the issue ID is in the first column (C)
+  const projectId = issue[1]; // Assuming the project ID is in the second column (D)
+
+  // Find the project configuration based on the project ID
+  const projectConfig = PROJECT_CONFIG[projectId];
+  if (!projectConfig) {
+    console.error(`❌ Project configuration not found for project ID ${projectId}`);
+    return ['', 'No', 'Unknown', ''];
+  }
+
+  // Fetch comments for the issue
+  const commentsResponse = await axios.get(
+    `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`,
+    {
+      headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+    }
+  );
+
+  const comments = commentsResponse.data;
+  let firstLgtmCommenter = '';
+  let reopenedStatus = 'No';
+  let lastReopenedBy = '';
+  let lastReopenedAt = '';
+
+  // Process comments to find the required data
+  for (const comment of comments) {
+    if (firstLgtmCommenter === '' && comment.body.includes('LGTM')) {
+      firstLgtmCommenter = comment.author.name;
+    }
+  }
+
+  // Fetch the issue details to check reopened status
+  const issueResponse = await axios.get(
+    `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}`,
+    {
+      headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+    }
+  );
+
+  const issueDetails = issueResponse.data;
+
+  if (issueDetails.reopened_at) {
+    reopenedStatus = 'Yes';
+    lastReopenedBy = issueDetails.reopened_by?.name ?? 'Unknown';
+    lastReopenedAt = formatDate(issueDetails.reopened_at);
+  }
+
+  return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
+}
+
+async function updateSheetWithAdditionalData(updatedRows) {
+  const authClient = await auth.getClient();
+  const sheets = google.sheets({ version: 'v4', auth: authClient });
+
+  // Clear the target range from C4 to N (to avoid affecting other columns)
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: SHEET_SYNC_SID,
+    range: 'ALL ISSUES!C4:N',
+  });
+
+  // Overwrite the target sheet starting from C4
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_SYNC_SID,
+    range: 'ALL ISSUES!C4',
+    valueInputOption: 'USER_ENTERED',
+    resource: { values: updatedRows },
+  });
+
+  console.log(`✅ Updated the sheet with additional data.`);
+}
+
+async function fetchAndUpdateIssues() {
+  const issues = await fetchIssuesFromSheet();
+  const updatedRows = [];
+
+  for (const issue of issues) {
+    const additionalData = await fetchAdditionalDataForIssue(issue);
+    updatedRows.push([...issue, ...additionalData]); // Combine original issue with additional data
+  }
+
+  await updateSheetWithAdditionalData(updatedRows);
+}
+
+fetchAndUpdateIssues();
