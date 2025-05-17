@@ -93,7 +93,13 @@ async function fetchAdditionalDataForIssue(issue) {
       if (comment.body.includes('reopened')) {
         reopenedStatus = 'Yes';
         lastReopenedBy = comment.author.name;
-        lastReopenedAt = comment.created_at;
+        const dateObj = new Date(comment.created_at);
+        lastReopenedAt = dateObj.toLocaleDateString('en-US', {
+          weekday: 'short',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
       }
     }
     return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
@@ -102,6 +108,7 @@ async function fetchAdditionalDataForIssue(issue) {
     return ['', 'Error', 'Error', 'Error'];
   }
 }
+
 
 async function updateSheet(authClient, startRow, rows) {
   console.log(`⏳ Updating sheet rows O${startRow}:R${startRow + rows.length - 1} with fetched data...`);
