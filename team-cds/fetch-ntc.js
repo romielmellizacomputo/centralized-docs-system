@@ -43,11 +43,11 @@ async function getSelectedMilestones(sheets, sheetId) {
 async function getAllIssues(sheets) {
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
-    range: ALL_ISSUES_RANGE,
+    range: ALL_NTC,
   });
 
   if (!data.values || data.values.length === 0) {
-    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
+    throw new Error(`No data found in range ${ALL_NTC}`);
   }
 
   return data.values;
