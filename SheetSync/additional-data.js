@@ -59,6 +59,21 @@ function formatDate(dateString) {
   }).format(date);
 }
 
+async function fetchIssuesForProject(projectId, config) {
+  const response = await axios.get(
+    `${GITLAB_URL}api/v4/projects/${projectId}/issues`,
+    {
+      headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+      params: {
+        per_page: 100, // Adjust as needed
+        page: 1,
+      },
+    }
+  );
+
+  return response.data;
+}
+
 async function fetchAdditionalDataForIssues(issues) {
   const additionalData = [];
 
