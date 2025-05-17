@@ -23,48 +23,13 @@ jobs:
         run: |
           cd SheetSync
           npm install
-          npm install google-spreadsheet  # Ensure the google-spreadsheet package is installed
 
       - name: Run fetchallissues.js
-        id: fetch_issues
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}  # Google Sheet ID
-          SHEET_SYNC_SAJ: ${{ secrets.SHEET_SYNC_SAJ }}  # Google Sheets API service account key
-          GITLAB_URL: ${{ secrets.GITLAB_URL }}  # GitLab URL secret
+          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
+          SHEET_SYNC_SAJ: ${{ secrets.SHEET_SYNC_SAJ }}
+          GITLAB_URL: ${{ secrets.GITLAB_URL }}
         run: |
           cd SheetSync
-          # Run the script and output to both the console and output.log
-          node fetchallissues.js | tee output.log
-          
-          # Extract updated and inserted counts from the output log
-          UPDATED_COUNT=$(grep -oP 'Updated \K[0-9]+' output.log || echo 0)
-          INSERTED_COUNT=$(grep -oP 'No new issues to insert' output.log && echo 0 || grep -oP 'Page \d+ fetched \(\K[0-9]+' output.log | tail -1 || echo 0)
-
-          echo "UPDATED_COUNT=${UPDATED_COUNT}" >> $GITHUB_ENV
-          echo "INSERTED_COUNT=${INSERTED_COUNT}" >> $GITHUB_ENV
-
-      - name: Log results to Google Sheets
-        if: always()  # Ensure this runs even if previous steps fail
-        run: |
-          # Use a simple Node.js script to log the results
-          echo "Logging to Google Sheets..."
-          node -e "
-            const { GoogleSpreadsheet } = require('google-spreadsheet');
-            const doc = new GoogleSpreadsheet('${{ secrets.SHEET_SYNC_SID }}');
-            async function logToSheet() {
-              await doc.useServiceAccountAuth(JSON.parse('${{ secrets.SHEET_SYNC_SAJ }}'));
-              await doc.loadInfo();
-              const sheet = doc.sheetsByTitle['Logs'];  // Targeting the 'Logs' sheet
-              
-              const dateTime = new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
-              await sheet.addRow({
-                'Date and Time': dateTime,
-                'Job Number': '${{ github.run_id }}',  # Unique job number
-                'Updated Count': '${{ steps.fetch_issues.outputs.UPDATED_COUNT }}',  # Count of updated issues
-                'Inserted Count': '${{ steps.fetch_issues.outputs.INSERTED_COUNT }}',  # Count of inserted issues
-                'Status': '${{ job.status }}'  # Status of the job
-              });
-            }
-            logToSheet().catch(console.error);
-          "
+          node fetchallissues.js
