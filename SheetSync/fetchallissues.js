@@ -110,6 +110,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
 
   console.log('🔄 Fetching issues for all projects...');
 
+  // Fetch issues for all projects
   const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (projectId) => {
     const config = PROJECT_CONFIG[projectId];
     return fetchIssuesForProject(projectId, config);
@@ -119,7 +120,7 @@ async function fetchAndUpdateIssuesForAllProjects() {
   const allIssues = allIssuesResults.flat();
 
   // Fetch comments for all issues in parallel
-  const comments = await fetchCommentsForIssues(projectId, allIssues);
+  const comments = await fetchCommentsForIssues(allIssues.map(issue => issue.project_id), allIssues);
 
   const processedIssues = allIssues.map((issue, index) => {
     let firstLgtmCommenter = 'Unknown';
