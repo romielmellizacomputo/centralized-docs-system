@@ -51,7 +51,6 @@ function formatDate(dateString) {
   }).format(new Date(dateString));
 }
 
-
 async function fetchMRsForProject(projectId, config) {
   let page = 1;
   let mrs = [];
@@ -122,8 +121,9 @@ async function fetchAndUpdateMRsForAllProjects() {
 
   console.log('🔄 Fetching MRs for all projects...');
 
-  const mrPromises = Object.entries(PROJECT_CONFIG).map(([projectId, config]) =>
-    fetchMRsForProject(projectId, config)
+  // FIX: Use config.id as projectId and pass project name as name property
+  const mrPromises = Object.entries(PROJECT_CONFIG).map(([projectName, config]) =>
+    fetchMRsForProject(config.id, { ...config, name: projectName })
   );
 
   const allMRsResults = await Promise.all(mrPromises);
@@ -220,7 +220,6 @@ async function fetchAndUpdateMRsForAllProjects() {
     } else {
       console.log('ℹ️ No new MRs to insert.');
     }
-    
   } catch (err) {
     console.error('❌ Error updating/inserting MRs:', err.stack || err.message);
   }
