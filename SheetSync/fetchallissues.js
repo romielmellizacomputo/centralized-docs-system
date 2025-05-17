@@ -84,7 +84,38 @@ async function fetchIssuesForProject(projectId, config) {
     const fetchedIssues = response.data;
     if (fetchedIssues.length === 0) break;
 
-    fetchedIssues.forEach((issue) => {
+    for (const issue of fetchedIssues) {
+      // Fetch comments to find the first LGTM commenter
+      const commentsResponse = await axios.get(
+        `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issue.iid}/notes`,
+        {
+          headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+        }
+      );
+
+      let firstLgtmCommenter = 'Unknown';
+      let lastReopenedBy = 'Unknown';
+      let reopenedStatus = 'No';
+
+      for (const comment of commentsResponse.data) {
+        if (comment.body.includes('LGTM') && firstLgtmCommenter === 'Unknown') {
+          firstLgtmCommenter = comment.author.name;
+        }
+      }
+
+      // Check if the issue was reopened
+      if (issue.state === 'reopened') {
+        reopenedStatus = 'Yes';
+        lastReopenedBy = issue.reopened_by?.name ?? 'Unknown';
+      }
+
+      // Prepare labels
+      const labels = (issue.labels || []).map(label => {
+        if (label === 'Bug-issue') return 'Bug Issue';
+        if (label === 'Usability Suggestions') return 'Usability Suggestion';
+        return label;
+      }).join(', ');
+
       const issueData = [
         issue.id ?? '',
         issue.iid ?? '',
@@ -93,17 +124,20 @@ async function fetchIssuesForProject(projectId, config) {
           : 'No Title',
         issue.author?.name ?? 'Unknown Author',
         issue.assignee?.name ?? 'Unassigned',
-        (issue.labels || []).join(', '),
+        labels,
         issue.milestone?.title ?? 'No Milestone',
         capitalize(issue.state ?? ''),
         issue.created_at ? formatDate(issue.created_at) : '',
         issue.closed_at ? formatDate(issue.closed_at) : '',
         issue.closed_by?.name ?? '',
         config.name,
+        firstLgtmCommenter,  // New field
+        reopenedStatus,       // New field
+        lastReopenedBy        // New field
       ];
 
       issues.push(issueData);
-    });
+    }
 
     console.log(`✅ Page ${page} fetched (${fetchedIssues.length} issues) for ${config.name}`);
     page++;
