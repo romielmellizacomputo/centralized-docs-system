@@ -2,7 +2,7 @@ name: Fetch Additional Issue Info
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  
+    - cron: '*/60 * * * *'  
   workflow_dispatch:      
 
 jobs:
