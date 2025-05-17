@@ -2,13 +2,13 @@ name: Team CDS Updater
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  
-  workflow_dispatch:       
+    - cron: '*/5 * * * *'  # Every 5 minutes
+  workflow_dispatch:
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    continue-on-error: true  
+    continue-on-error: true
 
     steps:
       - uses: actions/checkout@v3
@@ -25,15 +25,19 @@ jobs:
         run: node team-cds/fetch-issues.js
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
+          LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
+          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
 
       - name: Run fetch-mr.js
         run: node team-cds/fetch-mr.js
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
+          LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
+          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
 
       - name: Run fetch-ntc.js
         run: node team-cds/fetch-ntc.js
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
-
-  
+          LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
+          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
