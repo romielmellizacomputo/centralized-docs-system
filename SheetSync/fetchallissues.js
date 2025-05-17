@@ -84,34 +84,7 @@ async function fetchIssuesForProject(projectId, config) {
     const fetchedIssues = response.data;
     if (fetchedIssues.length === 0) break;
 
-    // Collect issue IDs for batch comment fetching
-    const issueIds = fetchedIssues.map(issue => issue.iid);
-    const commentsResponses = await Promise.all(
-      issueIds.map(issueId =>
-        axios.get(`${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`, {
-          headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-        }).catch(err => ({ data: [] })) // Handle errors gracefully
-      )
-    );
-
-    for (let i = 0; i < fetchedIssues.length; i++) {
-      const issue = fetchedIssues[i];
-      const comments = commentsResponses[i].data;
-
-      // Find first LGTM commenter
-      const firstLgtmCommenter = comments.find(comment => comment.body.includes('LGTM'))?.author.name || 'Unknown';
-      
-      // Check if the issue was reopened
-      const reopenedStatus = issue.state === 'reopened' ? 'Yes' : 'No';
-      const lastReopenedBy = reopenedStatus === 'Yes' ? issue.reopened_by?.name || 'Unknown' : 'Unknown';
-
-      // Prepare labels
-      const labels = (issue.labels || []).map(label => {
-        if (label === 'Bug-issue') return 'Bug Issue';
-        if (label === 'Usability Suggestions') return 'Usability Suggestion';
-        return label;
-      }).join(', ');
-
+    fetchedIssues.forEach((issue) => {
       const issueData = [
         issue.id ?? '',
         issue.iid ?? '',
@@ -120,20 +93,17 @@ async function fetchIssuesForProject(projectId, config) {
           : 'No Title',
         issue.author?.name ?? 'Unknown Author',
         issue.assignee?.name ?? 'Unassigned',
-        labels,
+        (issue.labels || []).join(', '),
         issue.milestone?.title ?? 'No Milestone',
         capitalize(issue.state ?? ''),
         issue.created_at ? formatDate(issue.created_at) : '',
         issue.closed_at ? formatDate(issue.closed_at) : '',
         issue.closed_by?.name ?? '',
         config.name,
-        firstLgtmCommenter,
-        reopenedStatus,
-        lastReopenedBy
       ];
 
       issues.push(issueData);
-    }
+    });
 
     console.log(`✅ Page ${page} fetched (${fetchedIssues.length} issues) for ${config.name}`);
     page++;
@@ -153,8 +123,8 @@ async function fetchAndUpdateIssuesForAllProjects() {
     return fetchIssuesForProject(projectId, config);
   });
 
-  const allIssuesResults = await Promise.allSettled(issuesPromises);
-  const allIssues = allIssuesResults.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+  const allIssuesResults = await Promise.all(issuesPromises);
+  const allIssues = allIssuesResults.flat();
 
   if (allIssues.length > 0) {
     const safeRows = allIssues.map((row) =>
@@ -164,6 +134,12 @@ async function fetchAndUpdateIssuesForAllProjects() {
     );
 
     try {
+      // Clear the target range from C4 to N (to avoid affecting other columns)
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SHEET_SYNC_SID,
+        range: 'ALL ISSUES!C4:N',
+      });
+
       // Overwrite the target sheet starting from C4
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_SYNC_SID,
