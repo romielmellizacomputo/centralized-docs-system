@@ -1,12 +1,12 @@
 import { google } from 'googleapis';
-
-const UTILS_SHEET_ID = process.env.LEADS_CDS_SID;
-const G_MILESTONES = 'G-Milestones';
-const G_ISSUES_SHEET = 'G-MR';
-const DASHBOARD_SHEET = 'Dashboard';
-
-const CENTRAL_ISSUE_SHEET_ID = process.env.SHEET_SYNC_SID;
-const ALL_ISSUES_RANGE = 'ALL MRs!C4:O'; 
+import {
+  UTILS_SHEET_ID,
+  G_MILESTONES,
+  G_MR_SHEET,
+  DASHBOARD_SHEET,
+  CENTRAL_ISSUE_SHEET_ID,
+  ALL_MR,
+} from '../constants.js';
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -43,11 +43,11 @@ async function getSelectedMilestones(sheets, sheetId) {
 async function getAllIssues(sheets) {
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
-    range: ALL_ISSUES_RANGE,
+    range: ALL_MR,
   });
 
   if (!data.values || data.values.length === 0) {
-    throw new Error(`No data found in range ${ALL_ISSUES_RANGE}`);
+    throw new Error(`No data found in range ${ALL_MR}`);
   }
 
   return data.values;
@@ -56,14 +56,14 @@ async function getAllIssues(sheets) {
 async function clearGIssues(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4:N`,
+    range: `${G_MR_SHEET}!C4:N`,
   });
 }
 
 async function insertDataToGIssues(sheets, sheetId, data) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4`,
+    range: `${G_MR_SHEET}!C4`,
     valueInputOption: 'RAW',
     requestBody: { values: data },
   });
@@ -143,7 +143,7 @@ async function main() {
           continue;
         }
 
-        if (!sheetTitles.includes(G_ISSUES_SHEET)) {
+        if (!sheetTitles.includes(G_MR_SHEET)) {
           console.warn(`⚠️ Skipping ${sheetId} — missing '${G_ISSUES_SHEET}' sheet`);
           continue;
         }
