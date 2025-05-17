@@ -62,7 +62,7 @@ async function fetchIssuesFromSheet() {
 
 async function fetchAdditionalDataForIssue(issue) {
   const issueId = issue[0]; // Assuming the issue ID is in the first column (C)
-  const projectId = issue[1]; // Change this if the project ID is in a different column
+  const projectId = String(issue[1]); // Convert project ID to string to preserve leading zeros
 
   // Find the project configuration based on the project ID
   const projectConfig = PROJECT_CONFIG[projectId];
@@ -110,6 +110,7 @@ async function fetchAdditionalDataForIssue(issue) {
 
   return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
 }
+
 
 async function updateSheetWithAdditionalData(updatedRows) {
   const authClient = await auth.getClient();
