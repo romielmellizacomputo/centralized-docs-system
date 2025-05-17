@@ -17,14 +17,14 @@ const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
 
 const PROJECT_CONFIG = {
-  155: { name: 'HQZen', path: 'bposeats/hqzen.com' },
-  88: { name: 'ApplyBPO', path: 'bposeats/applybpo.com' },
-  23: { name: 'Backend', path: 'bposeats/bposeats' },
-  123: { name: 'Desktop', path: 'bposeats/bposeats-desktop' },
-  141: { name: 'Ministry', path: 'bposeats/ministry-vuejs' },
-  147: { name: 'Scalema', path: 'bposeats/scalema.com' },
-  89: { name: 'BPOSeats.com', path: 'bposeats/bposeats.com' },
-  124: { name: 'Android', path: 'bposeats/android-app' },
+  '155': { name: 'HQZen', path: 'bposeats/hqzen.com' },
+  '88': { name: 'ApplyBPO', path: 'bposeats/applybpo.com' },
+  '23': { name: 'Backend', path: 'bposeats/bposeats' },
+  '123': { name: 'Desktop', path: 'bposeats/bposeats-desktop' },
+  '141': { name: 'Ministry', path: 'bposeats/ministry-vuejs' },
+  '147': { name: 'Scalema', path: 'bposeats/scalema.com' },
+  '89': { name: 'BPOSeats.com', path: 'bposeats/bposeats.com' },
+  '124': { name: 'Android', path: 'bposeats/android-app' },
 };
 
 function loadServiceAccount() {
@@ -60,68 +60,82 @@ async function fetchIssuesFromSheet() {
   return response.data.values || [];
 }
 
-async function fetchAdditionalDataForIssue(issue) {
-  const issueId = issue[0]; // Assuming the issue ID is in the first column (C)
-  const projectId = issue[1]; // Assuming the project ID is in the second column (D)
+function normalizeId(value) {
+  // Ensure the ID is preserved as a string (no numeric conversion)
+  return (value ?? '').toString().trim();
+}
 
-  // Find the project configuration based on the project ID
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+async function fetchAdditionalDataForIssue(issue) {
+  const issueIdRaw = issue[0]; // Column C
+  const projectIdRaw = issue[1]; // Column D
+
+  const issueId = normalizeId(issueIdRaw);
+  const projectId = normalizeId(projectIdRaw);
+
   const projectConfig = PROJECT_CONFIG[projectId];
   if (!projectConfig) {
-    console.error(`❌ Project configuration not found for project ID ${projectId}`);
+    console.error(`❌ Project configuration not found for project ID "${projectId}"`);
     return ['', 'No', 'Unknown', ''];
   }
 
-  // Fetch comments for the issue
-  const commentsResponse = await axios.get(
-    `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`,
-    {
-      headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-    }
-  );
+  try {
+    // Fetch comments
+    const commentsResponse = await axios.get(
+      `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`,
+      {
+        headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+      }
+    );
 
-  const comments = commentsResponse.data;
-  let firstLgtmCommenter = '';
-  let reopenedStatus = 'No';
-  let lastReopenedBy = '';
-  let lastReopenedAt = '';
+    const comments = commentsResponse.data;
+    let firstLgtmCommenter = '';
+    let reopenedStatus = 'No';
+    let lastReopenedBy = '';
+    let lastReopenedAt = '';
 
-  // Process comments to find the required data
-  for (const comment of comments) {
-    if (firstLgtmCommenter === '' && comment.body.includes('LGTM')) {
-      firstLgtmCommenter = comment.author.name;
+    for (const comment of comments) {
+      if (firstLgtmCommenter === '' && comment.body.includes('LGTM')) {
+        firstLgtmCommenter = comment.author.name;
+      }
     }
+
+    // Fetch issue details
+    const issueResponse = await axios.get(
+      `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}`,
+      {
+        headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
+      }
+    );
+
+    const issueDetails = issueResponse.data;
+
+    if (issueDetails.reopened_at) {
+      reopenedStatus = 'Yes';
+      lastReopenedBy = issueDetails.reopened_by?.name ?? 'Unknown';
+      lastReopenedAt = formatDate(issueDetails.reopened_at);
+    }
+
+    return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
+  } catch (error) {
+    console.error(`❌ Error fetching data for Issue ID "${issueId}" in Project "${projectId}":`, error.message);
+    return ['Error', 'Error', 'Error', 'Error'];
   }
-
-  // Fetch the issue details to check reopened status
-  const issueResponse = await axios.get(
-    `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}`,
-    {
-      headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-    }
-  );
-
-  const issueDetails = issueResponse.data;
-
-  if (issueDetails.reopened_at) {
-    reopenedStatus = 'Yes';
-    lastReopenedBy = issueDetails.reopened_by?.name ?? 'Unknown';
-    lastReopenedAt = formatDate(issueDetails.reopened_at);
-  }
-
-  return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
 }
 
 async function updateSheetWithAdditionalData(updatedRows) {
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-  // Clear the target range from C4 to N (to avoid affecting other columns)
   await sheets.spreadsheets.values.clear({
     spreadsheetId: SHEET_SYNC_SID,
     range: 'ALL ISSUES!C4:N',
   });
 
-  // Overwrite the target sheet starting from C4
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_SYNC_SID,
     range: 'ALL ISSUES!C4',
@@ -138,7 +152,7 @@ async function fetchAndUpdateIssues() {
 
   for (const issue of issues) {
     const additionalData = await fetchAdditionalDataForIssue(issue);
-    updatedRows.push([...issue, ...additionalData]); // Combine original issue with additional data
+    updatedRows.push([...issue, ...additionalData]);
   }
 
   await updateSheetWithAdditionalData(updatedRows);
