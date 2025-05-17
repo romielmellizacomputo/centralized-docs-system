@@ -1,0 +1,8 @@
+
+export const UTILS_SHEET_ID = process.env.LEADS_CDS_SID;
+export const G_MILESTONES = 'G-Milestones';
+export const G_ISSUES_SHEET = 'G-Issues';
+export const DASHBOARD_SHEET = 'Dashboard';
+
+export const CENTRAL_ISSUE_SHEET_ID = process.env.SHEET_SYNC_SID;
+export const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:U';
