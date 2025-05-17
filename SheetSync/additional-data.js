@@ -71,15 +71,15 @@ function formatDate(dateString) {
 }
 
 async function fetchAdditionalDataForIssue(issue) {
-  const issueIdRaw = issue[0]; // Column C
-  const projectNameRaw = issue[11]; // Column N (0-indexed, N = 13th column → index 12, but C = index 0 → N is 11th from C)
+  const issueIdRaw = issue[0]; // Column C: Issue ID
+  const projectNameRaw = issue[11]; // Column N: Project Name
 
   const issueId = normalizeId(issueIdRaw);
-  const projectName = normalizeId(projectNameRaw);
+  const projectName = (projectNameRaw ?? '').toString().trim();
 
-  // Find project config by matching name
+  // Find project config by project name
   const projectEntry = Object.entries(PROJECT_CONFIG).find(
-    ([, config]) => config.name.toLowerCase() === projectName.toLowerCase()
+    ([_, config]) => config.name.toLowerCase() === projectName.toLowerCase()
   );
 
   if (!projectEntry) {
@@ -132,7 +132,6 @@ async function fetchAdditionalDataForIssue(issue) {
     return ['Error', 'Error', 'Error', 'Error'];
   }
 }
-
 
 async function updateSheetWithAdditionalData(updatedRows) {
   const authClient = await auth.getClient();
