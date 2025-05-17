@@ -83,14 +83,20 @@ async function fetchAdditionalDataForIssue(issue) {
     let lastReopenedBy = '';
     let lastReopenedAt = '';
 
+    // Filter and sort LGTM comments
+    const lgtmComments = comments
+      .filter(comment =>
+        comment.body.match(/\b(?:\*\*LGTM\*\*|LGTM)\b/i)
+      )
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    if (lgtmComments.length > 0) {
+      firstLgtmCommenter = lgtmComments[0].author.name;
+    }
+
+    // Check for "reopened" comments
     for (const comment of comments) {
-      if (
-        firstLgtmCommenter === '' &&
-        (comment.body.includes('LGTM') || comment.body.includes('**LGTM**'))
-      ) {
-        firstLgtmCommenter = comment.author.name;
-      }
-      if (comment.body.includes('reopened')) {
+      if (comment.body.toLowerCase().includes('reopened')) {
         reopenedStatus = 'Yes';
         lastReopenedBy = comment.author.name;
         const dateObj = new Date(comment.created_at);
@@ -102,12 +108,14 @@ async function fetchAdditionalDataForIssue(issue) {
         });
       }
     }
+
     return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
   } catch (error) {
     console.error(`❌ Error fetching comments for issue ${issueId} in project ${projectName}:`, error.message);
     return ['', 'Error', 'Error', 'Error'];
   }
 }
+
 
 
 async function updateSheet(authClient, startRow, rows) {
