@@ -1,12 +1,12 @@
 import { google } from 'googleapis';
-
-const UTILS_SHEET_ID = process.env.LEADS_CDS_SID;
-const G_MILESTONES = 'G-Milestones';
-const NTC_SHEET = 'NTC'; 
-const DASHBOARD_SHEET = 'Dashboard';
-
-const CENTRAL_ISSUE_SHEET_ID = process.env.SHEET_SYNC_SID;
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:N'; 
+import {
+  UTILS_SHEET_ID,
+  G_MILESTONES,
+  NTC_SHEET,
+  DASHBOARD_SHEET,
+  CENTRAL_ISSUE_SHEET_ID,
+  ALL_NTC,
+} from '../constants.js';
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
