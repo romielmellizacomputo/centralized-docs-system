@@ -6,7 +6,7 @@ const G_ISSUES_SHEET = 'G-Issues';
 const DASHBOARD_SHEET = 'Dashboard';
 
 const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:O'; 
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:U'; 
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -56,7 +56,7 @@ async function getAllIssues(sheets) {
 async function clearGIssues(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4:N`,
+    range: `${G_ISSUES_SHEET}!C4:U`,
   });
 }
 
