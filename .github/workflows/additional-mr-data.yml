@@ -2,12 +2,15 @@ name: Fetch Additional MR Info
 
 on:
   schedule:
-    - cron: '*/60 * * * *'  
-  workflow_dispatch:      
+    - cron: '*/60 * * * *'  # Runs every hour
+  workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+
+    env:
+      PROJECT_CONFIG: ${{ secrets.PROJECT_CONFIG }}  # ✅ Added this line
 
     steps:
       - name: Checkout repository
@@ -16,18 +19,19 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
-          node-version: '18' # Specify the Node.js version you want to use
+          node-version: '18'
 
       - name: Install dependencies
         run: |
           npm install
           # If you have a package-lock.json, you can use `npm ci` instead
 
-      - name: Run additional mr data script
+      - name: Run additional MR data script
         env:
           GITLAB_URL: ${{ secrets.GITLAB_URL }}
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
           SHEET_SYNC_SAJ: ${{ secrets.SHEET_SYNC_SAJ }}
+          PROJECT_CONFIG: ${{ secrets.PROJECT_CONFIG }}  # ✅ Required here too if overridden
         run: |
           node SheetSync/additional-mr-data.js
