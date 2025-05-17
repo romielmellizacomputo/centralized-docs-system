@@ -12,6 +12,7 @@ requiredEnv.forEach((key) => {
   }
 });
 
+const BASE_URL = GITLAB_URL.endsWith('/') ? GITLAB_URL : GITLAB_URL + '/';
 const GITLAB_URL = process.env.GITLAB_URL;
 const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
 const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
@@ -77,28 +78,34 @@ async function fetchAdditionalDataForIssue(issue) {
   const issueId = normalizeId(issueIdRaw);
   const projectName = (projectNameRaw ?? '').toString().trim();
 
-  // Find project config by project name
+  if (!issueId || !projectName) {
+    console.error(`❌ Skipping due to missing issue ID or project name`);
+    return ['Skipped', 'Skipped', 'Skipped', 'Skipped'];
+  }
+
   const projectEntry = Object.entries(PROJECT_CONFIG).find(
     ([_, config]) => config.name.toLowerCase() === projectName.toLowerCase()
   );
 
   if (!projectEntry) {
     console.error(`❌ Project configuration not found for project name "${projectName}"`);
-    return ['', 'No', 'Unknown', ''];
+    return ['Unknown Project', 'No', 'Unknown', ''];
   }
 
   const [projectId, projectConfig] = projectEntry;
 
   try {
-    // Fetch comments
-    const commentsResponse = await axios.get(
-      `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}/notes`,
-      {
-        headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-      }
-    );
+    const commentsUrl = `${BASE_URL}api/v4/projects/${encodeURIComponent(projectId)}/issues/${issueId}/notes`;
+    const issueUrl = `${BASE_URL}api/v4/projects/${encodeURIComponent(projectId)}/issues/${issueId}`;
+
+    const [commentsResponse, issueResponse] = await Promise.all([
+      axios.get(commentsUrl, { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN } }),
+      axios.get(issueUrl, { headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN } }),
+    ]);
 
     const comments = commentsResponse.data;
+    const issueDetails = issueResponse.data;
+
     let firstLgtmCommenter = '';
     let reopenedStatus = 'No';
     let lastReopenedBy = '';
@@ -110,28 +117,23 @@ async function fetchAdditionalDataForIssue(issue) {
       }
     }
 
-    // Fetch issue details
-    const issueResponse = await axios.get(
-      `${GITLAB_URL}api/v4/projects/${projectId}/issues/${issueId}`,
-      {
-        headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
-      }
-    );
-
-    const issueDetails = issueResponse.data;
-
     if (issueDetails.reopened_at) {
       reopenedStatus = 'Yes';
       lastReopenedBy = issueDetails.reopened_by?.name ?? 'Unknown';
       lastReopenedAt = formatDate(issueDetails.reopened_at);
     }
 
-    return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
+    return [firstLgtmCommenter || 'None', reopenedStatus, lastReopenedBy, lastReopenedAt];
   } catch (error) {
+    if (error.response && error.response.status === 404) {
+      console.error(`❌ Issue ID "${issueId}" not found in project "${projectName}"`);
+      return ['Not Found', 'Not Found', 'Not Found', 'Not Found'];
+    }
     console.error(`❌ Error fetching data for Issue ID "${issueId}" in Project "${projectName}":`, error.message);
     return ['Error', 'Error', 'Error', 'Error'];
   }
 }
+
 
 async function updateSheetWithAdditionalData(updatedRows) {
   const authClient = await auth.getClient();
