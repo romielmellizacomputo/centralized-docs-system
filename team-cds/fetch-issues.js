@@ -1,14 +1,12 @@
 import { google } from 'googleapis';
 
-// Fetching from GitHub secrets
-const UTILS_SHEET_ID = process.env.LEADS_CDS_SID;
-const CENTRAL_ISSUE_SHEET_ID = process.env.SHEET_SYNC_SID;
-
+const UTILS_SHEET_ID = '1HStlB0xNjCJWScZ35e_e1c7YxZ06huNqznfVUc-ZE5k';
 const G_MILESTONES = 'G-Milestones';
 const G_ISSUES_SHEET = 'G-Issues';
 const DASHBOARD_SHEET = 'Dashboard';
 
-const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:U';
+const CENTRAL_ISSUE_SHEET_ID = '1ZhjtS_cnlTg8Sv81zKVR_d-_loBCJ3-6LXwZsMwUoRY'; 
+const ALL_ISSUES_RANGE = 'ALL ISSUES!C4:U'; 
 
 async function authenticate() {
   const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
@@ -73,21 +71,31 @@ async function insertDataToGIssues(sheets, sheetId, data) {
 
 async function updateTimestamp(sheets, sheetId) {
   const now = new Date();
-  const timeZoneEAT = 'Africa/Nairobi';
-  const timeZonePHT = 'Asia/Manila';
+  const timeZoneEAT = 'Africa/Nairobi'; // East Africa Time
+  const timeZonePHT = 'Asia/Manila'; // Philippine Time
 
-  const optionsDate = { year: 'numeric', month: 'long', day: 'numeric' };
+  const optionsDate = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  };
+
   const optionsTime = {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
   };
 
   const formattedDate = now.toLocaleDateString('en-US', optionsDate);
-  const formattedEAT = new Intl.DateTimeFormat('en-US', {
-    ...optionsTime, timeZone: timeZoneEAT
+  const formattedEAT = new Intl.DateTimeFormat('en-US', { 
+    ...optionsTime, 
+    timeZone: timeZoneEAT 
   }).format(now);
-
-  const formattedPHT = new Intl.DateTimeFormat('en-US', {
-    ...optionsTime, timeZone: timeZonePHT
+  
+  const formattedPHT = new Intl.DateTimeFormat('en-US', { 
+    ...optionsTime, 
+    timeZone: timeZonePHT 
   }).format(now);
 
   const formatted = `Sync on ${formattedDate}, ${formattedEAT} (EAT) / ${formattedDate}, ${formattedPHT} (PHT)`;
@@ -99,6 +107,7 @@ async function updateTimestamp(sheets, sheetId) {
     requestBody: { values: [[formatted]] },
   });
 }
+
 
 async function main() {
   try {
@@ -129,13 +138,13 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([
+        const [milestones, issuesData] = await Promise.all([ 
           getSelectedMilestones(sheets, sheetId),
           getAllIssues(sheets),
         ]);
 
-        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
-        const processedData = filtered.map(row => row.slice(0, 18)); // C to U = 18 columns
+        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
+        const processedData = filtered.map(row => row.slice(0, 12));
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
