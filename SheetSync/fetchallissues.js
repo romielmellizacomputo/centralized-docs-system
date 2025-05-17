@@ -1,7 +1,9 @@
 import { config } from 'dotenv';
 import axios from 'axios';
 import pLimit from 'p-limit';
+import { google } from 'googleapis'; // Ensure you have this import for Google Auth
 
+// Load environment variables
 config();
 
 const requiredEnv = ['GITLAB_URL', 'GITLAB_TOKEN', 'SHEET_SYNC_SID', 'SHEET_SYNC_SAJ'];
@@ -27,6 +29,7 @@ const PROJECT_CONFIG = {
   124: { name: 'Android', sheet: 'ANDROID', path: 'bposeats/android-app' },
 };
 
+// Load service account credentials
 function loadServiceAccount() {
   if (process.env.GITHUB_ACTIONS && process.env.SHEET_SYNC_SAJ) {
     try {
@@ -48,6 +51,7 @@ const auth = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
+// Utility functions
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
@@ -63,8 +67,10 @@ function formatDate(dateString) {
   }).format(date);
 }
 
-const limit = pLimit(5); // Limit the number of concurrent requests
+// Limit the number of concurrent requests
+const limit = pLimit(5);
 
+// Fetch comments for issues
 async function fetchCommentsForIssues(projectId, issues) {
   const commentPromises = issues.map(issue => 
     limit(() => axios.get(`${GITLAB_URL}api/v4/projects/${projectId}/issues/${issue.iid}/notes`, {
@@ -76,6 +82,7 @@ async function fetchCommentsForIssues(projectId, issues) {
   return commentsResponses.map(response => response.data);
 }
 
+// Fetch issues for a project
 async function fetchIssuesForProject(projectId, config) {
   let page = 1;
   let issues = [];
@@ -100,19 +107,26 @@ async function fetchIssuesForProject(projectId, config) {
   return { issues, comments };
 }
 
+// Main function
 async function main() {
   for (const [projectId, config] of Object.entries(PROJECT_CONFIG)) {
-    const { issues, comments } = await fetchIssuesForProject(projectId, config);
-    
-    // Process issues and comments as needed
-    console.log(`🔍 Fetched ${issues.length} issues and ${comments.flat().length} comments for ${config.name}.`);
+    try {
+      const { issues, comments } = await fetchIssuesForProject(projectId, config);
+      
+      // Process issues and comments as needed
+      console.log(`🔍 Fetched ${issues.length} issues and ${comments.flat().length} comments for ${config.name}.`);
+    } catch (error) {
+      console.error(`❌ Error fetching data for project ${config.name}:`, error);
+    }
   }
 }
 
+// Execute main function
 main().catch(error => {
   console.error('❌ An error occurred:', error);
   process.exit(1);
 });
+
 
 
 async function fetchAndUpdateIssuesForAllProjects() {
