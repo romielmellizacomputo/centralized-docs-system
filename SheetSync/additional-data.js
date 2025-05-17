@@ -72,16 +72,22 @@ function formatDate(dateString) {
 
 async function fetchAdditionalDataForIssue(issue) {
   const issueIdRaw = issue[0]; // Column C
-  const projectIdRaw = issue[1]; // Column D
+  const projectNameRaw = issue[11]; // Column N (0-indexed, N = 13th column → index 12, but C = index 0 → N is 11th from C)
 
   const issueId = normalizeId(issueIdRaw);
-  const projectId = normalizeId(projectIdRaw);
+  const projectName = normalizeId(projectNameRaw);
 
-  const projectConfig = PROJECT_CONFIG[projectId];
-  if (!projectConfig) {
-    console.error(`❌ Project configuration not found for project ID "${projectId}"`);
+  // Find project config by matching name
+  const projectEntry = Object.entries(PROJECT_CONFIG).find(
+    ([, config]) => config.name.toLowerCase() === projectName.toLowerCase()
+  );
+
+  if (!projectEntry) {
+    console.error(`❌ Project configuration not found for project name "${projectName}"`);
     return ['', 'No', 'Unknown', ''];
   }
+
+  const [projectId, projectConfig] = projectEntry;
 
   try {
     // Fetch comments
@@ -122,10 +128,11 @@ async function fetchAdditionalDataForIssue(issue) {
 
     return [firstLgtmCommenter, reopenedStatus, lastReopenedBy, lastReopenedAt];
   } catch (error) {
-    console.error(`❌ Error fetching data for Issue ID "${issueId}" in Project "${projectId}":`, error.message);
+    console.error(`❌ Error fetching data for Issue ID "${issueId}" in Project "${projectName}":`, error.message);
     return ['Error', 'Error', 'Error', 'Error'];
   }
 }
+
 
 async function updateSheetWithAdditionalData(updatedRows) {
   const authClient = await auth.getClient();
