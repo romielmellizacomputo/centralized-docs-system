@@ -1,6 +1,7 @@
 import { config } from 'dotenv';
 import { google } from 'googleapis';
 import axios from 'axios';
+import { GITLAB_URL, GITLAB_TOKEN, SHEET_SYNC_SID } from '../constants.js';
 
 config();
 
@@ -11,10 +12,6 @@ requiredEnv.forEach((key) => {
     process.exit(1);
   }
 });
-
-const GITLAB_URL = process.env.GITLAB_URL;
-const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
-const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
 
 let PROJECT_CONFIG;
 try {
