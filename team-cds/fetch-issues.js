@@ -32,7 +32,7 @@ async function getAllIssues(sheets) {
 async function clearGIssues(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4:U`,
+    range: `${G_ISSUES_SHEET}!C4:T`,
   });
 }
 
