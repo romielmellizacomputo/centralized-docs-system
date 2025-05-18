@@ -98,23 +98,30 @@ async function main() {
           getAllNTC(sheets),
         ]);
 
-        const filtered = ntcData.filter(row => {
-          const milestone = row[8]; // Column I
-          const labelsRaw = row[7] || ''; // Column H
-          const labels = labelsRaw.split(',').map(label => label.trim());
+        // Normalize milestones for case-insensitive match
+        const normalizedMilestones = milestones.map(m => m.toLowerCase().trim());
 
-          const matchesMilestone = milestones.includes(milestone);
-          const requiredLabels = [
-            'Needs Test Case',
-            'Needs Test Scenario',
-            'Test Case Needs Update'
-          ];
-          const hasRelevantLabel = labels.some(label =>
-            requiredLabels.includes(label)
-          );
+        const requiredLabels = [
+          'needs test case',
+          'needs test scenario',
+          'test case needs update'
+        ];
+
+        const filtered = ntcData.filter(row => {
+          const milestone = (row[8] || '').toLowerCase().trim(); // Column I
+          const labelsRaw = row[7] || ''; // Column H
+          const labels = labelsRaw.split(',').map(label => label.toLowerCase().trim());
+
+          const matchesMilestone = normalizedMilestones.includes(milestone);
+          const hasRelevantLabel = labels.some(label => requiredLabels.includes(label));
 
           return matchesMilestone && hasRelevantLabel;
         });
+
+        if (filtered.length === 0) {
+          console.log(`ℹ️ No matching data found for ${sheetId}, skipping clear & insert.`);
+          continue; // Skip clearing & inserting if no data
+        }
 
         const processedData = filtered.map(row => row.slice(0, 21));
 
