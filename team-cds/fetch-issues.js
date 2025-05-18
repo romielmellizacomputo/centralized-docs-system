@@ -9,37 +9,12 @@ import {
   generateTimestampString
 } from '../constants.js';
 
-async function authenticate() {
-  const credentials = JSON.parse(process.env.TEAM_CDS_SERVICE_ACCOUNT_JSON);
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  return auth;
-}
-
-async function getSheetTitles(sheets, spreadsheetId) {
-  const res = await sheets.spreadsheets.get({ spreadsheetId });
-  const titles = res.data.sheets.map(sheet => sheet.properties.title);
-  console.log(`📄 Sheets in ${spreadsheetId}:`, titles);
-  return titles;
-}
-
-async function getAllTeamCDSSheetIds(sheets) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: UTILS_SHEET_ID,
-    range: 'UTILS!B2:B',
-  });
-  return data.values?.flat().filter(Boolean) || [];
-}
-
-async function getSelectedMilestones(sheets, sheetId) {
-  const { data } = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `${G_MILESTONES}!G4:G`,
-  });
-  return data.values?.flat().filter(Boolean) || [];
-}
+import {
+  authenticate,
+  getSheetTitles,
+  getAllTeamCDSSheetIds,
+  getSelectedMilestones,
+} from './common.js';
 
 async function getAllIssues(sheets) {
   const { data } = await sheets.spreadsheets.values.get({
@@ -61,7 +36,6 @@ async function clearGIssues(sheets, sheetId) {
   });
 }
 
-// Pads each row to 21 columns (columns C to U)
 function padRowToU(row) {
   const fullLength = 21;
   return [...row, ...Array(fullLength - row.length).fill('')];
@@ -97,7 +71,7 @@ async function main() {
 
     await getSheetTitles(sheets, UTILS_SHEET_ID);
 
-    const sheetIds = await getAllTeamCDSSheetIds(sheets);
+    const sheetIds = await getAllTeamCDSSheetIds(sheets, UTILS_SHEET_ID);
     if (!sheetIds.length) {
       console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
       return;
@@ -120,12 +94,12 @@ async function main() {
         }
 
         const [milestones, issuesData] = await Promise.all([
-          getSelectedMilestones(sheets, sheetId),
+          getSelectedMilestones(sheets, sheetId, G_MILESTONES),
           getAllIssues(sheets),
         ]);
 
-        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I (index 6)
-        const processedData = filtered.map(row => row.slice(0, 21)); // Ensure only 21 columns
+        const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
+        const processedData = filtered.map(row => row.slice(0, 21));
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
