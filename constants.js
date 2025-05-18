@@ -15,12 +15,14 @@ export const G_MR_SHEET = 'G-MR';
 export const NTC_SHEET = 'NTC';
 
 // Platform & Database
-export const GITLAB_URL = process.env.GITLAB_URL.endsWith('/')
-  ? process.env.GITLAB_URL
-  : process.env.GITLAB_URL + '/';
+const rawGitlabUrl = process.env.GITLAB_URL || '';
 
-export const GITLAB_TOKEN = process.env.GITLAB_TOKEN;
-export const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID;
+export const GITLAB_URL = rawGitlabUrl.endsWith('/')
+  ? rawGitlabUrl
+  : rawGitlabUrl + '/';
+
+export const GITLAB_TOKEN = process.env.GITLAB_TOKEN || '';
+export const SHEET_SYNC_SID = process.env.SHEET_SYNC_SID || '';
 
 
 // Timestamp
