@@ -98,7 +98,24 @@ async function main() {
           getAllNTC(sheets),
         ]);
 
-        const filtered = ntcData.filter(row => milestones.includes(row[6])); // Column I
+        const filtered = ntcData.filter(row => {
+          const milestone = row[8]; // Column I
+          const labelsRaw = row[7] || ''; // Column H
+          const labels = labelsRaw.split(',').map(label => label.trim());
+
+          const matchesMilestone = milestones.includes(milestone);
+          const requiredLabels = [
+            'Needs Test Case',
+            'Needs Test Scenario',
+            'Test Case Needs Update'
+          ];
+          const hasRelevantLabel = labels.some(label =>
+            requiredLabels.includes(label)
+          );
+
+          return matchesMilestone && hasRelevantLabel;
+        });
+
         const processedData = filtered.map(row => row.slice(0, 21));
 
         await clearNTC(sheets, sheetId);
