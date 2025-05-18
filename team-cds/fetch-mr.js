@@ -47,7 +47,7 @@ async function insertDataToGMR(sheets, sheetId, data) {
   console.log(`📤 Inserting ${paddedData.length} rows to ${G_MR_SHEET}!C4`);
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${G_ISSUES_SHEET}!C4`,
+    range: `${G_MR_SHEET}!C4`,
     valueInputOption: 'RAW',
     requestBody: { values: paddedData },
   });
