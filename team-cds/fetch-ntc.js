@@ -16,7 +16,7 @@ import {
   getSelectedMilestones,
 } from './common.js';
 
-async function getAllIssues(sheets) {
+async function getAllNTC(sheets) {
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
     range: ALL_NTC,
@@ -29,23 +29,27 @@ async function getAllIssues(sheets) {
   return data.values;
 }
 
-async function clearNTCSheet(sheets, sheetId) {
+async function clearNTC(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${NTC_SHEET}!C4:N`,
+    range: `${NTC_SHEET}!C4:U`,
   });
 }
 
-async function insertDataToNTCSheet(sheets, sheetId, data) {
-  if (data.length === 0) {
-    console.log("No data to insert.");
-    return; 
-  }
+function padRowToU(row) {
+  const fullLength = 14;
+  return [...row, ...Array(fullLength - row.length).fill('')];
+}
+
+async function insertDataToNTC(sheets, sheetId, data) {
+  const paddedData = data.map(row => padRowToU(row.slice(0, 14)));
+
+  console.log(`📤 Inserting ${paddedData.length} rows to ${NTC_SHEET}!C4`);
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
     range: `${NTC_SHEET}!C4`,
     valueInputOption: 'RAW',
-    requestBody: { values: data },
+    requestBody: { values: paddedData },
   });
 }
 
@@ -67,7 +71,7 @@ async function main() {
 
     await getSheetTitles(sheets, UTILS_SHEET_ID);
 
-    const sheetIds = await getAllTeamCDSSheetIds(sheets);
+    const sheetIds = await getAllTeamCDSSheetIds(sheets, UTILS_SHEET_ID);
     if (!sheetIds.length) {
       console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
       return;
@@ -89,38 +93,19 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([ 
-          getSelectedMilestones(sheets, sheetId),
-          getAllIssues(sheets),
+        const [milestones, ntcData] = await Promise.all([
+          getSelectedMilestones(sheets, sheetId, G_MILESTONES),
+          getAllNTC(sheets),
         ]);
 
-        const filtered = issuesData.filter(row => {
-          const milestoneMatches = milestones.includes(row[6]);
+        const filtered = ntcData.filter(row => milestones.includes(row[6])); // Column I
+        const processedData = filtered.map(row => row.slice(0, 21));
 
-          const labelsRaw = row[5] || '';  
-          const labels = labelsRaw.split(',').map(label => label.trim().toLowerCase());
+        await clearNTC(sheets, sheetId);
+        await insertDataToNTC(sheets, sheetId, processedData);
+        await updateTimestamp(sheets, sheetId);
 
-          console.log(`Raw labels for row: ${labelsRaw}`);
-          console.log(`Processed labels for row: ${labels}`);
-
-          const labelsMatch = labels.some(label => 
-            ["needs test case", "needs test scenario", "test case needs update"].includes(label)
-          );
-
-          return milestoneMatches && labelsMatch;
-        });
-
-        if (filtered.length > 0) {
-          const processedData = filtered.map(row => row.slice(0, 12)); 
-
-          await clearNTCSheet(sheets, sheetId);
-          await insertDataToNTCSheet(sheets, sheetId, processedData);
-          await updateTimestamp(sheets, sheetId);
-
-          console.log(`✅ Finished: ${sheetId}`);
-        } else {
-          console.log(`⚠️ No matching data for ${sheetId}`);
-        }
+        console.log(`✅ Finished: ${sheetId}`);
       } catch (err) {
         console.error(`❌ Error processing ${sheetId}: ${err.message}`);
       }
