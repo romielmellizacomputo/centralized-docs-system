@@ -113,10 +113,10 @@ async function main() {
         // - AND column H (index 7) contains at least one of the requiredLabels
         // Note: column J (index 9) is status and is ignored for label validation
         const filtered = ntcData.filter((row, i) => {
-          const milestoneRaw = row[8] || ''; // Column I
+          const milestoneRaw = row[6] || ''; // Column I
           const milestone = milestoneRaw.toLowerCase().trim();
 
-          const labelsRaw = row[7] || ''; // Column H
+          const labelsRaw = row[5] || ''; // Column H
           const labels = labelsRaw.split(',').map(label => label.toLowerCase().trim());
 
           const matchesMilestone = normalizedMilestones.includes(milestone);
