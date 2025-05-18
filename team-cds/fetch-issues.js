@@ -37,12 +37,12 @@ async function clearGIssues(sheets, sheetId) {
 }
 
 function padRowToU(row) {
-  const fullLength = 19;
+  const fullLength = 18;
   return [...row, ...Array(fullLength - row.length).fill('')];
 }
 
 async function insertDataToGIssues(sheets, sheetId, data) {
-  const paddedData = data.map(row => padRowToU(row.slice(0, 19)));
+  const paddedData = data.map(row => padRowToU(row.slice(0, 18)));
 
   console.log(`📤 Inserting ${paddedData.length} rows to ${G_ISSUES_SHEET}!C4`);
   await sheets.spreadsheets.values.update({
@@ -99,7 +99,7 @@ async function main() {
         ]);
 
         const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
-        const processedData = filtered.map(row => row.slice(0, 19));
+        const processedData = filtered.map(row => row.slice(0, 18));
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
