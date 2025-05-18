@@ -5,7 +5,7 @@ export const UTILS_SHEET_ID = process.env.LEADS_CDS_SID;
 export const CENTRAL_ISSUE_SHEET_ID = process.env.SHEET_SYNC_SID;
 export const ALL_ISSUES = 'ALL ISSUES!C4:U';
 export const ALL_NTC = 'ALL ISSUES!C4:N';
-export const ALL_MR = 'ALL MRs!C4:O';
+export const ALL_MR = 'ALL MRs!C4:S';
 
 // Target
 export const DASHBOARD_SHEET = 'Dashboard';
