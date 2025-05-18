@@ -37,12 +37,12 @@ async function clearGMR(sheets, sheetId) {
 }
 
 function padRowToU(row) {
-  const fullLength = 19;
+  const fullLength = 17;
   return [...row, ...Array(fullLength - row.length).fill('')];
 }
 
 async function insertDataToGMR(sheets, sheetId, data) {
-  const paddedData = data.map(row => padRowToU(row.slice(0, 19)));
+  const paddedData = data.map(row => padRowToU(row.slice(0, 17)));
 
   console.log(`📤 Inserting ${paddedData.length} rows to ${G_MR_SHEET}!C4`);
   await sheets.spreadsheets.values.update({
@@ -99,7 +99,7 @@ async function main() {
         ]);
 
         const filtered = issuesData.filter(row => milestones.includes(row[7])); // Column J
-        const processedData = filtered.map(row => row.slice(0, 19));
+        const processedData = filtered.map(row => row.slice(0, 17));
 
         await clearGMR(sheets, sheetId);
         await insertDataToGMR(sheets, sheetId, processedData);
