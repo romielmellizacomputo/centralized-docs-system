@@ -77,6 +77,13 @@ async function main() {
       return;
     }
 
+    // Labels to check inside column H (comma separated)
+    const requiredLabels = [
+      'needs test case',
+      'needs test scenario',
+      'test case needs update',
+    ];
+
     for (const sheetId of sheetIds) {
       try {
         console.log(`🔄 Processing: ${sheetId}`);
@@ -98,29 +105,37 @@ async function main() {
           getAllNTC(sheets),
         ]);
 
-        // Normalize milestones for case-insensitive match
+        // Normalize milestones for case-insensitive comparison
         const normalizedMilestones = milestones.map(m => m.toLowerCase().trim());
 
-        const requiredLabels = [
-          'needs test case',
-          'needs test scenario',
-          'test case needs update'
-        ];
+        // Filter rows where:
+        // - column I (index 8) matches one of the milestones
+        // - AND column H (index 7) contains at least one of the requiredLabels
+        const filtered = ntcData.filter((row, i) => {
+          const milestoneRaw = row[8] || ''; // Column I
+          const milestone = milestoneRaw.toLowerCase().trim();
 
-        const filtered = ntcData.filter(row => {
-          const milestone = (row[8] || '').toLowerCase().trim(); // Column I
           const labelsRaw = row[7] || ''; // Column H
           const labels = labelsRaw.split(',').map(label => label.toLowerCase().trim());
 
           const matchesMilestone = normalizedMilestones.includes(milestone);
           const hasRelevantLabel = labels.some(label => requiredLabels.includes(label));
 
-          return matchesMilestone && hasRelevantLabel;
+          if (matchesMilestone && hasRelevantLabel) {
+            console.log(`✅ Row ${i} MATCHES — Milestone: '${milestoneRaw}', Labels: '${labelsRaw}'`);
+            return true;
+          } else {
+            let reasons = [];
+            if (!matchesMilestone) reasons.push(`milestone '${milestoneRaw}' not matched`);
+            if (!hasRelevantLabel) reasons.push(`labels '${labelsRaw}' missing relevant tags`);
+            console.log(`❌ Row ${i} skipped — ${reasons.join(', ')}`);
+            return false;
+          }
         });
 
         if (filtered.length === 0) {
-          console.log(`ℹ️ No matching data found for ${sheetId}, skipping clear & insert.`);
-          continue; // Skip clearing & inserting if no data
+          console.info(`ℹ️ No matching data found for ${sheetId}, skipping clear & insert.`);
+          continue;
         }
 
         const processedData = filtered.map(row => row.slice(0, 21));
