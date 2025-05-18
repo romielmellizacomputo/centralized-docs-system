@@ -41,7 +41,7 @@ function padRowToU(row) {
   return [...row, ...Array(fullLength - row.length).fill('')];
 }
 
-async function insertDataToGIssues(sheets, sheetId, data) {
+async function insertDataToGMR(sheets, sheetId, data) {
   const paddedData = data.map(row => padRowToU(row.slice(0, 19)));
 
   console.log(`📤 Inserting ${paddedData.length} rows to ${G_MR_SHEET}!C4`);
