@@ -95,14 +95,14 @@ async function main() {
 
         const [milestones, issuesData] = await Promise.all([
           getSelectedMilestones(sheets, sheetId, G_MILESTONES),
-          getAllIssues(sheets),
+          getAllMR(sheets),
         ]);
 
         const filtered = issuesData.filter(row => milestones.includes(row[7])); // Column J
         const processedData = filtered.map(row => row.slice(0, 19));
 
-        await clearGIssues(sheets, sheetId);
-        await insertDataToGIssues(sheets, sheetId, processedData);
+        await clearGMR(sheets, sheetId);
+        await insertDataToGMR(sheets, sheetId, processedData);
         await updateTimestamp(sheets, sheetId);
 
         console.log(`✅ Finished: ${sheetId}`);
