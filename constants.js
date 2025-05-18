@@ -64,5 +64,5 @@ export function generateTimestampString() {
     timeZone: timeZonePHT
   }).format(now);
 
-  return `Sync on ${formattedDateEAT}, ${formattedEAT} (EAT) / ${formattedDatePHT}, ${formattedPHT} (PHT)`;
+  return `Sync on ${formattedDateEAT}, ${formattedEAT} (UG) / ${formattedDatePHT}, ${formattedPHT} (PH)`;
 }
