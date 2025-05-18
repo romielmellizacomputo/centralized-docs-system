@@ -99,19 +99,7 @@ async function main() {
         ]);
 
         const filtered = issuesData.filter(row => milestones.includes(row[6])); // Column I
-        const processedData = filtered.map(row => {
-          const sliced = row.slice(0, 19);
-          const valueU = sliced[18];
-        
-          if (valueU) {
-            
-            const cleaned = valueU.toString().match(/\d+/g);
-            sliced[18] = cleaned ? cleaned.join('') : '';
-          }
-        
-          return sliced;
-        });
-
+        const processedData = filtered.map(row => row.slice(0, 19));
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
