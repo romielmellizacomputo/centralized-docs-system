@@ -2,7 +2,7 @@ name: Update Existing Test Cases In Portal
 
 on:
   schedule:
-    - cron: '*/5 * * * *' 
+    - cron: '*/15 * * * *' 
   workflow_dispatch:      
 
 jobs:
