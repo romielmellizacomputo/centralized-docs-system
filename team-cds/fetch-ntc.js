@@ -2,10 +2,10 @@ import { google } from 'googleapis';
 import {
   UTILS_SHEET_ID,
   G_MILESTONES,
-  G_ISSUES_SHEET,
+  NTC_SHEET,
   DASHBOARD_SHEET,
   CENTRAL_ISSUE_SHEET_ID,
-  ALL_ISSUES,
+  ALL_NTC,
   generateTimestampString
 } from '../constants.js';
 
