@@ -82,7 +82,7 @@ async function main() {
         }
 
         if (!sheetTitles.includes(G_MR_SHEET)) {
-          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_ISSUES_SHEET}' sheet`);
+          console.warn(`⚠️ Skipping ${sheetId} — missing '${G_MR_SHEET}' sheet`);
           continue;
         }
 
