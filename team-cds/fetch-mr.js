@@ -16,7 +16,7 @@ import {
   getSelectedMilestones,
 } from './common.js';
 
-async function getAllIssues(sheets) {
+async function getAllMR(sheets) {
   const { data } = await sheets.spreadsheets.values.get({
     spreadsheetId: CENTRAL_ISSUE_SHEET_ID,
     range: ALL_MR,
@@ -29,19 +29,27 @@ async function getAllIssues(sheets) {
   return data.values;
 }
 
-async function clearGIssues(sheets, sheetId) {
+async function clearGMR(sheets, sheetId) {
   await sheets.spreadsheets.values.clear({
     spreadsheetId: sheetId,
-    range: `${G_MR_SHEET}!C4:N`,
+    range: `${G_MR_SHEET}!C4:S`,
   });
 }
 
+function padRowToU(row) {
+  const fullLength = 19;
+  return [...row, ...Array(fullLength - row.length).fill('')];
+}
+
 async function insertDataToGIssues(sheets, sheetId, data) {
+  const paddedData = data.map(row => padRowToU(row.slice(0, 19)));
+
+  console.log(`📤 Inserting ${paddedData.length} rows to ${G_MR_SHEET}!C4`);
   await sheets.spreadsheets.values.update({
     spreadsheetId: sheetId,
-    range: `${G_MR_SHEET}!C4`,
+    range: `${G_ISSUES_SHEET}!C4`,
     valueInputOption: 'RAW',
-    requestBody: { values: data },
+    requestBody: { values: paddedData },
   });
 }
 
@@ -56,7 +64,6 @@ async function updateTimestamp(sheets, sheetId) {
   });
 }
 
-
 async function main() {
   try {
     const auth = await authenticate();
@@ -64,7 +71,7 @@ async function main() {
 
     await getSheetTitles(sheets, UTILS_SHEET_ID);
 
-    const sheetIds = await getAllTeamCDSSheetIds(sheets);
+    const sheetIds = await getAllTeamCDSSheetIds(sheets, UTILS_SHEET_ID);
     if (!sheetIds.length) {
       console.error('❌ No Team CDS sheet IDs found in UTILS!B2:B');
       return;
@@ -86,13 +93,13 @@ async function main() {
           continue;
         }
 
-        const [milestones, issuesData] = await Promise.all([ 
-          getSelectedMilestones(sheets, sheetId),
+        const [milestones, issuesData] = await Promise.all([
+          getSelectedMilestones(sheets, sheetId, G_MILESTONES),
           getAllIssues(sheets),
         ]);
 
-        const filtered = issuesData.filter(row => milestones.includes(row[7])); // Column I (index 6)
-        const processedData = filtered.map(row => row.slice(0, 13));
+        const filtered = issuesData.filter(row => milestones.includes(row[7])); // Column J
+        const processedData = filtered.map(row => row.slice(0, 19));
 
         await clearGIssues(sheets, sheetId);
         await insertDataToGIssues(sheets, sheetId, processedData);
