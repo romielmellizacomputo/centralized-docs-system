@@ -2,7 +2,7 @@ name: Fetch Additional MR Info
 
 on:
   schedule:
-    - cron: '*/60 * * * *'  # Runs every hour
+    - cron: '0 */3 * * *'  # Runs every 3 hours
   workflow_dispatch:
 
 jobs:
