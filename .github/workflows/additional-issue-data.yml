@@ -2,7 +2,7 @@ name: Fetch Additional Issue Info
 
 on:
   schedule:
-    - cron: '0 */3 * * *'  # Runs every 3 hours
+    - cron: '0 */12 * * *'  # Runs every 12 hours
   workflow_dispatch:
 
 jobs:
