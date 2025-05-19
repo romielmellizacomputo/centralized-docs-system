@@ -2,7 +2,7 @@ name: Fetch GitLab Issues Service
 
 on:
   schedule:
-    - cron: '*/20 * * * *'  # Runs every 20 minutes
+    - cron: '*/40 * * * *'  # Runs every 50 minutes
   workflow_dispatch:
 
 jobs:
