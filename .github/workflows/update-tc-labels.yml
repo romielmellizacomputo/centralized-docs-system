@@ -2,7 +2,7 @@ name: Update TC Labels Service
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Runs every 5 minutes
+    - cron: '*/30 * * * *'  # Runs every 5 minutes
   workflow_dispatch:
 
 jobs:
