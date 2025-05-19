@@ -2,7 +2,7 @@ name: Fetch GitLab MR Service
 
 on:
   schedule:
-    - cron: '*/40 * * * *'  # Runs every 50 minutes
+    - cron: '0 */12 * * *'  # Runs every 12 hours
   workflow_dispatch:
 
 jobs:
