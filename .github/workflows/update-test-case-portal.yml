@@ -2,7 +2,7 @@ name: Update Test Case Portal
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Every 5 minutes
+    - cron: '*/15 * * * *'  # Every 15 minutes
   workflow_dispatch:       # Allow manual trigger
 
 jobs:
@@ -20,6 +20,11 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+
+      - name: Check runner IP address
+        run: |
+          echo "Runner IP Address:"
+          curl ifconfig.me  # Fetch and display the public IP address
 
       - name: Run update script
         env:
