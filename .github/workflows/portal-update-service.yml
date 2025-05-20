@@ -25,6 +25,11 @@ jobs:
         run: |
           ls -la automated-portals  # List contents of the folder
 
+      - name: Check runner IP address
+        run: |
+          echo "Runner IP Address:"
+          curl ifconfig.me  # Fetch and display the public IP address
+
       - name: Run update script
         env:
           CDS_PORTALS_SERVICE_ACCOUNT_JSON: ${{ secrets.CDS_PORTALS_SERVICE_ACCOUNT_JSON }}
