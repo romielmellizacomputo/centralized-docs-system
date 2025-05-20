@@ -3,7 +3,7 @@ name: Run Test Case Update Requests
 on:
   workflow_dispatch:  # allows manual triggering
   schedule:
-    - cron: '*/5 * * * *'  # every 5 minutes
+    - cron: '*/3 * * * *'  # every 5 minutes
 
 jobs:
   update-sheet:
