@@ -195,12 +195,33 @@ async function getSheetId(auth, sheetTitle) {
   return sheet.properties.sheetId;
 }
 
-async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
+// Converts a column letter like 'A' to a number (A=1, B=2, ..., Z=26, AA=27, etc.)
+function columnToNumber(col) {
+  let num = 0;
+  for (let i = 0; i < col.length; i++) {
+    num *= 26;
+    num += col.charCodeAt(i) - 64;
+  }
+  return num;
+}
+
+// Converts a column number like 27 back to a letter (27 = 'AA')
+function numberToColumn(n) {
+  let result = '';
+  while (n > 0) {
+    let remainder = (n - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    n = Math.floor((n - 1) / 26);
+  }
+  return result;
+}
+
+async function insertDataInRow(auth, sheetTitle, row, data, startCol) {
   const sheets = google.sheets({ version: 'v4', auth });
 
   const isAllTestCases = sheetTitle === "ALL TEST CASES";
 
-  const values = [
+  const rowValues = [
     data.C24,
     data.C3,
     `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
@@ -208,7 +229,7 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
     data.C5,
     data.C6,
     data.C7,
-    '',
+    '', // This blank cell is intentionally left
     data.C11,
     data.C32,
     data.C15,
@@ -220,19 +241,28 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
     data.C21
   ];
 
+  // Add one more value if sheet is 'ALL TEST CASES'
   if (isAllTestCases) {
-    values.push(data.C21);
+    rowValues.push(data.C21);
   }
+
+  // Calculate range dynamically
+  const startIndex = columnToNumber(startCol);
+  const endIndex = startIndex + rowValues.length - 1;
+  const endCol = numberToColumn(endIndex);
+
+  const range = `${sheetTitle}!${startCol}${row}:${endCol}${row}`;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`,
+    range,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
-      values: [values]
+      values: [rowValues]
     }
   });
 }
+
 
 async function clearRowData(auth, sheetTitle, row, isAllTestCases) {
   const sheets = google.sheets({ version: 'v4', auth });
