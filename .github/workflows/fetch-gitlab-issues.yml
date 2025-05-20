@@ -27,6 +27,12 @@ jobs:
           cd SheetSync
           npm install
 
+      - name: Check Runner IP Address
+        run: |
+          echo "Fetching IP address..."
+          IP_ADDRESS=$(curl -s ifconfig.me)
+          echo "Runner IP Address: $IP_ADDRESS"
+
       - name: Run fetchallissues.js
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
