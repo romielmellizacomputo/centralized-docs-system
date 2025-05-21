@@ -3,17 +3,16 @@ name: Run Team CDS Process
 on:
   workflow_dispatch:
     inputs:
-      type:
-        description: 'Type of data to process'
+      script:
+        description: 'Which script to run'
         required: true
-        default: 'issues'
+        default: 'sync_issues'
         type: choice
         options:
-          - issues
-          - mr
-          - ntc
+          - sync_issues
+          - sync_mrs
   schedule:
-    - cron: '0 2 * * *'  # Run daily at 2:00 AM UTC
+    - cron: '0 2 * * *'  # every day at 2:00 AM UTC
 
 jobs:
   run_team_cds:
@@ -21,21 +20,24 @@ jobs:
     env:
       TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
       SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
-
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Set up Python 3.11
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install google-api-python-client google-auth pytz
 
-      - name: Run main CDS script
+      - name: Run script
         run: |
-          python team-cds/main.py "${{ github.event.inputs.type || 'issues' }}"
+          if [ "${{ github.event.inputs.script }}" = "sync_issues" ]; then
+            python team-cds/sync_issues.py
+          else
+            python team-cds/sync_mrs.py
+          fi
