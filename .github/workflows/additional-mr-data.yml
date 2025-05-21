@@ -1,8 +1,9 @@
 name: Fetch Additional MR Info
 
 on:
-  # schedule:
-  #   - cron: '0 */12 * * *'  # Runs every 12 hours
+  schedule:
+  - cron: '0 18 * * *'  # Runs every day at 6 PM
+
   workflow_dispatch:
 
 jobs:
