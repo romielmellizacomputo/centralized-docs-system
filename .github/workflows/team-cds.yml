@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run fetch-issues.js
+      - name: Run fetch-issues.py
         run: node team-cds/fetch-issues.js
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
@@ -34,7 +34,7 @@ jobs:
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
 
-      - name: Run fetch-mr.js
+      - name: Run fetch-mr.py
         run: node team-cds/fetch-mr.js
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
@@ -42,7 +42,7 @@ jobs:
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
 
-      - name: Run fetch-ntc.js
+      - name: Run fetch-ntc.py
         run: node team-cds/fetch-ntc.js
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
