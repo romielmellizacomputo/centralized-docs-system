@@ -24,7 +24,7 @@ def get_sheet_titles(sheets, spreadsheet_id):
 def get_all_team_cds_sheet_ids(sheets, utils_sheet_id):
     result = sheets.spreadsheets().values().get(
         spreadsheetId=utils_sheet_id,
-        range='UTILS!B2:B'
+        range='UTILS!B2:B100'  # <-- fixed range with explicit end row
     ).execute()
     values = result.get('values', [])
     return [item for sublist in values for item in sublist if item]
@@ -33,7 +33,7 @@ def get_all_team_cds_sheet_ids(sheets, utils_sheet_id):
 def get_selected_milestones(sheets, sheet_id, g_milestones):
     result = sheets.spreadsheets().values().get(
         spreadsheetId=sheet_id,
-        range=f'{g_milestones}!G4:G'
+        range=f'{g_milestones}!G4:G100'  # <-- fixed range
     ).execute()
     values = result.get('values', [])
     return [item for sublist in values for item in sublist if item]
