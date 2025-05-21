@@ -1,7 +1,9 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-
+import os
 from googleapiclient.discovery import build
-from google.oauth2.service_account import Credentials
 from constants import (
     UTILS_SHEET_ID,
     G_MILESTONES,
