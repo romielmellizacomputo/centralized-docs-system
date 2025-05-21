@@ -1,5 +1,7 @@
-from googleapiclient.discovery import build
-from constants import (
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from googleapiclient.discovery import buildfrom constants import (
     UTILS_SHEET_ID,
     G_MILESTONES,
     NTC_SHEET,
@@ -133,3 +135,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
