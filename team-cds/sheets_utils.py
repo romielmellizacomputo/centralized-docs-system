@@ -1,0 +1,48 @@
+from config import CONFIG, DASHBOARD_SHEET, generate_timestamp_string
+
+def get_all_data(sheets, data_type, CENTRAL_ISSUE_SHEET_ID):
+    data_range = CONFIG[data_type]["range"]
+    result = sheets.spreadsheets().values().get(
+        spreadsheetId=CENTRAL_ISSUE_SHEET_ID,
+        range=data_range
+    ).execute()
+    values = result.get('values', [])
+    if not values:
+        raise Exception(f"No data found in range {data_range}")
+    return values
+
+
+def clear_target_sheet(sheets, sheet_id, data_type):
+    sheet_name = CONFIG[data_type]["sheet_name"]
+    col_end = chr(ord('C') + CONFIG[data_type]["max_length"] - 1)
+    sheets.spreadsheets().values().clear(
+        spreadsheetId=sheet_id,
+        range=f"{sheet_name}!C4:{col_end}"
+    ).execute()
+
+
+def pad_row(row, max_length):
+    return row[:max_length] + [''] * (max_length - len(row))
+
+
+def insert_data(sheets, sheet_id, data_type, data):
+    sheet_name = CONFIG[data_type]["sheet_name"]
+    max_length = CONFIG[data_type]["max_length"]
+    padded_data = [pad_row(row, max_length) for row in data]
+    print(f"📤 Inserting {len(padded_data)} rows to {sheet_name}!C4")
+    sheets.spreadsheets().values().update(
+        spreadsheetId=sheet_id,
+        range=f"{sheet_name}!C4",
+        valueInputOption='RAW',
+        body={'values': padded_data}
+    ).execute()
+
+
+def update_timestamp(sheets, sheet_id):
+    timestamp = generate_timestamp_string()
+    sheets.spreadsheets().values().update(
+        spreadsheetId=sheet_id,
+        range=f"{DASHBOARD_SHEET}!W6",
+        valueInputOption='RAW',
+        body={'values': [[timestamp]]}
+    ).execute()
