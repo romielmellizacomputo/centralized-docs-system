@@ -6,10 +6,6 @@ def get_all_data(sheets, data_type, CENTRAL_ISSUE_SHEET_ID):
         spreadsheetId=CENTRAL_ISSUE_SHEET_ID,
         range=data_range
     ).execute()
-    values = result.get('values', [])
-    if not values:
-        raise Exception(f"No data found in range {data_range}")
-    return values
 
 def clear_target_sheet(sheets, sheet_id, data_type):
     sheet_name = CONFIG[data_type]["sheet_name"]
