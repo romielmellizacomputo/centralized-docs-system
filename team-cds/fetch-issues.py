@@ -23,6 +23,12 @@ from common import (
 )
 
 
+# Synchronous authenticate function
+def authenticate():
+    # Replace 'your-service-account-file.json' with your actual service account file
+    creds = Credentials.from_service_account_file('your-service-account-file.json')
+    return creds
+
 async def get_all_issues(sheets):
     result = sheets.spreadsheets().values().get(
         spreadsheetId=CENTRAL_ISSUE_SHEET_ID,
@@ -35,18 +41,15 @@ async def get_all_issues(sheets):
 
     return values
 
-
 async def clear_g_issues(sheets, sheet_id):
     sheets.spreadsheets().values().clear(
         spreadsheetId=sheet_id,
         range=f"{G_ISSUES_SHEET}!C4:T"
     ).execute()
 
-
 def pad_row_to_u(row):
     full_length = 18
     return row + [''] * (full_length - len(row))
-
 
 async def insert_data_to_g_issues(sheets, sheet_id, data):
     padded_data = [pad_row_to_u(row[:18]) for row in data]
@@ -59,7 +62,6 @@ async def insert_data_to_g_issues(sheets, sheet_id, data):
         body={"values": padded_data}
     ).execute()
 
-
 async def update_timestamp(sheets, sheet_id):
     formatted = generate_timestamp_string()
     sheets.spreadsheets().values().update(
@@ -69,10 +71,9 @@ async def update_timestamp(sheets, sheet_id):
         body={"values": [[formatted]]}
     ).execute()
 
-
 async def main():
     try:
-        auth = await authenticate()
+        auth = authenticate()  # No await here
         sheets = build('sheets', 'v4', credentials=auth)
 
         await get_sheet_titles(sheets, UTILS_SHEET_ID)
@@ -113,7 +114,6 @@ async def main():
 
     except Exception as err:
         print(f"❌ Main failure: {str(err)}")
-
 
 if __name__ == "__main__":
     asyncio.run(main())
