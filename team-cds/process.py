@@ -13,7 +13,7 @@ def process_data_type(data_type):
 
         sheet_ids = get_all_team_cds_sheet_ids(sheets, CENTRAL_ISSUE_SHEET_ID)
         if not sheet_ids:
-            print("❌ No Team CDS sheet IDs found in UTILS!B2:B1000")  # Fixed range in message
+            print("❌ No Team CDS sheet IDs found in UTILS!B2:B10")
             return
 
         for sheet_id in sheet_ids:
@@ -33,7 +33,7 @@ def process_data_type(data_type):
                 milestones = get_selected_milestones(sheets, sheet_id, milestone_sheet)
                 
                 # Pass explicit range for utils sheet to avoid parsing error
-                all_data = get_all_data(sheets, data_type, CENTRAL_ISSUE_SHEET_ID, utils_range="UTILS!B2:B")
+                all_data = get_all_data(sheets, data_type, CENTRAL_ISSUE_SHEET_ID, utils_range="UTILS!B2:B10")
 
                 label_index = CONFIG[data_type]["label_index"]
 
