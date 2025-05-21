@@ -33,7 +33,7 @@ def process_data_type(data_type):
                 milestones = get_selected_milestones(sheets, sheet_id, milestone_sheet)
                 
                 # Pass explicit range for utils sheet to avoid parsing error
-                all_data = get_all_data(sheets, data_type, CENTRAL_ISSUE_SHEET_ID, utils_range="UTILS!B2:B10")
+                all_data = get_all_data(sheets, data_type, CENTRAL_ISSUE_SHEET_ID, utils_range="UTILS!B2:B")
 
                 label_index = CONFIG[data_type]["label_index"]
 
