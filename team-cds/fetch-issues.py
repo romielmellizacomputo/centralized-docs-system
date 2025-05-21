@@ -1,5 +1,6 @@
 import sys
 import os
+import asyncio  # Add this line to import asyncio
 
 # Add the root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
