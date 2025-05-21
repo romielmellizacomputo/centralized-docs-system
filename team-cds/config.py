@@ -1,11 +1,5 @@
 import os
 
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-
-if not SPREADSHEET_ID:
-    raise RuntimeError("Missing SPREADSHEET_ID environment variable")
-
-
 from constants import (
     UTILS_SHEET_ID,
     G_MILESTONES,
