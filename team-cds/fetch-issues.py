@@ -1,11 +1,13 @@
 import sys
 import os
+import json
 import asyncio  # Add this line to import asyncio
 
 # Add the root directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from googleapiclient.discovery import build
+from google.oauth2 import service_account  # Import service_account for credentials
 from constants import (
     UTILS_SHEET_ID,
     G_MILESTONES,
@@ -16,7 +18,6 @@ from constants import (
     generate_timestamp_string
 )
 from common import (
-    authenticate,
     get_sheet_titles,
     get_all_team_cds_sheet_ids,
     get_selected_milestones,
@@ -66,6 +67,12 @@ async def update_timestamp(sheets, sheet_id):
         body={'values': [[formatted]]},
     ).execute()
 
+async def authenticate():
+    # Load credentials from the environment variable
+    service_account_info = json.loads(os.environ['TEAM_CDS_SERVICE_ACCOUNT_JSON'])
+    credentials = service_account.Credentials.from_service_account_info(service_account_info)
+    return credentials
+
 async def main():
     try:
         auth = await authenticate()
@@ -112,4 +119,5 @@ async def main():
         print(f"❌ Main failure: {err}")
 
 # Run the main function
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
