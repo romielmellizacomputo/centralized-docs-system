@@ -99,10 +99,9 @@ async def main():
                     print(f"⚠️ Skipping {sheet_id} — missing '{G_ISSUES_SHEET}' sheet")
                     continue
 
-                milestones, issues_data = await asyncio.gather(
-                    get_selected_milestones(sheets, sheet_id, G_MILESTONES),
-                    get_all_issues(sheets),
-                )
+                # Ensure both functions are async and return awaitable objects
+                milestones = await get_selected_milestones(sheets, sheet_id, G_MILESTONES)
+                issues_data = await get_all_issues(sheets)
 
                 filtered = [row for row in issues_data if row[6] in milestones]  # Column I
                 processed_data = [row[:18] for row in filtered]
