@@ -1,7 +1,8 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from googleapiclient.discovery import buildfrom constants import (
+from googleapiclient.discovery import build
+from constants import (
     UTILS_SHEET_ID,
     G_MILESTONES,
     NTC_SHEET,
