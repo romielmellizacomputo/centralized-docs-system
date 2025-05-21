@@ -1,5 +1,9 @@
 import asyncio
+import os
+import sys
 from googleapiclient.discovery import build
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from constants import (
     UTILS_SHEET_ID,
