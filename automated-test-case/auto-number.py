@@ -2,37 +2,38 @@ import os
 import json
 import re
 import time
-from google.oauth2 import service_account
+
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-# Parse env vars
-sheet_data = json.loads(os.environ["SHEET_DATA"])
-spreadsheet_url = sheet_data["spreadsheetUrl"]
-spreadsheet_id = re.search(r"/d/([a-zA-Z0-9-_]+)", spreadsheet_url).group(1)
+# Load environment variables (assumes they're set in your environment)
+sheet_data = json.loads(os.environ['SHEET_DATA'])
+credentials_info = json.loads(os.environ['TEST_CASE_SERVICE_ACCOUNT_JSON'])
 
-credentials_json = json.loads(os.environ["TEST_CASE_SERVICE_ACCOUNT_JSON"])
-
-# Create credentials and sheets client
+# Constants
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-credentials = service_account.Credentials.from_service_account_info(credentials_json, scopes=SCOPES)
-sheets_service = build('sheets', 'v4', credentials=credentials)
-
 skip_sheets = ['ToC', 'Roster', 'Issues']
 
-def update_values_with_retry(sheets, spreadsheet_id, range_name, values):
+def get_spreadsheet_id(url):
+    match = re.search(r'/d/([a-zA-Z0-9-_]+)', url)
+    if match:
+        return match.group(1)
+    raise ValueError('Invalid spreadsheet URL')
+
+def update_values_with_retry(service, spreadsheet_id, range_, values):
     attempts = 0
     while True:
         try:
-            sheets.values().update(
+            service.spreadsheets().values().update(
                 spreadsheetId=spreadsheet_id,
-                range=range_name,
+                range=range_,
                 valueInputOption='USER_ENTERED',
                 body={'values': values}
             ).execute()
             return
-        except HttpError as error:
-            if error.resp.status == 429:
+        except HttpError as e:
+            if e.resp.status == 429:
                 attempts += 1
                 wait_time = (2 ** attempts)
                 print(f"Quota exceeded. Retrying in {wait_time} seconds...")
@@ -41,8 +42,14 @@ def update_values_with_retry(sheets, spreadsheet_id, range_name, values):
                 raise
 
 def main():
+    spreadsheet_url = sheet_data['spreadsheetUrl']
+    spreadsheet_id = get_spreadsheet_id(spreadsheet_url)
+
+    creds = Credentials.from_service_account_info(credentials_info, scopes=SCOPES)
+    service = build('sheets', 'v4', credentials=creds)
+
     try:
-        metadata = sheets_service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+        metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
         sheets = metadata.get('sheets', [])
         sheet_names = [s['properties']['title'] for s in sheets]
 
@@ -54,14 +61,13 @@ def main():
             sheet_id = sheet_meta['properties']['sheetId']
             merges = sheet_meta.get('merges', [])
 
-            range_name = f"'{name}'!E12:F"
-            result = sheets_service.spreadsheets().values().get(
-                spreadsheetId=spreadsheet_id, range=range_name).execute()
+            range_ = f"'{name}'!E12:F"
+            result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=range_).execute()
             rows = result.get('values', [])
             start_row = 12
 
             requests = []
-            values = [[''] for _ in range(len(rows))]
+            values = [[''] for _ in range(len(rows))]  # list of single-item lists
             number = 1
             row = 0
 
@@ -70,9 +76,9 @@ def main():
 
                 f_merge = next((
                     m for m in merges
-                    if m['startRowIndex'] == abs_row - 1
-                    and m['startColumnIndex'] == 5
-                    and m['endColumnIndex'] == 6
+                    if m['startRowIndex'] == abs_row - 1 and
+                       m['startColumnIndex'] == 5 and
+                       m['endColumnIndex'] == 6
                 ), None)
 
                 merge_start = abs_row
@@ -85,15 +91,15 @@ def main():
                 is_merged_in_f = merge_end > merge_start
                 merge_length = merge_end - merge_start
 
-                f_value = rows[row][1].strip() if len(rows[row]) > 1 else ''
-                e_value = rows[row][0].strip() if len(rows[row]) > 0 else ''
+                f_value = rows[row][1].strip() if len(rows[row]) > 1 and rows[row][1] else None
+                e_value = rows[row][0].strip() if len(rows[row]) > 0 and rows[row][0] else None
 
                 e_merge = next((
                     m for m in merges
-                    if m['startRowIndex'] == merge_start - 1
-                    and m['endRowIndex'] == merge_end - 1
-                    and m['startColumnIndex'] == 4
-                    and m['endColumnIndex'] == 5
+                    if m['startRowIndex'] == merge_start - 1 and
+                       m['endRowIndex'] == merge_end - 1 and
+                       m['startColumnIndex'] == 4 and
+                       m['endColumnIndex'] == 5
                 ), None)
 
                 if f_value:
@@ -109,7 +115,7 @@ def main():
                                     'startColumnIndex': 4,
                                     'endColumnIndex': 5,
                                 },
-                                'mergeType': 'MERGE_ALL'
+                                'mergeType': 'MERGE_ALL',
                             }
                         })
 
@@ -130,14 +136,14 @@ def main():
 
                 row += merge_length
 
-            update_range = f"'{name}'!E12:E{start_row + len(values) - 1}"
-            update_values_with_retry(sheets_service, spreadsheet_id, update_range, values)
+            # Update values with retry
+            end_row = start_row + len(values) - 1
+            value_range = f"'{name}'!E12:E{end_row}"
+            update_values_with_retry(service, spreadsheet_id, value_range, values)
 
             if requests:
-                sheets_service.spreadsheets().batchUpdate(
-                    spreadsheetId=spreadsheet_id,
-                    body={'requests': requests}
-                ).execute()
+                body = {'requests': requests}
+                service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
 
             print(f"✅ Updated: {name}")
 
