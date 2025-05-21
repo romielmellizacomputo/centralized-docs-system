@@ -1,7 +1,6 @@
 import asyncio
-import os
-import sys
 from googleapiclient.discovery import build
+from google.oauth2.service_account import Credentials  # Ensure this import is included
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -16,12 +15,10 @@ from constants import (
 )
 
 from common import (
-    authenticate,
     get_sheet_titles,
     get_all_team_cds_sheet_ids,
     get_selected_milestones
 )
-
 
 # Synchronous authenticate function
 def authenticate():
