@@ -1,11 +1,8 @@
 import os
 import json
 import re
-import time
-
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
 sheet_data = json.loads(os.environ['SHEET_DATA'])
 credentials_info = json.loads(os.environ['TEST_CASE_SERVICE_ACCOUNT_JSON'])
@@ -39,118 +36,109 @@ def main():
             sheet_id = sheet_meta['properties']['sheetId']
             merges = sheet_meta.get('merges', [])
 
-            # Get data from columns E and F starting row 12
-            range_ = f"'{name}'!E12:F"
-            result = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=range_).execute()
-            rows = result.get('values', [])
-            start_row = 12
-
             requests = []
 
             for merge in merges:
-                start_row_idx = merge['startRowIndex']
-                end_row_idx = merge['endRowIndex']
-                start_col_idx = merge['startColumnIndex']
-                end_col_idx = merge['endColumnIndex']
+                start_row = merge['startRowIndex']
+                end_row = merge['endRowIndex']
+                start_col = merge['startColumnIndex']
+                end_col = merge['endColumnIndex']
 
-                if start_row_idx < 11:  # skip merges above row 12
+                if start_row < 11:  # only process rows from 12 (index 11)
                     continue
 
-                col_letter = chr(65 + start_col_idx)
-                merge_range = f"{col_letter}{start_row_idx+1}:{chr(64 + end_col_idx)}{end_row_idx}"
+                # Handle E column (index 4)
+                if start_col == 4 and end_col == 5:
+                    row_range = f"{name}!E{start_row+1}:E{end_row}"
+                    values = service.spreadsheets().values().get(
+                        spreadsheetId=spreadsheet_id, range=row_range).execute().get('values', [])
 
-                # Process column E merges (column index 4)
-                if start_col_idx == 4 and end_col_idx == 5:
-                    e_range = f"'{name}'!E{start_row_idx+1}:E{end_row_idx}"
-                    f_range = f"'{name}'!F{start_row_idx+1}:F{end_row_idx}"
-                    e_values = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=e_range).execute().get('values', [])
-                    f_values = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=f_range).execute().get('values', [])
+                    has_data = any(val and val[0].strip() for val in values)
 
-                    e_has_data = any(row and row[0].strip() for row in e_values)
-                    f_has_data = any(row and row[0].strip() for row in f_values)
-
-                    if e_has_data and not f_has_data:
-                        # Unmerge E
+                    if not has_data:
+                        # Unmerge
                         requests.append({
                             'unmergeCells': {
                                 'range': {
                                     'sheetId': sheet_id,
-                                    'startRowIndex': start_row_idx,
-                                    'endRowIndex': end_row_idx,
+                                    'startRowIndex': start_row,
+                                    'endRowIndex': end_row,
                                     'startColumnIndex': 4,
-                                    'endColumnIndex': 5,
+                                    'endColumnIndex': 5
                                 }
                             }
                         })
-                        # Clear E values
+                        # Clear values
                         requests.append({
                             'updateCells': {
                                 'range': {
                                     'sheetId': sheet_id,
-                                    'startRowIndex': start_row_idx,
-                                    'endRowIndex': end_row_idx,
+                                    'startRowIndex': start_row,
+                                    'endRowIndex': end_row,
                                     'startColumnIndex': 4,
-                                    'endColumnIndex': 5,
+                                    'endColumnIndex': 5
                                 },
                                 'fields': 'userEnteredValue'
                             }
                         })
-                        # Add black border
+                        # Add borders
                         requests.append({
                             'updateBorders': {
                                 'range': {
                                     'sheetId': sheet_id,
-                                    'startRowIndex': start_row_idx,
-                                    'endRowIndex': end_row_idx,
+                                    'startRowIndex': start_row,
+                                    'endRowIndex': end_row,
                                     'startColumnIndex': 4,
-                                    'endColumnIndex': 5,
+                                    'endColumnIndex': 5
                                 },
                                 'top':    {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}},
                                 'bottom': {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}},
                                 'left':   {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}},
-                                'right':  {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}},
+                                'right':  {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}}
                             }
                         })
 
-                # Process column F merges (index 5)
-                elif start_col_idx == 5 and end_col_idx == 6:
-                    f_range = f"'{name}'!F{start_row_idx+1}:F{end_row_idx}"
-                    f_values = service.spreadsheets().values().get(spreadsheetId=spreadsheet_id, range=f_range).execute().get('values', [])
+                # Handle F column (index 5)
+                elif start_col == 5 and end_col == 6:
+                    row_range = f"{name}!F{start_row+1}:F{end_row}"
+                    values = service.spreadsheets().values().get(
+                        spreadsheetId=spreadsheet_id, range=row_range).execute().get('values', [])
 
-                    f_has_data = any(row and row[0].strip() for row in f_values)
+                    has_data = any(val and val[0].strip() for val in values)
 
-                    if not f_has_data:
-                        # Unmerge F and add black border
+                    if not has_data:
+                        # Unmerge
                         requests.append({
                             'unmergeCells': {
                                 'range': {
                                     'sheetId': sheet_id,
-                                    'startRowIndex': start_row_idx,
-                                    'endRowIndex': end_row_idx,
+                                    'startRowIndex': start_row,
+                                    'endRowIndex': end_row,
                                     'startColumnIndex': 5,
-                                    'endColumnIndex': 6,
+                                    'endColumnIndex': 6
                                 }
                             }
                         })
+                        # Add borders
                         requests.append({
                             'updateBorders': {
                                 'range': {
                                     'sheetId': sheet_id,
-                                    'startRowIndex': start_row_idx,
-                                    'endRowIndex': end_row_idx,
+                                    'startRowIndex': start_row,
+                                    'endRowIndex': end_row,
                                     'startColumnIndex': 5,
-                                    'endColumnIndex': 6,
+                                    'endColumnIndex': 6
                                 },
                                 'top':    {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}},
                                 'bottom': {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}},
                                 'left':   {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}},
-                                'right':  {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}},
+                                'right':  {'style': 'SOLID', 'width': 1, 'color': {'red': 0, 'green': 0, 'blue': 0}}
                             }
                         })
 
             if requests:
-                body = {'requests': requests}
-                service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+                service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id, body={'requests': requests}).execute()
                 print(f"✅ Unmerging updated for: {name}")
             else:
                 print(f"⏭️ No unmerging needed for: {name}")
