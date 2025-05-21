@@ -1,0 +1,39 @@
+name: Run Team CDS Process
+
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Type of data to process'
+        required: true
+        default: 'issues'
+        type: choice
+        options:
+          - issues
+          - mr
+          - ntc
+  schedule:
+    - cron: '0 2 * * *'  # every day at 2:00 AM UTC
+
+jobs:
+  run_team_cds:
+    runs-on: ubuntu-latest
+    env:
+      TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-api-python-client google-auth
+
+      - name: Run script
+        run: |
+          python team-cds/main.py ${{ github.event.inputs.type || 'issues' }}
