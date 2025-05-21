@@ -1,6 +1,6 @@
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
-from constants import (
+from ..constants import (
     UTILS_SHEET_ID,
     G_MILESTONES,
     G_MR_SHEET,
