@@ -1,5 +1,5 @@
 from googleapiclient.discovery import build
-from ..constants import (
+from constants import (
     UTILS_SHEET_ID,
     G_MILESTONES,
     NTC_SHEET,
