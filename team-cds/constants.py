@@ -4,8 +4,12 @@ import pytz  # Make sure to install pytz: pip install pytz
 
 # Constants
 UTILS_SHEET_ID = os.getenv('LEADS_CDS_SID')
+if not UTILS_SHEET_ID:
+    raise ValueError("Missing required env var: LEADS_CDS_SID")
 
 CENTRAL_ISSUE_SHEET_ID = os.getenv('SHEET_SYNC_SID')
+if not CENTRAL_ISSUE_SHEET_ID:
+    raise ValueError("Missing required env var: SHEET_SYNC_SID")
 ALL_ISSUES = 'ALL ISSUES!C4:T'
 ALL_NTC = 'ALL ISSUES!C4:N'
 ALL_MR = 'ALL MRs!C4:S'
