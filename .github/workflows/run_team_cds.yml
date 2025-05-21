@@ -2,15 +2,6 @@ name: Run Team CDS Process
 
 on:
   workflow_dispatch:
-    inputs:
-      script:
-        description: 'Which script to run'
-        required: true
-        default: 'sync_issues'
-        type: choice
-        options:
-          - sync_issues
-          - sync_mrs
   schedule:
     - cron: '0 2 * * *'  # every day at 2:00 AM UTC
 
@@ -34,10 +25,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install google-api-python-client google-auth pytz
 
-      - name: Run script
-        run: |
-          if [ "${{ github.event.inputs.script }}" = "sync_issues" ]; then
-            python team-cds/sync_issues.py
-          else
-            python team-cds/sync_mrs.py
-          fi
+      - name: Run sync_issues.py
+        run: python team-cds/sync_issues.py
+
+      - name: Run sync_mrs.py
+        run: python team-cds/sync_mrs.py
