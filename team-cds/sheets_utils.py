@@ -1,15 +1,12 @@
 from config import CONFIG, DASHBOARD_SHEET, generate_timestamp_string
 
 def get_all_data(sheets, data_type, spreadsheet_id, utils_range=None):
-    data_range = utils_range if utils_range else CONFIG[data_type]["range"]
     result = sheets.spreadsheets().values().get(
         spreadsheetId=spreadsheet_id,
-        range=data_range
+        range=utils_range
     ).execute()
-    values = result.get('values', [])
-    if not values:
-        raise Exception(f"No data found in range {data_range}")
-    return values
+    return result.get("values", [])
+
 
 
 def clear_target_sheet(sheets, sheet_id, data_type):
