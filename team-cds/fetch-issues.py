@@ -1,7 +1,10 @@
+import sys
+import os
 import asyncio
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials  # Ensure this import is included
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from constants import (
     UTILS_SHEET_ID,
