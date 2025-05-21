@@ -1,8 +1,9 @@
 name: Fetch Additional Issue Info
 
 on:
-  # schedule:
-  #   - cron: '0 */12 * * *'  # Runs every 12 hours
+  schedule:
+  - cron: '0 6 * * *'  # Runs every day at 6 AM
+
   workflow_dispatch:
 
 jobs:
