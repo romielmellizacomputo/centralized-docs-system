@@ -1,9 +1,9 @@
 from config import CONFIG, DASHBOARD_SHEET, generate_timestamp_string
 
-def get_all_data(sheets, data_type, CENTRAL_ISSUE_SHEET_ID):
-    data_range = CONFIG[data_type]["range"]
+def get_all_data(sheets, data_type, spreadsheet_id, utils_range=None):
+    data_range = utils_range if utils_range else CONFIG[data_type]["range"]
     result = sheets.spreadsheets().values().get(
-        spreadsheetId=CENTRAL_ISSUE_SHEET_ID,
+        spreadsheetId=spreadsheet_id,
         range=data_range
     ).execute()
 
