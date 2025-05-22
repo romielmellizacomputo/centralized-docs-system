@@ -13,7 +13,7 @@ credentials_info = json.loads(os.environ['TEST_CASE_SERVICE_ACCOUNT_JSON'])
 
 # Constants
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-skip_sheets = ['ToC', 'Roster', 'Issues']
+skip_sheets = ['ToC', 'Roster', 'Issues', 'HELP']
 
 def get_spreadsheet_id(url):
     match = re.search(r'/d/([a-zA-Z0-9-_]+)', url)
