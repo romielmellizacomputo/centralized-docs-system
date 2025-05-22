@@ -2,7 +2,8 @@ import os
 import json
 import re
 import time
-
+import datetime
+import pytz 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -40,6 +41,36 @@ def update_values_with_retry(service, spreadsheet_id, range_, values):
                 time.sleep(wait_time)
             else:
                 raise
+
+# Retry helper
+def execute_with_retries(request_fn, max_retries=5, base_delay=5):
+    for attempt in range(max_retries):
+        try:
+            return request_fn()
+        except HttpError as e:
+            if e.resp.status in [429, 500, 503]:
+                wait_time = base_delay * (2 ** attempt)
+                print(f"⚠️ Rate limited or server error. Retrying in {wait_time} seconds... (Attempt {attempt + 1})")
+                time.sleep(wait_time)
+            else:
+                print("❌ Non-retryable error encountered:")
+                raise
+    raise Exception("❌ Exceeded maximum retries due to rate limits or server errors.")
+    
+def get_current_times():
+    # Define timezones
+    ph_tz = pytz.timezone('Asia/Manila')
+    ug_tz = pytz.timezone('Africa/Kampala')
+    # Get current UTC time
+    now_utc = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
+    # Convert to PH and UG timezones
+    now_ph = now_utc.astimezone(ph_tz)
+    now_ug = now_utc.astimezone(ug_tz)
+    # Format the date and time nicely
+    ph_time_str = now_ph.strftime('%B %d, %Y %I:%M %p')
+    ug_time_str = now_ug.strftime('%B %d, %Y %I:%M %p')
+    return ph_time_str, ug_time_str
+
 
 def main():
     spreadsheet_url = sheet_data['spreadsheetUrl']
@@ -140,10 +171,34 @@ def main():
             end_row = start_row + len(values) - 1
             value_range = f"'{name}'!E12:E{end_row}"
             update_values_with_retry(service, spreadsheet_id, value_range, values)
-
             if requests:
-                body = {'requests': requests}
-                service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body=body).execute()
+                # Add a note to cell E10 (row 9 zero-based)
+                ph_time_str, ug_time_str = get_current_times()
+                note_text = (
+                    f"This document was updated on {ph_time_str} (PH Time) / {ug_time_str} (UG Time). "
+                    "The autonumbering and unmerging processes were managed by the Centralized Docs System, "
+                    "leveraging integrations with GitLab, GitHub, Google API, and Google Apps Script. "
+                    "This is a Milestone Project by Romiel Melliza Computo."
+                )
+                requests.append({
+                    "updateCells": {
+                        "rows": [{
+                            "values": [{
+                                "note": note_text
+                            }]
+                        }],
+                        "fields": "note",
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 9,  # E10 is zero-based index 9
+                            "endRowIndex": 10,
+                            "startColumnIndex": 4,  # Column E → index 4
+                            "endColumnIndex": 5
+                        }
+                    }
+                })
+                execute_with_retries(lambda: service.spreadsheets().batchUpdate(
+                    spreadsheetId=spreadsheet_id, body={'requests': requests}).execute())
 
             print(f"✅ Updated: {name}")
 
