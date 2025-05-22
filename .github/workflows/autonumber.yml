@@ -23,7 +23,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install google-auth google-auth-httplib2 google-api-python-client
+        run: pip install google-auth google-auth-httplib2 google-api-python-client pytz
 
       - name: Run autonumber script
         run: |
