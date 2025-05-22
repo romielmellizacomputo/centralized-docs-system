@@ -6,7 +6,7 @@ dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Boards Test Cases'; //Fetch from "Boards Test Cases"
-const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues'];
+const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues', "HELP"];
 const MAX_URLS = 20;
 const RATE_LIMIT_DELAY = 5000; // 5 seconds delay between requests
 
