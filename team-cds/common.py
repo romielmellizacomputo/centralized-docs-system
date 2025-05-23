@@ -1,21 +1,11 @@
-# common.py
 import os
 import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 
-def authenticate_team_cds():
+def authenticate():
     credentials_info = json.loads(os.getenv('TEAM_CDS_SERVICE_ACCOUNT_JSON'))
-    credentials = service_account.Credentials.from_service_account_info(
-        credentials_info,
-        scopes=['https://www.googleapis.com/auth/spreadsheets']
-    )
-    return credentials
-
-
-def authenticate_leads_cds():
-    credentials_info = json.loads(os.getenv('LEADS_CDS_SERVICE_ACCOUNT_JSON'))
     credentials = service_account.Credentials.from_service_account_info(
         credentials_info,
         scopes=['https://www.googleapis.com/auth/spreadsheets']
