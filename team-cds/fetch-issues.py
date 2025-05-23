@@ -73,7 +73,7 @@ def main():
         leads_sheets = build('sheets', 'v4', credentials=leads_credentials)
         team_sheets = build('sheets', 'v4', credentials=team_credentials)
 
-        get_sheet_titles(tem_sheets, UTILS_SHEET_ID)
+        get_sheet_titles(team_sheets, UTILS_SHEET_ID)
 
         sheet_ids = get_all_team_cds_sheet_ids(sheets, UTILS_SHEET_ID)
         if not sheet_ids:
