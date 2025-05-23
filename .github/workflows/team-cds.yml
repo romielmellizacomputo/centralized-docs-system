@@ -33,6 +33,7 @@ jobs:
         run: python team-cds/fetch-issues.py
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
+          LEADS_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.LEADS_CDS_SERVICE_ACCOUNT_JSON }}
           LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
