@@ -3,13 +3,11 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from googleapiclient.discovery import build
 from common import (
-    authenticate_leads_cds,
-    authenticate_team_cds,
+    authenticate,
     get_sheet_titles,
     get_all_team_cds_sheet_ids,
     get_selected_milestones
 )
-
 from constants import (
     UTILS_SHEET_ID,
     G_MILESTONES,
@@ -67,13 +65,10 @@ def update_timestamp(sheets, sheet_id):
 
 def main():
     try:
-        leads_credentials = authenticate_leads_cds()
-        team_credentials = authenticate_team_cds()
+        credentials = authenticate()
+        sheets = build('sheets', 'v4', credentials=credentials)
 
-        leads_sheets = build('sheets', 'v4', credentials=leads_credentials)
-        team_sheets = build('sheets', 'v4', credentials=team_credentials)
-
-        get_sheet_titles(team_sheets, UTILS_SHEET_ID)
+        get_sheet_titles(sheets, UTILS_SHEET_ID)
 
         sheet_ids = get_all_team_cds_sheet_ids(sheets, UTILS_SHEET_ID)
         if not sheet_ids:
