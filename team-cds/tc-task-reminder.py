@@ -26,11 +26,15 @@ def get_sheet_ids(sheets):
 
 def days_since(date_str):
     try:
-        assigned_date = datetime.datetime.strptime(date_str, "%m/%d/%Y")
-        return (datetime.datetime.now() - assigned_date).days
-    except Exception as e:
-        print(f"⚠️ Could not parse date '{date_str}': {e}")
-        return None
+        # Try your original format first
+        return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%m/%d/%Y")).days
+    except ValueError:
+        try:
+            # Try this new format for strings like "Mon, Mar 17, 2025"
+            return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%a, %b %d, %Y")).days
+        except Exception as e:
+            print(f"⚠️ Could not parse date '{date_str}': {e}")
+            return None
 
 def should_send_reminder(row):
     # Defensive: fill empty fields with empty string
