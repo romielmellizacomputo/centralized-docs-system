@@ -341,10 +341,10 @@ def main():
     assignee_email_map = get_assignee_email_map(sheets)
 
     # Email credentials — set as environment variables or input here
-    sender_email = os.getenv("SENDER_EMAIL")
-    sender_password = os.getenv("SENDER_PASSWORD")
+    sender_email = os.getenv("GMAIL_SENDER")
+    sender_password = os.getenv("GMAIL_APP_PASSWORD")
     if not sender_email or not sender_password:
-        print("❌ Email credentials not set in environment variables SENDER_EMAIL and SENDER_PASSWORD")
+        print("❌ Email credentials not set in environment variables GMAIL_SENDER and GMAIL_APP_PASSWORD")
         sys.exit(1)
 
     # Process each sheet ID
