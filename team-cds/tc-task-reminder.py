@@ -85,19 +85,27 @@ def should_send_reminder(row):
     print("  => No reminder: All required fields are present.")
     return False, None
 
-def send_email(assignee, task, days, missing):
+def send_email_combined(assignee, tasks):
     recipient = "romiel@bposeats.com"
     sender = os.environ.get("GMAIL_SENDER")
     app_password = os.environ.get("GMAIL_APP_PASSWORD")
-    subject = f"Task Reminder: {task}"
+    subject = f"Task Reminder: You have {len(tasks)} pending task(s)"
 
-    body = f"Hey, {assignee}, you have a pending task: '{task}' for {days} days.\n\n"
-    if "estimation" in missing:
-        body += "- You missed declaring estimation on your task.\n"
-    if "output reference" in missing:
-        body += "- You missed declaring your output reference.\n"
-    if "test case link" in missing:
-        body += "- You missed declaring your test case sheet link.\n"
+    # Compose the email body with all tasks listed
+    body = f"Hey, {assignee}, you have {len(tasks)} pending tasks:\n\n"
+    for task_info in tasks:
+        task = task_info["task"]
+        days = task_info["days"]
+        missing = task_info["missing"]
+
+        body += f"Task: '{task}' assigned {days} days ago.\n"
+        if "estimation" in missing:
+            body += "- You missed declaring estimation on this task.\n"
+        if "output reference" in missing:
+            body += "- You missed declaring your output reference.\n"
+        if "test case link" in missing:
+            body += "- You missed declaring your test case sheet link.\n"
+        body += "\n"
 
     msg = MIMEMultipart()
     msg["From"] = sender
@@ -105,12 +113,12 @@ def send_email(assignee, task, days, missing):
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
 
-    print(f"Attempting to send email from {sender} to {recipient} regarding task '{task}'")
+    print(f"Attempting to send combined email from {sender} to {recipient} for assignee '{assignee}'")
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(sender, app_password)
             server.sendmail(sender, recipient, msg.as_string())
-            print(f"📧 Email sent to {recipient} for task '{task}'")
+            print(f"📧 Combined email sent to {recipient} for assignee '{assignee}' with {len(tasks)} tasks")
     except Exception as e:
         print(f"❌ Failed to send email: {e}")
 
@@ -123,17 +131,23 @@ def process_sheet(sheet_service, sheet_id):
         rows = result.get("values", [])
         print(f"Fetched {len(rows)} rows from sheet ID: {sheet_id}")
 
+        # Dictionary to accumulate tasks by assignee
+        assignee_tasks = {}
+
         for row in rows:
             send_flag, info = should_send_reminder(row)
             if send_flag and info:
-                send_email(
-                    info["assignee"],
-                    info["task"],
-                    info["days"],
-                    info["missing"]
-                )
+                assignee = info["assignee"]
+                if assignee not in assignee_tasks:
+                    assignee_tasks[assignee] = []
+                assignee_tasks[assignee].append(info)
             else:
                 print("No email triggered for this row.")
+
+        # After collecting all tasks, send one email per assignee
+        for assignee, tasks in assignee_tasks.items():
+            send_email_combined(assignee, tasks)
+
     except Exception as e:
         print(f"❌ Error processing sheet {sheet_id}: {str(e)}")
 
