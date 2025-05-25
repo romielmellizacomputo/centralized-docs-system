@@ -8,7 +8,6 @@ on:
 jobs:
   send-email:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
@@ -19,14 +18,13 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: |
-          pip install pytz google-api-python-client google-auth google-auth-httplib2 google-auth-oauthlib
+        run: pip install google-api-python-client
 
       - name: Run reminder script
         env:
           GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
-          UTILS_SHEET_ID: ${{ secrets.UTILS_SHEET_ID }}
+          UTILS_SHEET_ID: ${{ secrets.UTILS_SHEET_ID }}   # <-- Make sure this line exists
         run: python team-cds/tc-task-reminder.py
 
