@@ -110,14 +110,14 @@ def should_send_reminder(row):
 
     # Check missing estimation
     if not estimate:
-        missing_items.append("estimation")
+        missing_items.append("Estimation")
 
     # For tasks marked done, check output and test case links
     if status == "done":
         if not output_url:
-            missing_items.append("output reference")
+            missing_items.append("Output Reference")
         if not test_case_link:
-            missing_items.append("test case link")
+            missing_items.append("Test Case Link")
 
     if missing_items:
         print(f"  => Reminder needed for missing: {missing_items}")
@@ -130,6 +130,143 @@ def should_send_reminder(row):
 
     print("  => No reminder: All required fields are present.")
     return False, None
+
+def generate_email_html(assignee, tasks):
+    """
+    Generate an attractive HTML email body listing all pending tasks with missing info.
+    """
+    missing_colors = {
+        "Estimation": "#e74c3c",         # Red
+        "Output Reference": "#e67e22",   # Orange
+        "Test Case Link": "#3498db"      # Blue
+    }
+
+    html = f"""
+    <html>
+    <head>
+    <style>
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f9f9;
+            color: #333333;
+            padding: 20px;
+        }}
+        .container {{
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 600px;
+            margin: auto;
+        }}
+        h2 {{
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 25px;
+        }}
+        .task {{
+            border: 1px solid #ddd;
+            padding: 15px 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            background-color: #fafafa;
+        }}
+        .task-header {{
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #34495e;
+        }}
+        .days-info {{
+            font-style: italic;
+            color: #7f8c8d;
+            margin-bottom: 12px;
+        }}
+        ul {{
+            padding-left: 20px;
+            margin: 0;
+        }}
+        li {{
+            margin-bottom: 6px;
+            font-weight: 500;
+        }}
+        .missing-estimation {{
+            color: {missing_colors['Estimation']};
+            font-weight: 700;
+        }}
+        .missing-output {{
+            color: {missing_colors['Output Reference']};
+            font-weight: 700;
+        }}
+        .missing-testcase {{
+            color: {missing_colors['Test Case Link']};
+            font-weight: 700;
+        }}
+        .footer {{
+            margin-top: 30px;
+            font-size: 14px;
+            text-align: center;
+            color: #999999;
+        }}
+        .cta {{
+            display: block;
+            width: fit-content;
+            margin: 25px auto 0;
+            background-color: #27ae60;
+            color: white !important;
+            padding: 12px 24px;
+            font-weight: 700;
+            text-decoration: none;
+            border-radius: 30px;
+            box-shadow: 0 4px 10px rgba(39, 174, 96, 0.4);
+            transition: background-color 0.3s ease;
+        }}
+        .cta:hover {{
+            background-color: #2ecc71;
+        }}
+    </style>
+    </head>
+    <body>
+    <div class="container">
+        <h2>⚠️ Important: Pending Task Reminder for {assignee}</h2>
+        <p>Dear <strong>{assignee}</strong>,</p>
+        <p>You have <strong>{len(tasks)} pending task(s)</strong> that require your attention due to missing information. Please review the details below and update the necessary fields as soon as possible to ensure smooth progress.</p>
+    """
+
+    for task_info in tasks:
+        task = task_info["task"]
+        days = task_info["days"]
+        missing = task_info["missing"]
+
+        html += f"""
+        <div class="task">
+            <div class="task-header">{task}</div>
+            <div class="days-info">Assigned <strong>{days} day{'s' if days > 1 else ''} ago</strong></div>
+            <ul>
+        """
+
+        for miss in missing:
+            class_name = ""
+            if miss == "Estimation":
+                class_name = "missing-estimation"
+            elif miss == "Output Reference":
+                class_name = "missing-output"
+            elif miss == "Test Case Link":
+                class_name = "missing-testcase"
+
+            html += f'<li class="{class_name}">Missing {miss}</li>'
+
+        html += "</ul></div>"
+
+    html += """
+        <p>Please update the missing information at your earliest convenience to avoid any delays.</p>
+        <a href="https://docs.google.com/spreadsheets/d/" target="_blank" class="cta">Update Your Tasks Now</a>
+        <p class="footer">Thank you for your prompt attention and dedication!<br>— The TC Task Management Team</p>
+    </div>
+    </body>
+    </html>
+    """
+    return html
 
 def send_email_combined(assignee, tasks, assignee_email):
     """
@@ -147,33 +284,17 @@ def send_email_combined(assignee, tasks, assignee_email):
         return
 
     recipient = assignee_email
-    subject = f"TC Task Reminder: You have {len(tasks)} pending task(s)"
+    subject = f"⏰ TC Task Reminder: {len(tasks)} Pending Task(s) Need Your Attention!"
 
-    body = f"Hello {assignee},\n\nYou have {len(tasks)} pending tasks with missing information:\n\n"
-    for task_info in tasks:
-        task = task_info["task"]
-        days = task_info["days"]
-        missing = task_info["missing"]
+    body_html = generate_email_html(assignee, tasks)
 
-        body += f"Task: '{task}' (assigned {days} days ago)\n"
-        for miss in missing:
-            if miss == "estimation":
-                body += "- Missing task estimation\n"
-            elif miss == "output reference":
-                body += "- Missing output reference\n"
-            elif miss == "test case link":
-                body += "- Missing test case sheet link\n"
-        body += "\n"
-
-    body += "Please update the missing information at your earliest convenience.\n\nThank you!"
-
-    msg = MIMEMultipart()
+    msg = MIMEMultipart("alternative")
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
+    msg.attach(MIMEText(body_html, "html"))
 
-    print(f"Attempting to send combined email from {sender} to {recipient} for assignee '{assignee}'")
+    print(f"Attempting to send combined HTML email from {sender} to {recipient} for assignee '{assignee}'")
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(sender, app_password)
