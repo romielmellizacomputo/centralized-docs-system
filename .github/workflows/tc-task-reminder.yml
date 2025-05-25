@@ -26,4 +26,4 @@ jobs:
         env:
           GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: python path/to/your_script.py
+        run: python team-cds/tc-task-reminder.py
