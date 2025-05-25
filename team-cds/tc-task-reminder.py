@@ -182,7 +182,6 @@ def generate_email_html(assignee, tasks, sheet_id):
         }}
         .cta {{
             display: inline-block;
-            margin-top: 15px;
             background-color: #27ae60;
             color: white !important;
             padding: 10px 20px;
@@ -191,6 +190,7 @@ def generate_email_html(assignee, tasks, sheet_id):
             border-radius: 30px;
             box-shadow: 0 4px 10px rgba(39, 174, 96, 0.4);
             transition: background-color 0.3s ease;
+            margin-top: 15px;
         }}
         .cta:hover {{
             background-color: #2ecc71;
@@ -208,11 +208,11 @@ def generate_email_html(assignee, tasks, sheet_id):
         task = task_info["task"]
         days = task_info["days"]
         missing = task_info["missing"]
-        row_number = task_info.get("row_number", None)
+        row_number = task_info["row_number"]
 
-        # Generate link to specific row in the Google Sheet
-        # Assumes sheet tab gid=0; adjust if needed
-        sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit#gid=0&range=A{row_number}" if row_number else f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+        # Construct URL to the specific row in the Google Sheet
+        # Note: Google Sheets rows start at 1, header row is 1, tasks start at row 2, so row_number should be correct.
+        sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit#gid=0&range=A{row_number}"
 
         html += f"""
         <div class="task">
@@ -220,7 +220,6 @@ def generate_email_html(assignee, tasks, sheet_id):
             <div class="days-info">Assigned <strong>{days} day{'s' if days > 1 else ''} ago</strong></div>
             <ul>
         """
-
         for miss in missing:
             class_name = ""
             if miss == "Estimation":
@@ -229,12 +228,13 @@ def generate_email_html(assignee, tasks, sheet_id):
                 class_name = "missing-output"
             elif miss == "Test Case Link":
                 class_name = "missing-testcase"
-
             html += f'<li class="{class_name}">Missing {miss}</li>'
 
-        html += "</ul>"
-        html += f'<a href="{sheet_url}" target="_blank" class="cta">Update Task Now</a>'
-        html += "</div>"
+        html += f"""
+            </ul>
+            <a href="{sheet_url}" target="_blank" class="cta">Update Task Now</a>
+        </div>
+        """
 
     html += """
         <p>Please update the missing information at your earliest convenience to avoid any delays.</p>
@@ -243,73 +243,72 @@ def generate_email_html(assignee, tasks, sheet_id):
     </body>
     </html>
     """
-
     return html
 
-def process_sheet(sheet_id, sheets, email_map):
-    print(f"📋 Processing sheet: {sheet_id}")
-    result = sheets.spreadsheets().values().get(
-        spreadsheetId=sheet_id,
-        range="Test Cases!A2:Q"
-    ).execute()
-    rows = result.get("values", [])
-
-    reminders = {}
-
-    for idx, row in enumerate(rows, start=2):  # start=2 because header is row 1
-        send_reminder, info = should_send_reminder(row)
-        if send_reminder and info:
-            assignee = info["assignee"]
-            if assignee in email_map:
-                # Add row number info to each task
-                info["row_number"] = idx
-                reminders.setdefault(assignee, []).append(info)
-
-    print(f"Found {sum(len(v) for v in reminders.values())} tasks needing reminders in sheet {sheet_id}")
-    return reminders
-
-def send_email(to_email, subject, html_body):
-    from_email = os.getenv("EMAIL_FROM")
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASS")
-
-    if not all([from_email, smtp_host, smtp_user, smtp_pass]):
-        print("❌ Missing SMTP configuration environment variables.")
-        return False
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = from_email
-    msg["To"] = to_email
-    part = MIMEText(html_body, "html")
-    msg.attach(part)
-
+def send_email_combined(assignee, tasks, assignee_email, sheet_id):
     try:
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(from_email, to_email, msg.as_string())
-        print(f"✅ Email sent to {to_email}")
-        return True
+        from_email = os.environ.get("EMAIL_FROM")
+        email_password = os.environ.get("EMAIL_PASSWORD")
+        smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+        smtp_port = int(os.environ.get("SMTP_PORT", 587))
+
+        if not from_email or not email_password:
+            print("❌ Email credentials not set in environment variables")
+            return
+
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "⏳ Reminder: Update Your Pending Tasks"
+        msg["From"] = from_email
+        msg["To"] = assignee_email
+
+        html_content = generate_email_html(assignee, tasks, sheet_id)
+        part2 = MIMEText(html_content, "html")
+        msg.attach(part2)
+
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(from_email, email_password)
+        server.sendmail(from_email, assignee_email, msg.as_string())
+        server.quit()
+
+        print(f"✅ Email sent to {assignee} ({assignee_email}) with {len(tasks)} tasks")
     except Exception as e:
-        print(f"❌ Failed to send email to {to_email}: {e}")
-        return False
+        print(f"❌ Failed to send email to {assignee}: {e}")
 
 def main():
     sheets = authenticate()
     sheet_ids = get_sheet_ids(sheets)
-    email_map = get_assignee_email_map(sheets)
+    assignee_email_map = get_assignee_email_map(sheets)
 
     for sheet_id in sheet_ids:
-        reminders = process_sheet(sheet_id, sheets, email_map)
-        for assignee, tasks in reminders.items():
-            if assignee in email_map:
-                to_email = email_map[assignee]
-                subject = f"Pending Task Reminder for {assignee}"
-                html_body = generate_email_html(assignee, tasks, sheet_id)
-                send_email(to_email, subject, html_body)
+        try:
+            result = sheets.spreadsheets().values().get(
+                spreadsheetId=sheet_id,
+                range="Task Tracking!A2:Q"
+            ).execute()
+
+            rows = result.get("values", [])
+            pending_tasks = {}
+
+            for i, row in enumerate(rows, start=2):  # start=2 because row 1 is header
+                send_reminder, details = should_send_reminder(row)
+                if send_reminder:
+                    assignee = details["assignee"]
+                    if assignee not in pending_tasks:
+                        pending_tasks[assignee] = []
+                    # Add row number to details for direct link
+                    details["row_number"] = i
+                    pending_tasks[assignee].append(details)
+
+            for assignee, tasks in pending_tasks.items():
+                email = assignee_email_map.get(assignee)
+                if email:
+                    send_email_combined(assignee, tasks, email, sheet_id)
+                else:
+                    print(f"⚠️ No email found for assignee '{assignee}', skipping email")
+
+        except Exception as e:
+            print(f"❌ Failed to process sheet {sheet_id}: {e}")
 
 if __name__ == "__main__":
     main()
