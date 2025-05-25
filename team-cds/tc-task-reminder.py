@@ -4,6 +4,7 @@ import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from googleapiclient.discovery import build
@@ -12,51 +13,44 @@ from constants import UTILS_SHEET_ID
 
 
 if not UTILS_SHEET_ID:
-    print("❌ UTILS_SHEET_ID is not set. Please set the environment variable accordingly.")
+    print("❌ UTILS_SHEET_ID is not set. Please set LEADS_CDS_SID environment variable.")
     sys.exit(1)
 
 
-def get_sheet_urls(sheets_service):
+def get_sheet_ids(sheets):
     """
-    Fetch all source sheet URLs from the UTILS spreadsheet, column B starting at B2.
-    """
-    result = sheets_service.spreadsheets().values().get(
-        spreadsheetId=UTILS_SHEET_ID,
-        range="B2:B"
-    ).execute()
-    values = result.get("values", [])
-    # Filter out empty rows
-    urls = [row[0] for row in values if row and row[0].strip()]
-    return urls
-
-
-def extract_sheet_id_from_url(url):
-    """
-    Extract the sheet ID from a Google Sheets URL.
+    Read spreadsheet IDs from the UTILS sheet, column B (B2:B).
     """
     try:
-        return url.split("/d/")[1].split("/")[0]
-    except IndexError:
-        return None
+        result = sheets.spreadsheets().values().get(
+            spreadsheetId=UTILS_SHEET_ID,
+            range="UTILS!B2:B"
+        ).execute()
+    except Exception as e:
+        print(f"❌ Failed to fetch UTILS sheet IDs: {e}")
+        return []
+
+    values = result.get("values", [])
+    sheet_ids = []
+    for row in values:
+        if row:
+            sid = row[0].strip()
+            if sid:
+                sheet_ids.append(sid)
+            else:
+                print(f"⚠️ Empty or invalid ID skipped.")
+    return sheet_ids
 
 
 def days_since(date_str):
-    """
-    Compute days elapsed since the given date string in MM/DD/YYYY format.
-    Returns None if date_str is invalid.
-    """
     try:
         assigned_date = datetime.datetime.strptime(date_str, "%m/%d/%Y")
-        delta = datetime.datetime.now() - assigned_date
-        return delta.days
-    except Exception:
+        return (datetime.datetime.now() - assigned_date).days
+    except:
         return None
 
 
 def should_send_reminder(row):
-    """
-    Determine if an email reminder should be sent based on the row data from "Test Cases".
-    """
     assigned_date = row[2] if len(row) > 2 else ""
     task_name = row[3] if len(row) > 3 else ""
     assignee = row[4] if len(row) > 4 else ""
@@ -96,10 +90,7 @@ def should_send_reminder(row):
 
 
 def send_email(assignee, task, days, missing):
-    """
-    Send reminder email using Gmail SMTP.
-    """
-    recipient = "romiel@bposeats.com"
+    recipient = "romiel@bposeats.com"  # you can customize recipient here or dynamically
     sender = os.environ.get("GMAIL_SENDER")
     app_password = os.environ.get("GMAIL_APP_PASSWORD")
     subject = f"Task Reminder: {task}"
@@ -116,6 +107,7 @@ def send_email(assignee, task, days, missing):
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
+
     msg.attach(MIMEText(body, "plain"))
 
     try:
@@ -128,19 +120,14 @@ def send_email(assignee, task, days, missing):
 
 
 def process_sheet(sheet_service, sheet_id):
-    """
-    Fetch rows from the "Test Cases" sheet of the given sheet_id,
-    then check each row for reminders.
-    """
     try:
-        # Explicitly fetch range from 'Test Cases' sheet
         result = sheet_service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
             range="Test Cases!A2:Q"
         ).execute()
         rows = result.get("values", [])
         if not rows:
-            print(f"⚠️ No data found in 'Test Cases' for sheet {sheet_id}")
+            print(f"⚠️ No data found in Test Cases sheet for {sheet_id}")
             return
 
         for row in rows:
@@ -158,21 +145,24 @@ def process_sheet(sheet_service, sheet_id):
 
 def main():
     credentials = authenticate()
-    sheets_service = build("sheets", "v4", credentials=credentials)
+    sheets = build("sheets", "v4", credentials=credentials)
+    sheet_ids = get_sheet_ids(sheets)
+    print(f"🔗 Found {len(sheet_ids)} valid sheet IDs in UTILS sheet")
 
-    # Step 1: Get all sheet URLs from the UTILS spreadsheet column B2:B
-    urls = get_sheet_urls(sheets_service)
-    print(f"🔗 Found {len(urls)} sheet URLs in UTILS sheet")
+    if not sheet_ids:
+        print("❌ No valid sheet IDs to process. Exiting.")
+        return
 
-    # Step 2: For each URL, extract sheet ID and process 'Test Cases' data
-    for url in urls:
-        sheet_id = extract_sheet_id_from_url(url)
-        if not sheet_id:
-            print(f"⚠️ Invalid URL skipped: {url}")
-            continue
+    # Use ThreadPoolExecutor to process multiple sheets in parallel
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = []
+        for sheet_id in sheet_ids:
+            print(f"📄 Processing sheet: {sheet_id}")
+            futures.append(executor.submit(process_sheet, sheets, sheet_id))
 
-        print(f"📄 Processing sheet ID: {sheet_id}")
-        process_sheet(sheets_service, sheet_id)
+        # Wait for all to complete
+        for future in futures:
+            future.result()
 
 
 if __name__ == "__main__":
