@@ -36,3 +36,31 @@ def get_selected_milestones(sheets, sheet_id, g_milestones):
     ).execute()
     values = result.get('values', [])
     return [item for sublist in values for item in sublist if item]
+
+
+# =========================
+# Task Reminders functions
+# =========================
+
+def get_task_reminders(sheets, spreadsheet_id, sheet_name='TaskReminders', data_range='A2:E100'):
+    """
+    Fetch task reminders data from the specified sheet and range.
+    """
+    result = sheets.spreadsheets().values().get(
+        spreadsheetId=spreadsheet_id,
+        range=f'{sheet_name}!{data_range}'
+    ).execute()
+    values = result.get('values', [])
+    return values
+
+
+def get_task_reminder_titles(sheets, spreadsheet_id, sheet_name='TaskReminders'):
+    """
+    Get titles of all sheets related to Task Reminders.
+    """
+    res = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+    titles = [sheet['properties']['title'] for sheet in res.get('sheets', [])]
+    # Filter for TaskReminders sheets only (optional, if you have multiple)
+    task_reminder_titles = [title for title in titles if 'TaskReminders' in title]
+    print(f"📝 Task Reminders Sheets in {spreadsheet_id}:", task_reminder_titles)
+    return task_reminder_titles
