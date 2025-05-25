@@ -4,6 +4,7 @@ import pytz  # Make sure to install pytz: pip install pytz
 
 # Constants
 UTILS_SHEET_ID = os.getenv('LEADS_CDS_SID')
+CDS_MASTER_ROSTER = os.getenv('CDS_MASTER_ROSTER')
 
 CENTRAL_ISSUE_SHEET_ID = os.getenv('SHEET_SYNC_SID')
 ALL_ISSUES = 'ALL ISSUES!C4:T'
