@@ -8,10 +8,14 @@ from email.mime.multipart import MIMEMultipart
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from googleapiclient.discovery import build
 from common import authenticate
-from constants import UTILS_SHEET_ID
+from constants import UTILS_SHEET_ID, CDS_MASTER_ROSTER
 
 if not UTILS_SHEET_ID:
     print("❌ UTILS_SHEET_ID is not set. Please set LEADS_CDS_SID environment variable.")
+    sys.exit(1)
+
+if not CDS_MASTER_ROSTER:
+    print("❌ CDS_MASTER_ROSTER is not set. Please set CDS_MASTER_ROSTER environment variable.")
     sys.exit(1)
 
 def get_sheet_ids(sheets):
@@ -24,21 +28,43 @@ def get_sheet_ids(sheets):
     print(f"🔗 Found {len(sheet_ids)} valid sheet IDs in UTILS sheet")
     return sheet_ids
 
+def get_assignee_email_map(sheets):
+    """
+    Fetch assignee to email mapping from the CDS_MASTER_ROSTER sheet
+    Sheet name: "Roster"
+    Range: A4:B (A = assignee name, B = email)
+    """
+    try:
+        result = sheets.spreadsheets().values().get(
+            spreadsheetId=CDS_MASTER_ROSTER,
+            range="Roster!A4:B"
+        ).execute()
+        rows = result.get("values", [])
+        mapping = {}
+        for row in rows:
+            if len(row) >= 2:
+                name = row[0].strip()
+                email = row[1].strip()
+                if name and email:
+                    mapping[name] = email
+        print(f"📋 Loaded {len(mapping)} assignee-email mappings from CDS_MASTER_ROSTER")
+        return mapping
+    except Exception as e:
+        print(f"❌ Failed to load assignee-email mapping: {e}")
+        return {}
+
 def days_since(date_str):
     try:
-        # Try your original format first
         return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%m/%d/%Y")).days
     except ValueError:
         try:
-            # Try this new format for strings like "Mon, Mar 17, 2025"
             return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%a, %b %d, %Y")).days
         except Exception as e:
             print(f"⚠️ Could not parse date '{date_str}': {e}")
             return None
 
 def should_send_reminder(row):
-    # Defensive: fill empty fields with empty string
-    row += [""] * (17 - len(row))  # ensure at least 17 elements
+    row += [""] * (17 - len(row))
 
     assigned_date = row[2].strip()
     task_name = row[3].strip()
@@ -85,13 +111,16 @@ def should_send_reminder(row):
     print("  => No reminder: All required fields are present.")
     return False, None
 
-def send_email_combined(assignee, tasks):
-    recipient = "romiel@bposeats.com"
+def send_email_combined(assignee, tasks, assignee_email):
+    if not assignee_email:
+        print(f"❌ No email found for assignee '{assignee}'. Skipping email.")
+        return
+
+    recipient = assignee_email
     sender = os.environ.get("GMAIL_SENDER")
     app_password = os.environ.get("GMAIL_APP_PASSWORD")
     subject = f"Task Reminder: You have {len(tasks)} pending task(s)"
 
-    # Compose the email body with all tasks listed
     body = f"Hey, {assignee}, you have {len(tasks)} pending tasks:\n\n"
     for task_info in tasks:
         task = task_info["task"]
@@ -122,7 +151,7 @@ def send_email_combined(assignee, tasks):
     except Exception as e:
         print(f"❌ Failed to send email: {e}")
 
-def process_sheet(sheet_service, sheet_id):
+def process_sheet(sheet_service, sheet_id, assignee_email_map):
     try:
         result = sheet_service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
@@ -131,7 +160,6 @@ def process_sheet(sheet_service, sheet_id):
         rows = result.get("values", [])
         print(f"Fetched {len(rows)} rows from sheet ID: {sheet_id}")
 
-        # Dictionary to accumulate tasks by assignee
         assignee_tasks = {}
 
         for row in rows:
@@ -144,9 +172,9 @@ def process_sheet(sheet_service, sheet_id):
             else:
                 print("No email triggered for this row.")
 
-        # After collecting all tasks, send one email per assignee
         for assignee, tasks in assignee_tasks.items():
-            send_email_combined(assignee, tasks)
+            assignee_email = assignee_email_map.get(assignee)
+            send_email_combined(assignee, tasks, assignee_email)
 
     except Exception as e:
         print(f"❌ Error processing sheet {sheet_id}: {str(e)}")
@@ -154,11 +182,15 @@ def process_sheet(sheet_service, sheet_id):
 def main():
     credentials = authenticate()
     sheets = build("sheets", "v4", credentials=credentials)
+
+    # Fetch assignee-email mapping first
+    assignee_email_map = get_assignee_email_map(sheets)
+
     sheet_ids = get_sheet_ids(sheets)
 
     for sheet_id in sheet_ids:
         print(f"📄 Processing sheet: {sheet_id}")
-        process_sheet(sheets, sheet_id)
+        process_sheet(sheets, sheet_id, assignee_email_map)
 
 if __name__ == "__main__":
     main()
