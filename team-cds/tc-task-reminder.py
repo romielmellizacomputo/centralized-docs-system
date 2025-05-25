@@ -131,10 +131,9 @@ def should_send_reminder(row):
     print("  => No reminder: All required fields are present.")
     return False, None
 
-def generate_email_html(assignee, tasks, sheet_url):
+def generate_email_html(assignee, tasks):
     """
     Generate an attractive HTML email body listing all pending tasks with missing info.
-    The Update button will redirect to the actual Google Sheet URL where tasks were fetched.
     """
     missing_colors = {
         "Estimation": "#e74c3c",         # Red
@@ -259,98 +258,100 @@ def generate_email_html(assignee, tasks, sheet_url):
 
         html += "</ul></div>"
 
-    html += f"""
-        <a href="{sheet_url}" target="_blank" class="cta">Update Your Tasks Now</a>
-        <div class="footer">
-            <p>If you believe you have received this email in error or have already updated your tasks, please disregard this message.</p>
-            <p>Thank you for your prompt attention!</p>
-        </div>
+    html += """
+        <p>Please update the missing information at your earliest convenience to avoid any delays.</p>
+        <a href="https://docs.google.com/spreadsheets/d/" target="_blank" class="cta">Update Your Tasks Now</a>
+        <p class="footer">Thank you for your prompt attention and dedication!<br>— The TC Task Management Team</p>
     </div>
     </body>
     </html>
     """
-
     return html
 
-def send_email(sender_email, sender_password, recipient_email, subject, html_body):
+def send_email_combined(assignee, tasks, assignee_email):
     """
-    Send an email with the given parameters using Gmail SMTP.
+    Sends one combined email to the assignee listing all their pending tasks.
     """
-    message = MIMEMultipart("alternative")
-    message["From"] = sender_email
-    message["To"] = recipient_email
-    message["Subject"] = subject
+    if not assignee_email:
+        print(f"❌ No email found for assignee '{assignee}'. Skipping email.")
+        return
 
-    message.attach(MIMEText(html_body, "html"))
+    sender = os.environ.get("GMAIL_SENDER")
+    app_password = os.environ.get("GMAIL_APP_PASSWORD")
 
+    if not sender or not app_password:
+        print("❌ GMAIL_SENDER or GMAIL_APP_PASSWORD environment variables not set.")
+        return
+
+    recipient = assignee_email
+    subject = f"⏰ TC Task Reminder: {len(tasks)} Pending Task(s) Need Your Attention!"
+
+    body_html = generate_email_html(assignee, tasks)
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = sender
+    msg["To"] = recipient
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body_html, "html"))
+
+    print(f"Attempting to send combined HTML email from {sender} to {recipient} for assignee '{assignee}'")
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, recipient_email, message.as_string())
-        server.quit()
-        print(f"✅ Email sent to {recipient_email}")
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(sender, app_password)
+            server.sendmail(sender, recipient, msg.as_string())
+        print(f"📧 Combined email sent to {recipient} for assignee '{assignee}' with {len(tasks)} tasks")
     except Exception as e:
-        print(f"❌ Failed to send email to {recipient_email}: {e}")
+        print(f"❌ Failed to send email: {e}")
 
-def process_sheet(sheets, sheet_id, assignee_email_map, sender_email, sender_password):
+def process_sheet(sheet_service, sheet_id, assignee_email_map):
     """
-    Fetch data from a single sheet ID, check tasks, and send emails for pending tasks.
+    Process each sheet by reading task rows,
+    grouping tasks by assignee that require reminders,
+    then sending emails accordingly.
     """
-    # Get spreadsheet metadata to obtain URL and title
-    spreadsheet_metadata = sheets.spreadsheets().get(spreadsheetId=sheet_id).execute()
-    sheet_url = spreadsheet_metadata.get("spreadsheetUrl")
-    spreadsheet_title = spreadsheet_metadata.get("properties", {}).get("title", "Your Spreadsheet")
+    try:
+        result = sheet_service.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range="Test Cases!A2:Q"
+        ).execute()
+        rows = result.get("values", [])
+        print(f"Fetched {len(rows)} rows from sheet ID: {sheet_id}")
 
-    # Fetch data from "Sheet1!A2:Q" (columns A-Q, from row 2 down)
-    result = sheets.spreadsheets().values().get(
-        spreadsheetId=sheet_id,
-        range="Sheet1!A2:Q"
-    ).execute()
-    rows = result.get("values", [])
+        assignee_tasks = {}
 
-    reminders = {}
-    for row in rows:
-        send_reminder, info = should_send_reminder(row)
-        if send_reminder and info and info["assignee"]:
-            assignee = info["assignee"]
-            if assignee not in reminders:
-                reminders[assignee] = []
-            reminders[assignee].append(info)
+        for row in rows:
+            send_flag, info = should_send_reminder(row)
+            if send_flag and info:
+                assignee = info["assignee"]
+                if assignee not in assignee_tasks:
+                    assignee_tasks[assignee] = []
+                assignee_tasks[assignee].append(info)
+            else:
+                # No reminder needed for this row
+                pass
 
-    # Send emails to assignees with reminders
-    for assignee, tasks in reminders.items():
-        email = assignee_email_map.get(assignee)
-        if not email:
-            print(f"⚠️ No email found for assignee '{assignee}'. Skipping email.")
-            continue
+        # Send emails per assignee
+        for assignee, tasks in assignee_tasks.items():
+            assignee_email = assignee_email_map.get(assignee)
+            send_email_combined(assignee, tasks, assignee_email)
 
-        email_html = generate_email_html(assignee, tasks, sheet_url)
-        subject = f"[Reminder] Pending Tasks Alert - {spreadsheet_title}"
-
-        send_email(sender_email, sender_password, email, subject, email_html)
+    except Exception as e:
+        print(f"❌ Error processing sheet {sheet_id}: {str(e)}")
 
 def main():
-    # Authenticate to Google Sheets API
-    creds = authenticate()
-    sheets = build('sheets', 'v4', credentials=creds)
+    credentials = authenticate()
+    sheets = build("sheets", "v4", credentials=credentials)
 
-    # Get all sheet IDs to process
-    sheet_ids = get_sheet_ids(sheets)
-
-    # Get assignee-email mapping
+    # Get assignee-to-email mapping once
     assignee_email_map = get_assignee_email_map(sheets)
 
-    # Email credentials — set as environment variables or input here
-    sender_email = os.getenv("GMAIL_SENDER")
-    sender_password = os.getenv("GMAIL_APP_PASSWORD")
-    if not sender_email or not sender_password:
-        print("❌ Email credentials not set in environment variables GMAIL_SENDER and GMAIL_APP_PASSWORD")
-        sys.exit(1)
+    # Get sheet IDs to process
+    sheet_ids = get_sheet_ids(sheets)
 
-    # Process each sheet ID
+    # Process each sheet
     for sheet_id in sheet_ids:
-        print(f"Processing sheet ID: {sheet_id}")
-        process_sheet(sheets, sheet_id, assignee_email_map, sender_email, sender_password)
+        print(f"📄 Processing sheet: {sheet_id}")
+        process_sheet(sheets, sheet_id, assignee_email_map)
 
 if __name__ == "__main__":
     main()
