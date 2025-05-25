@@ -8,7 +8,12 @@ from email.mime.multipart import MIMEMultipart
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from googleapiclient.discovery import build
 from common import authenticate
-from constants import UTILS_SHEET_ID
+
+# Read UTILS_SHEET_ID from environment
+UTILS_SHEET_ID = os.environ.get("UTILS_SHEET_ID")
+if not UTILS_SHEET_ID:
+    print("❌ UTILS_SHEET_ID environment variable not set!")
+    sys.exit(1)
 
 
 def get_sheet_urls(sheets):
