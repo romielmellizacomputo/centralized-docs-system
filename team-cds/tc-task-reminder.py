@@ -260,7 +260,7 @@ def generate_email_html(assignee, tasks):
 
     html += """
         <p>Please update the missing information at your earliest convenience to avoid any delays.</p>
-        <a href="https://docs.google.com/spreadsheets/d/" target="_blank" class="cta">Update Your Tasks Now</a>
+        <a href="https://drive.google.com/drive/u/0/folders/1X7tChdqEcO_RvOl617W_haZ0ea7nl36m" target="_blank" class="cta">Update Your Tasks Now</a>
         <p class="footer">Thank you for your prompt attention and dedication!<br>— The TC Task Management Team</p>
     </div>
     </body>
