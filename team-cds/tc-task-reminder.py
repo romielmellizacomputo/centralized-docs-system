@@ -76,16 +76,17 @@ def should_send_reminder(row):
 
 def send_email(assignee, task, days, missing):
     recipient = "romiel@bposeats.com"
-    sender = "your-email@gmail.com"  # Replace with your email
+    sender = os.environ.get("GMAIL_SENDER")
+    app_password = os.environ.get("GMAIL_APP_PASSWORD")
     subject = f"Task Reminder: {task}"
 
-    body = f"Hey, {assignee}, you have pending task: {task} for {days} days.\n\n"
+    body = f"Hey, {assignee}, you have a pending task: {task} for {days} days.\n\n"
     if "estimation" in missing:
-        body += "- You missed to declare estimation on your task.\n"
+        body += "- You missed declaring estimation on your task.\n"
     if "output reference" in missing:
-        body += "- You missed to declare your output reference.\n"
+        body += "- You missed declaring your output reference.\n"
     if "test case link" in missing:
-        body += "- You missed to declare your test case sheet link.\n"
+        body += "- You missed declaring your test case sheet link.\n"
 
     msg = MIMEMultipart()
     msg["From"] = sender
@@ -96,7 +97,7 @@ def send_email(assignee, task, days, missing):
 
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(sender, "your-app-password")  # Use app password or token
+            server.login(sender, app_password)
             server.sendmail(sender, recipient, msg.as_string())
             print(f"📧 Email sent to {recipient} for task '{task}'")
     except Exception as e:
