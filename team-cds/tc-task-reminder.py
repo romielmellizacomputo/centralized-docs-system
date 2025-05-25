@@ -147,7 +147,7 @@ def send_email_combined(assignee, tasks, assignee_email):
         return
 
     recipient = assignee_email
-    subject = f"Task Reminder: You have {len(tasks)} pending task(s)"
+    subject = f"TC Task Reminder: You have {len(tasks)} pending task(s)"
 
     body = f"Hello {assignee},\n\nYou have {len(tasks)} pending tasks with missing information:\n\n"
     for task_info in tasks:
