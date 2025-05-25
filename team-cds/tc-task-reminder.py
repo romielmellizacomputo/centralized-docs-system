@@ -12,20 +12,28 @@ from constants import UTILS_SHEET_ID
 
 
 if not UTILS_SHEET_ID:
-    print("❌ UTILS_SHEET_ID is not set. Please set LEADS_CDS_SID environment variable.")
+    print("❌ UTILS_SHEET_ID is not set. Please set the environment variable accordingly.")
     sys.exit(1)
 
 
-def get_sheet_urls(sheets):
-    result = sheets.spreadsheets().values().get(
+def get_sheet_urls(sheets_service):
+    """
+    Fetch all source sheet URLs from the UTILS spreadsheet, column B starting at B2.
+    """
+    result = sheets_service.spreadsheets().values().get(
         spreadsheetId=UTILS_SHEET_ID,
         range="B2:B"
     ).execute()
     values = result.get("values", [])
-    return [row[0] for row in values if row]
+    # Filter out empty rows
+    urls = [row[0] for row in values if row and row[0].strip()]
+    return urls
 
 
 def extract_sheet_id_from_url(url):
+    """
+    Extract the sheet ID from a Google Sheets URL.
+    """
     try:
         return url.split("/d/")[1].split("/")[0]
     except IndexError:
@@ -33,14 +41,22 @@ def extract_sheet_id_from_url(url):
 
 
 def days_since(date_str):
+    """
+    Compute days elapsed since the given date string in MM/DD/YYYY format.
+    Returns None if date_str is invalid.
+    """
     try:
         assigned_date = datetime.datetime.strptime(date_str, "%m/%d/%Y")
-        return (datetime.datetime.now() - assigned_date).days
-    except:
+        delta = datetime.datetime.now() - assigned_date
+        return delta.days
+    except Exception:
         return None
 
 
 def should_send_reminder(row):
+    """
+    Determine if an email reminder should be sent based on the row data from "Test Cases".
+    """
     assigned_date = row[2] if len(row) > 2 else ""
     task_name = row[3] if len(row) > 3 else ""
     assignee = row[4] if len(row) > 4 else ""
@@ -80,6 +96,9 @@ def should_send_reminder(row):
 
 
 def send_email(assignee, task, days, missing):
+    """
+    Send reminder email using Gmail SMTP.
+    """
     recipient = "romiel@bposeats.com"
     sender = os.environ.get("GMAIL_SENDER")
     app_password = os.environ.get("GMAIL_APP_PASSWORD")
@@ -97,7 +116,6 @@ def send_email(assignee, task, days, missing):
     msg["From"] = sender
     msg["To"] = recipient
     msg["Subject"] = subject
-
     msg.attach(MIMEText(body, "plain"))
 
     try:
@@ -110,12 +128,21 @@ def send_email(assignee, task, days, missing):
 
 
 def process_sheet(sheet_service, sheet_id):
+    """
+    Fetch rows from the "Test Cases" sheet of the given sheet_id,
+    then check each row for reminders.
+    """
     try:
+        # Explicitly fetch range from 'Test Cases' sheet
         result = sheet_service.spreadsheets().values().get(
             spreadsheetId=sheet_id,
             range="Test Cases!A2:Q"
         ).execute()
         rows = result.get("values", [])
+        if not rows:
+            print(f"⚠️ No data found in 'Test Cases' for sheet {sheet_id}")
+            return
+
         for row in rows:
             send_flag, info = should_send_reminder(row)
             if send_flag and info:
@@ -131,17 +158,21 @@ def process_sheet(sheet_service, sheet_id):
 
 def main():
     credentials = authenticate()
-    sheets = build("sheets", "v4", credentials=credentials)
-    urls = get_sheet_urls(sheets)
-    print(f"🔗 Found {len(urls)} sheet URLs")
+    sheets_service = build("sheets", "v4", credentials=credentials)
 
+    # Step 1: Get all sheet URLs from the UTILS spreadsheet column B2:B
+    urls = get_sheet_urls(sheets_service)
+    print(f"🔗 Found {len(urls)} sheet URLs in UTILS sheet")
+
+    # Step 2: For each URL, extract sheet ID and process 'Test Cases' data
     for url in urls:
         sheet_id = extract_sheet_id_from_url(url)
         if not sheet_id:
-            print(f"⚠️ Invalid URL: {url}")
+            print(f"⚠️ Invalid URL skipped: {url}")
             continue
-        print(f"📄 Processing sheet: {sheet_id}")
-        process_sheet(sheets, sheet_id)
+
+        print(f"📄 Processing sheet ID: {sheet_id}")
+        process_sheet(sheets_service, sheet_id)
 
 
 if __name__ == "__main__":
