@@ -38,7 +38,11 @@ def should_send_reminder(row):
     return False, None
 
 def generate_email_html(assignee, tasks):
-    colors = {"Estimation": "#e74c3c", "Output Reference": "#e67e22", "Test Case Link": "#3498db"}
+    colors = {
+        "Estimation": "#e74c3c",
+        "Output Reference": "#e67e22",
+        "Test Case Link": "#3498db"
+    }
     get_class = lambda m: f'missing-{"estimation" if m=="Estimation" else "output" if m=="Output Reference" else "testcase"}'
 
     style = "\n".join([
@@ -53,7 +57,8 @@ def generate_email_html(assignee, tasks):
         f".missing-output{{color:{colors['Output Reference']};font-weight:700}}",
         f".missing-testcase{{color:{colors['Test Case Link']};font-weight:700}}",
         ".footer{margin-top:30px;font-size:14px;text-align:center;color:#999}",
-        ".cta{display:block;margin:25px auto 0;background:#27ae60;color:white!important;padding:12px 24px;font-weight:700;text-decoration:none;border-radius:30px;box-shadow:0 4px 10px rgba(39,174,96,0.4);transition:0.3s}.cta:hover{background:#2ecc71}"
+        ".cta-wrapper{text-align:center;margin-top:30px}",
+        ".cta{display:inline-block;background:#27ae60;color:white!important;padding:12px 24px;font-weight:700;text-decoration:none;border-radius:30px;box-shadow:0 4px 10px rgba(39,174,96,0.4);transition:0.3s}.cta:hover{background:#2ecc71}"
     ])
 
     task_html = ""
@@ -65,11 +70,17 @@ def generate_email_html(assignee, tasks):
     return f"""<html><head><style>{style}</style></head><body><div class="container">
     <h2>⚠️ Important: Pending Task Reminder for {assignee}</h2>
     <p>Dear <strong>{assignee}</strong>,</p>
-    <p>You have <strong>{len(tasks)} pending task(s)</strong> requiring your attention. Please review below and update missing fields.</p>
+    <p>You have <strong>{len(tasks)} pending task(s)</strong> requiring your attention. Please review below and update missing fields:</p>
     {task_html}
-    <p>Please update the missing information at your earliest convenience to avoid delays.</p>
-    <a href="https://drive.google.com/drive/u/0/folders/1X7tChdqEcO_RvOl617W_haZ0ea7nl36m" target="_blank" class="cta">Update Your Tasks Now</a>
-    <p class="footer">Thanks for your dedication!<br>— The TC Task Management Team</p>
+    <p>Please update the missing information at your earliest convenience to avoid delays in project timelines.</p>
+    <div class="cta-wrapper">
+        <a href="https://drive.google.com/drive/u/0/folders/1X7tChdqEcO_RvOl617W_haZ0ea7nl36m" target="_blank" class="cta">Update Your Tasks Now</a>
+    </div>
+    <p class="footer">
+        This is an auto-generated email triggered by GitHub/GitLab automations under the <strong>Project Milestone initiative</strong> of Romiel Melliza Computo.<br>
+        The <em>Centralized Docs System</em> was introduced on <strong>October 3, 2024</strong> to centralize task management, manpower tracking, sprint/milestone planning, testing tools, and test data—all with reduced manual QA and automation QA input.<br><br>
+        Thanks for your dedication!<br>— The TC Task Management Team
+    </p>
     </div></body></html>"""
 
 def send_email_combined(assignee, tasks, recipient):
