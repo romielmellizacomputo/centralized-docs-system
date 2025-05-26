@@ -8,7 +8,7 @@ from email.mime.multipart import MIMEMultipart
 # Add parent directory to sys.path for custom imports if necessary
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from googleapiclient.discovery import build
-from common import authenticate
+from common import authenticate, get_sheet_ids, get_assignee_email_map, days_since
 from constants import UTILS_SHEET_ID, CDS_MASTER_ROSTER
 
 # Validate required environment variables
@@ -19,60 +19,6 @@ if not UTILS_SHEET_ID:
 if not CDS_MASTER_ROSTER:
     print("❌ CDS_MASTER_ROSTER is not set. Please set CDS_MASTER_ROSTER environment variable.")
     sys.exit(1)
-
-def get_sheet_ids(sheets):
-    """
-    Fetch sheet IDs listed in the UTILS sheet (range UTILS!B2:B).
-    """
-    result = sheets.spreadsheets().values().get(
-        spreadsheetId=UTILS_SHEET_ID,
-        range="UTILS!B2:B"
-    ).execute()
-    values = result.get("values", [])
-    sheet_ids = [row[0].strip() for row in values if row and row[0].strip()]
-    print(f"🔗 Found {len(sheet_ids)} valid sheet IDs in UTILS sheet")
-    return sheet_ids
-
-def get_assignee_email_map(sheets):
-    """
-    Fetch assignee-to-email mapping from the CDS_MASTER_ROSTER sheet.
-    Sheet name: "Roster"
-    Range: A4:B (A = assignee name, B = email)
-    Returns dict {assignee_name: email}
-    """
-    try:
-        result = sheets.spreadsheets().values().get(
-            spreadsheetId=CDS_MASTER_ROSTER,
-            range="Roster!A4:B"
-        ).execute()
-        rows = result.get("values", [])
-        mapping = {}
-        for row in rows:
-            if len(row) >= 2:
-                name = row[0].strip()
-                email = row[1].strip()
-                if name and email:
-                    mapping[name] = email
-        print(f"📋 Loaded {len(mapping)} assignee-email mappings from CDS_MASTER_ROSTER")
-        return mapping
-    except Exception as e:
-        print(f"❌ Failed to load assignee-email mapping: {e}")
-        return {}
-
-def days_since(date_str):
-    """
-    Calculate days passed since date_str.
-    Supports formats: "MM/DD/YYYY" and "Day, Mon DD, YYYY"
-    Returns integer days or None if parsing fails.
-    """
-    try:
-        return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%m/%d/%Y")).days
-    except ValueError:
-        try:
-            return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%a, %b %d, %Y")).days
-        except Exception as e:
-            print(f"⚠️ Could not parse date '{date_str}': {e}")
-            return None
 
 def should_send_reminder(row):
     """
