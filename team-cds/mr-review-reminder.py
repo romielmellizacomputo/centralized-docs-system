@@ -142,16 +142,13 @@ def main():
     credentials = authenticate()
     sheets = build("sheets", "v4", credentials=credentials)
 
-    # Get assignee-to-email mapping once
     assignee_email_map = get_assignee_email_map(sheets)
-
-    # Get sheet IDs to process
     sheet_ids = get_sheet_ids(sheets)
 
-    # Process each sheet
     for sheet_id in sheet_ids:
         print(f"📄 Processing sheet ID: {sheet_id}")
-        process_sheet(sheets, sheet_id, assignee_email_map)
+        process_mr_sheet(sheets, sheet_id, assignee_email_map)
 
 if __name__ == "__main__":
     main()
+
