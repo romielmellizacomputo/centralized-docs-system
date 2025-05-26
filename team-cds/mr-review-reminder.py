@@ -14,19 +14,22 @@ for name, val in missing_vars.items():
         print(f"❌ {name} is not set. Please set {name} environment variable.")
         sys.exit(1)
 
-def get_priority_color(priority_label):
-    lower = priority_label.lower()
-    if "urg" in lower:
-        return "#ffcccc"  # Red
-    elif "high" in lower:
-        return "#f8d7da"  # Light red
-    elif "med" in lower:
-        return "#e6ccff"  # Light violet
-    elif "low" in lower:
-        return "#d6ecff"  # Light blue
-    return "#f9f9f9"     # Default light gray
+def get_priority_color(priority):
+    if not priority:
+        return "#ffe5b4"  # peach / light yellow
+    p = priority.lower()
+    if "low" in p:
+        return "#d9f0ff"  # light blue
+    elif "med" in p:
+        return "#ead9ff"  # light violet
+    elif "high" in p:
+        return "#ffd9d9"  # light red
+    elif "urg" in p:
+        return "#ff4d4d"  # red
+    else:
+        return "#ffe5b4"  # fallback to peach
 
-def should_send_mr_reminder(row, row_number):
+def should_send_mr_reminder(row, index):
     row += [""] * 17  # pad row to expected length
 
     assigned_date = row[2].strip()
@@ -60,7 +63,7 @@ def should_send_mr_reminder(row, row_number):
     if not should_remind:
         return False, None
 
-    task_display = f"Task ID: Row{row_number + 2} | {priority} - " \
+    task_display = f"Task ID: Row{index + 2}<br>{priority or 'No Priority'} - " \
                    f"<a href='{backend_url}' target='_blank'>Backend</a> / " \
                    f"<a href='{frontend_url}' target='_blank'>Frontend</a>"
 
@@ -69,17 +72,17 @@ def should_send_mr_reminder(row, row_number):
         "task": task_display,
         "days": days,
         "missing": reasons,
-        "priority": priority
+        "priority_color": get_priority_color(priority)
     }
 
 def generate_mr_email_html(assignee, tasks):
     style = """
     body{font-family:sans-serif;padding:20px;background:#f5f5f5;color:#333}
-    .container{background:#fff;padding:25px;border-radius:8px;max-width:700px;margin:auto;box-shadow:0 0 10px rgba(0,0,0,0.1)}
+    .container{background:#fff;padding:25px;border-radius:8px;max-width:600px;margin:auto;box-shadow:0 0 10px rgba(0,0,0,0.1)}
     h2{text-align:center;color:#2c3e50}
-    .task{border:1px solid #ddd;padding:15px;border-radius:6px;margin:15px 0}
+    .task{padding:15px;border-radius:6px;margin:15px 0;border:1px solid #ddd}
     .task-header{font-weight:bold;font-size:16px;margin-bottom:5px}
-    .days-info{font-style:italic;color:#555;margin-bottom:8px}
+    .days-info{font-style:italic;color:#888;margin-bottom:8px}
     ul{margin:0;padding-left:20px}
     li{margin:4px 0}
     .footer{margin-top:30px;font-size:12px;text-align:center;color:#aaa}
@@ -87,14 +90,14 @@ def generate_mr_email_html(assignee, tasks):
 
     body = f"<html><head><style>{style}</style></head><body><div class='container'>"
     body += f"<h2>🔔 MR Review Reminder for {assignee}</h2>"
-    body += f"<p>Hello <strong>{assignee}</strong>, you have <strong>{len(tasks)} task(s)</strong> needing review:</p>"
+    body += f"<p>Hello <strong>{assignee}</strong>, you have <strong>{len(tasks)} task(s)</strong> needing your review:</p>"
 
     for task in tasks:
         issues = "".join(f"<li>{m}</li>" for m in task['missing'])
         plural = "s" if task["days"] > 1 else ""
-        bg_color = get_priority_color(task['priority'])
+        color = task["priority_color"]
         body += f"""
-        <div class="task" style="background:{bg_color};">
+        <div class="task" style="background:{color}">
             <div class="task-header">{task['task']}</div>
             <div class="days-info">Assigned <strong>{task['days']} day{plural} ago</strong></div>
             <ul>{issues}</ul>
