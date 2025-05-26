@@ -43,9 +43,10 @@ def generate_email_html(assignee, tasks):
 
     style = "\n".join([
         "body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f9f9f9;color:#333;padding:20px}",
-        ".container{background:#fff;padding:25px;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-width:600px;margin:auto}",
+        ".container{background:#fff;padding:25px;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-width:700px;margin:auto}",
         "h2{color:#2c3e50;text-align:center;margin-bottom:25px}",
-        ".task{border:1px solid #ddd;padding:15px 20px;border-radius:6px;margin-bottom:20px;background:#fafafa}",
+        ".tasks-wrapper{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between}",
+        ".task{border:1px solid #ddd;padding:15px 20px;border-radius:6px;background:#fafafa;width:48%;box-sizing:border-box}",
         ".task-header{font-size:18px;font-weight:600;margin-bottom:8px;color:#34495e}",
         ".days-info{font-style:italic;color:#7f8c8d;margin-bottom:12px}",
         "ul{padding-left:20px;margin:0}li{margin-bottom:6px;font-weight:500}",
@@ -53,20 +54,26 @@ def generate_email_html(assignee, tasks):
         f".missing-output{{color:{colors['Output Reference']};font-weight:700}}",
         f".missing-testcase{{color:{colors['Test Case Link']};font-weight:700}}",
         ".footer{margin-top:30px;font-size:14px;text-align:center;color:#999}",
-        ".cta{display:block;margin:25px auto 0;background:#27ae60;color:white!important;padding:12px 24px;font-weight:700;text-decoration:none;border-radius:30px;box-shadow:0 4px 10px rgba(39,174,96,0.4);transition:0.3s}.cta:hover{background:#2ecc71}"
+        ".cta{display:block;margin:25px auto 0;background:#27ae60;color:white!important;padding:12px 24px;font-weight:700;text-decoration:none;border-radius:30px;box-shadow:0 4px 10px rgba(39,174,96,0.4);transition:0.3s}.cta:hover{background:#2ecc71}",
+        "@media (max-width: 600px) {.task{width:100%}}"
     ])
 
-    task_html = ""
-    for t in tasks:
-        items = "".join([f'<li class="{get_class(m)}">Missing {m}</li>' for m in t["missing"]])
-        plural = "s" if t["days"] > 1 else ""
-        task_html += f'<div class="task"><div class="task-header">{t["task"]}</div><div class="days-info">Assigned <strong>{t["days"]} day{plural} ago</strong></div><ul>{items}</ul></div>'
+    task_html = "".join([
+        f'''
+        <div class="task">
+            <div class="task-header">{t["task"]}</div>
+            <div class="days-info">Assigned <strong>{t["days"]} day{'s' if t["days"] > 1 else ''} ago</strong></div>
+            <ul>{"".join(f'<li class="{get_class(m)}">Missing {m}</li>' for m in t["missing"])}</ul>
+        </div>
+        '''
+        for t in tasks
+    ])
 
     return f"""<html><head><style>{style}</style></head><body><div class="container">
     <h2>⚠️ Important: Pending Task Reminder for {assignee}</h2>
     <p>Dear <strong>{assignee}</strong>,</p>
     <p>You have <strong>{len(tasks)} pending task(s)</strong> requiring your attention. Please review below and update missing fields.</p>
-    {task_html}
+    <div class="tasks-wrapper">{task_html}</div>
     <p>Please update the missing information at your earliest convenience to avoid delays.</p>
     <a href="https://drive.google.com/drive/u/0/folders/1X7tChdqEcO_RvOl617W_haZ0ea7nl36m" target="_blank" class="cta">Update Your Tasks Now</a>
     <p class="footer">Thanks for your dedication!<br>— The TC Task Management Team</p>
@@ -82,7 +89,7 @@ def send_email_combined(assignee, tasks, recipient):
         return
 
     msg = MIMEMultipart("alternative")
-    msg["From"], msg["To"], msg["Subject"] = sender, recipient, f"⏰ TC Task Reminder: {len(tasks)} Pending Task(s)"
+    msg["From"], msg["To"], msg["Subject"] = sender, recipient, f"📜 TC Task Reminder: {len(tasks)} Pending Task(s)"
     msg.attach(MIMEText(generate_email_html(assignee, tasks), "html"))
 
     print(f"Sending email to {recipient} for '{assignee}' with {len(tasks)} tasks...")
