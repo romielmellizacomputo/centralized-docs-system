@@ -79,7 +79,7 @@ def generate_email_html(assignee, tasks):
     <p class="footer">
         This is an auto-generated email triggered by GitHub/GitLab automations under the <strong>Project Milestone initiative</strong> of Romiel Melliza Computo.<br>
         The <em>Centralized Docs System</em> was introduced on <strong>October 3, 2024</strong> to centralize task management, manpower tracking, sprint/milestone planning, testing tools, and test data—all with reduced manual QA and automation QA input.<br><br>
-        Thanks for your dedication!<br>— The TC Task Management Team
+        Thanks for your attention!<br>— Centralized Docs System —
     </p>
     </div></body></html>"""
 
