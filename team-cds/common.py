@@ -42,25 +42,45 @@ def get_selected_milestones(sheets, sheet_id, g_milestones):
 # Task Reminders functions
 # =========================
 
-def get_task_reminders(sheets, spreadsheet_id, sheet_name='TaskReminders', data_range='A2:E100'):
-    """
-    Fetch task reminders data from the specified sheet and range.
-    """
+import datetime
+from constants import UTILS_SHEET_ID, CDS_MASTER_ROSTER
+
+def get_sheet_ids(sheets):
     result = sheets.spreadsheets().values().get(
-        spreadsheetId=spreadsheet_id,
-        range=f'{sheet_name}!{data_range}'
+        spreadsheetId=UTILS_SHEET_ID,
+        range="UTILS!B2:B"
     ).execute()
-    values = result.get('values', [])
-    return values
+    values = result.get("values", [])
+    sheet_ids = [row[0].strip() for row in values if row and row[0].strip()]
+    print(f"🔗 Found {len(sheet_ids)} valid sheet IDs in UTILS sheet")
+    return sheet_ids
 
+def get_assignee_email_map(sheets):
+    try:
+        result = sheets.spreadsheets().values().get(
+            spreadsheetId=CDS_MASTER_ROSTER,
+            range="Roster!A4:B"
+        ).execute()
+        rows = result.get("values", [])
+        mapping = {}
+        for row in rows:
+            if len(row) >= 2:
+                name = row[0].strip()
+                email = row[1].strip()
+                if name and email:
+                    mapping[name] = email
+        print(f"📋 Loaded {len(mapping)} assignee-email mappings from CDS_MASTER_ROSTER")
+        return mapping
+    except Exception as e:
+        print(f"❌ Failed to load assignee-email mapping: {e}")
+        return {}
 
-def get_task_reminder_titles(sheets, spreadsheet_id, sheet_name='TaskReminders'):
-    """
-    Get titles of all sheets related to Task Reminders.
-    """
-    res = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-    titles = [sheet['properties']['title'] for sheet in res.get('sheets', [])]
-    # Filter for TaskReminders sheets only (optional, if you have multiple)
-    task_reminder_titles = [title for title in titles if 'TaskReminders' in title]
-    print(f"📝 Task Reminders Sheets in {spreadsheet_id}:", task_reminder_titles)
-    return task_reminder_titles
+def days_since(date_str):
+    try:
+        return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%m/%d/%Y")).days
+    except ValueError:
+        try:
+            return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%a, %b %d, %Y")).days
+        except Exception as e:
+            print(f"⚠️ Could not parse date '{date_str}': {e}")
+            return None
