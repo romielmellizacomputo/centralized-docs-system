@@ -14,7 +14,19 @@ for name, val in missing_vars.items():
         print(f"❌ {name} is not set. Please set {name} environment variable.")
         sys.exit(1)
 
-def should_send_mr_reminder(row):
+def get_priority_color(priority_label):
+    lower = priority_label.lower()
+    if "urg" in lower:
+        return "#ffcccc"  # Red
+    elif "high" in lower:
+        return "#f8d7da"  # Light red
+    elif "med" in lower:
+        return "#e6ccff"  # Light violet
+    elif "low" in lower:
+        return "#d6ecff"  # Light blue
+    return "#f9f9f9"     # Default light gray
+
+def should_send_mr_reminder(row, row_number):
     row += [""] * 17  # pad row to expected length
 
     assigned_date = row[2].strip()
@@ -48,7 +60,7 @@ def should_send_mr_reminder(row):
     if not should_remind:
         return False, None
 
-    task_display = f"{priority} - " \
+    task_display = f"Task ID: Row{row_number + 2} | {priority} - " \
                    f"<a href='{backend_url}' target='_blank'>Backend</a> / " \
                    f"<a href='{frontend_url}' target='_blank'>Frontend</a>"
 
@@ -56,17 +68,18 @@ def should_send_mr_reminder(row):
         "assignee": assignee,
         "task": task_display,
         "days": days,
-        "missing": reasons
+        "missing": reasons,
+        "priority": priority
     }
 
 def generate_mr_email_html(assignee, tasks):
     style = """
     body{font-family:sans-serif;padding:20px;background:#f5f5f5;color:#333}
-    .container{background:#fff;padding:25px;border-radius:8px;max-width:600px;margin:auto;box-shadow:0 0 10px rgba(0,0,0,0.1)}
+    .container{background:#fff;padding:25px;border-radius:8px;max-width:700px;margin:auto;box-shadow:0 0 10px rgba(0,0,0,0.1)}
     h2{text-align:center;color:#2c3e50}
-    .task{border:1px solid #ddd;padding:15px;border-radius:6px;margin:15px 0;background:#fafafa}
+    .task{border:1px solid #ddd;padding:15px;border-radius:6px;margin:15px 0}
     .task-header{font-weight:bold;font-size:16px;margin-bottom:5px}
-    .days-info{font-style:italic;color:#888;margin-bottom:8px}
+    .days-info{font-style:italic;color:#555;margin-bottom:8px}
     ul{margin:0;padding-left:20px}
     li{margin:4px 0}
     .footer{margin-top:30px;font-size:12px;text-align:center;color:#aaa}
@@ -79,8 +92,9 @@ def generate_mr_email_html(assignee, tasks):
     for task in tasks:
         issues = "".join(f"<li>{m}</li>" for m in task['missing'])
         plural = "s" if task["days"] > 1 else ""
+        bg_color = get_priority_color(task['priority'])
         body += f"""
-        <div class="task">
+        <div class="task" style="background:{bg_color};">
             <div class="task-header">{task['task']}</div>
             <div class="days-info">Assigned <strong>{task['days']} day{plural} ago</strong></div>
             <ul>{issues}</ul>
@@ -108,7 +122,7 @@ def send_mr_email(assignee, tasks, recipient):
     msg = MIMEMultipart("alternative")
     msg["From"] = sender
     msg["To"] = recipient
-    msg["Subject"] = f"</> MR Review Reminder: {len(tasks)} Task(s) for {assignee}"
+    msg["Subject"] = f"🔔 MR Review Reminder: {len(tasks)} Task(s) for {assignee}"
     msg.attach(MIMEText(generate_mr_email_html(assignee, tasks), "html"))
 
     try:
@@ -126,8 +140,8 @@ def process_mr_sheet(sheet_service, sheet_id, assignee_email_map):
         print(f"✅ Fetched {len(rows)} rows from MR Review")
 
         assignee_tasks = {}
-        for row in rows:
-            flag, info = should_send_mr_reminder(row)
+        for idx, row in enumerate(rows):
+            flag, info = should_send_mr_reminder(row, idx)
             if flag and info:
                 assignee_tasks.setdefault(info["assignee"], []).append(info)
 
@@ -136,7 +150,6 @@ def process_mr_sheet(sheet_service, sheet_id, assignee_email_map):
 
     except Exception as e:
         print(f"❌ Error processing MR sheet: {e}")
-
 
 def main():
     credentials = authenticate()
@@ -151,4 +164,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
