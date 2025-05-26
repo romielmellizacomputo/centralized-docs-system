@@ -105,12 +105,16 @@ def generate_mr_email_html(assignee, tasks):
         """
 
     body += """
-    <p>Please update the MR sheet to reflect the latest progress.</p>
-    <div class="footer">
-        This is an automated reminder sent by the CDS Monitoring System.<br>
-        Kindly ignore if you’ve already updated your items.
-    </div></div></body></html>
-    """
+    <p>Please update the missing information at your earliest convenience to avoid delays in project timelines.</p>
+    <div class="cta-wrapper">
+        <a href="https://drive.google.com/drive/u/0/folders/1X7tChdqEcO_RvOl617W_haZ0ea7nl36m" target="_blank" class="cta">Update Your Tasks Now</a>
+    </div>
+    <p class="footer">
+        This is an auto-generated email triggered by GitHub/GitLab automations under the <strong>Project Milestone initiative</strong> of Romiel Melliza Computo.<br>
+        The <em>Centralized Docs System</em> was introduced on <strong>October 3, 2024</strong> to centralize task management, manpower tracking, sprint/milestone planning, testing tools, and test data—all with reduced manual QA and automation QA input.<br><br>
+        Thanks for your attention!<br>— Centralized Docs System —
+    </p>
+    </div></body></html>"""
     return body
 
 def send_mr_email(assignee, tasks, recipient):
