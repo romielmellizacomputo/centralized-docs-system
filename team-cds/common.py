@@ -75,12 +75,32 @@ def get_assignee_email_map(sheets):
         print(f"❌ Failed to load assignee-email mapping: {e}")
         return {}
 
+# def days_since(date_str):
+#     try:
+#         return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%m/%d/%Y")).days
+#     except ValueError:
+#         try:
+#             return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%a, %b %d, %Y")).days
+#         except Exception as e:
+#             print(f"⚠️ Could not parse date '{date_str}': {e}")
+#             return None
+
 def days_since(date_str):
     try:
-        return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%m/%d/%Y")).days
-    except ValueError:
+        # Normalize unicode (replace narrow no-break space with normal space)
+        date_str = date_str.replace("\u202f", " ").strip()
+        
+        # Try format with full datetime and time
         try:
-            return (datetime.datetime.now() - datetime.datetime.strptime(date_str, "%a, %b %d, %Y")).days
-        except Exception as e:
-            print(f"⚠️ Could not parse date '{date_str}': {e}")
-            return None
+            parsed = datetime.datetime.strptime(date_str, "%a, %b %d, %Y, %I:%M:%S %p")
+        except ValueError:
+            try:
+                parsed = datetime.datetime.strptime(date_str, "%a, %b %d, %Y")
+            except ValueError:
+                parsed = datetime.datetime.strptime(date_str, "%m/%d/%Y")
+        
+        return (datetime.datetime.now() - parsed).days
+    except Exception as e:
+        print(f"⚠️ Could not parse date '{date_str}': {e}")
+        return None
+
