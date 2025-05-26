@@ -29,4 +29,4 @@ jobs:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
           LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
           CDS_MASTER_ROSTER: ${{ secrets.CDS_MASTER_ROSTER }}
-        run: python team-cds/mr-review-reminder.py
+        run: python team-cds/tc-task-reminder.py
