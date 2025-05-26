@@ -38,19 +38,14 @@ def should_send_reminder(row):
     return False, None
 
 def generate_email_html(assignee, tasks):
-    colors = {
-        "Estimation": "#e74c3c",
-        "Output Reference": "#e67e22",
-        "Test Case Link": "#3498db"
-    }
+    colors = {"Estimation": "#e74c3c", "Output Reference": "#e67e22", "Test Case Link": "#3498db"}
     get_class = lambda m: f'missing-{"estimation" if m=="Estimation" else "output" if m=="Output Reference" else "testcase"}'
 
     style = "\n".join([
         "body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f9f9f9;color:#333;padding:20px}",
         ".container{background:#fff;padding:25px;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-width:600px;margin:auto}",
         "h2{color:#2c3e50;text-align:center;margin-bottom:25px}",
-        ".task-table{width:100%;border-spacing:20px 20px;border-collapse:separate}",
-        ".task{border:1px solid #ddd;padding:15px;border-radius:6px;background:#fafafa;width:100%;}",
+        ".task{border:1px solid #ddd;padding:15px 20px;border-radius:6px;margin-bottom:20px;background:#fafafa}",
         ".task-header{font-size:18px;font-weight:600;margin-bottom:8px;color:#34495e}",
         ".days-info{font-style:italic;color:#7f8c8d;margin-bottom:12px}",
         "ul{padding-left:20px;margin:0}li{margin-bottom:6px;font-weight:500}",
@@ -58,42 +53,20 @@ def generate_email_html(assignee, tasks):
         f".missing-output{{color:{colors['Output Reference']};font-weight:700}}",
         f".missing-testcase{{color:{colors['Test Case Link']};font-weight:700}}",
         ".footer{margin-top:30px;font-size:14px;text-align:center;color:#999}",
-        ".cta{display:block;margin:25px auto 0;background:#27ae60;color:white!important;padding:12px 24px;font-weight:700;text-decoration:none;border-radius:30px;box-shadow:0 4px 10px rgba(39,174,96,0.4);transition:0.3s}.cta:hover{background:#2ecc71}",
-
-        # Responsive layout
-        "@media only screen and (max-width: 600px){ .task-table td{display:block;width:100%!important} }"
+        ".cta{display:block;margin:25px auto 0;background:#27ae60;color:white!important;padding:12px 24px;font-weight:700;text-decoration:none;border-radius:30px;box-shadow:0 4px 10px rgba(39,174,96,0.4);transition:0.3s}.cta:hover{background:#2ecc71}"
     ])
 
-    # Generate task cells in table format (2 per row)
-    task_cells = []
-    for i, t in enumerate(tasks):
-        plural = "s" if t["days"] > 1 else ""
+    task_html = ""
+    for t in tasks:
         items = "".join([f'<li class="{get_class(m)}">Missing {m}</li>' for m in t["missing"]])
-        html = f"""
-        <td>
-            <div class="task">
-                <div class="task-header">{t["task"]}</div>
-                <div class="days-info">Assigned <strong>{t["days"]} day{plural} ago</strong></div>
-                <ul>{items}</ul>
-            </div>
-        </td>
-        """
-        task_cells.append(html)
-
-    # Group every 2 cells into one <tr>
-    rows_html = ""
-    for i in range(0, len(task_cells), 2):
-        first = task_cells[i]
-        second = task_cells[i+1] if i + 1 < len(task_cells) else "<td></td>"
-        rows_html += f"<tr>{first}{second}</tr>"
-
-    task_table_html = f'<table class="task-table">{rows_html}</table>'
+        plural = "s" if t["days"] > 1 else ""
+        task_html += f'<div class="task"><div class="task-header">{t["task"]}</div><div class="days-info">Assigned <strong>{t["days"]} day{plural} ago</strong></div><ul>{items}</ul></div>'
 
     return f"""<html><head><style>{style}</style></head><body><div class="container">
     <h2>⚠️ Important: Pending Task Reminder for {assignee}</h2>
     <p>Dear <strong>{assignee}</strong>,</p>
     <p>You have <strong>{len(tasks)} pending task(s)</strong> requiring your attention. Please review below and update missing fields.</p>
-    {task_table_html}
+    {task_html}
     <p>Please update the missing information at your earliest convenience to avoid delays.</p>
     <a href="https://drive.google.com/drive/u/0/folders/1X7tChdqEcO_RvOl617W_haZ0ea7nl36m" target="_blank" class="cta">Update Your Tasks Now</a>
     <p class="footer">Thanks for your dedication!<br>— The TC Task Management Team</p>
