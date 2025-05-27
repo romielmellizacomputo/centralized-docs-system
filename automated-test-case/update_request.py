@@ -54,13 +54,13 @@ def main():
             "values": log_entries
         }
 
-        execute_with_retries(
-            service.spreadsheets().values().append,
+        # ✅ Correct usage with your execute_with_retries
+        execute_with_retries(lambda: service.spreadsheets().values().append(
             spreadsheetId=AUTOMATED_PORTALS,
             range="Logs!A:C",
             valueInputOption="USER_ENTERED",
             body=append_body
-        )
+        ).execute())
 
         print(f"✅ Log(s) added to Logs sheet at {AUTOMATED_PORTALS}")
 
