@@ -31,6 +31,7 @@ jobs:
           python automated-test-case/autonumber.py
           python automated-test-case/auto-unmerging.py
           python automated-test-case/autodropdown.py
+          python automated-test-case/autoToC.py
 
         env:
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
