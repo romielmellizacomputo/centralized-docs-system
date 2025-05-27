@@ -36,7 +36,6 @@ def construct_log_entry(service, entry):
 
     return [timestamp, sheet_url, log_message]
 
-
 def main():
     try:
         print("📤 Starting log update to Logs sheet")
@@ -54,7 +53,7 @@ def main():
             "values": log_entries
         }
 
-        # ✅ Correct usage with your execute_with_retries
+        # ✅ Wrap the API call in a lambda to pass it to execute_with_retries
         execute_with_retries(lambda: service.spreadsheets().values().append(
             spreadsheetId=AUTOMATED_PORTALS,
             range="Logs!A:C",
@@ -67,7 +66,6 @@ def main():
     except Exception as e:
         print(f"❌ ERROR: {e}")
         sys.exit(1)
-
 
 if __name__ == '__main__':
     main()
