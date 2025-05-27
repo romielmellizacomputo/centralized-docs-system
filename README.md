@@ -1,3 +1,6 @@
+![image](https://github.com/user-attachments/assets/2ca0f00f-0bad-4074-8461-8eab70cf5abd)
+
+
 # 📘 Centralized Docs System (CDS)
 
 > **Develop by Romiel Melliza Computo**  
@@ -30,6 +33,9 @@ The **Centralized Docs System** aims to:
 
 ## 🚀 Key Features & Components
 
+---
+![image](https://github.com/user-attachments/assets/9a3d1003-a284-4e79-af92-a0ae657a0343)
+
 ### 1. 📊 Leads/Management CDS
 
 **For QA Managers & Leads**  
@@ -41,6 +47,7 @@ A bird’s-eye view of all QA operations.
 - Built-in performance dashboards  
 
 ---
+![image](https://github.com/user-attachments/assets/d60893f1-613c-48e6-8dc8-ddb112651067)
 
 ### 2. 🧑‍🤝‍🧑 Team CDS
 
@@ -53,6 +60,7 @@ A centralized platform for all team-level tasks.
 - Access instructions and role-specific dashboards  
 
 ---
+![image](https://github.com/user-attachments/assets/81a93a24-f1c5-42af-9e9b-579517b58615)
 
 ### 3. 🗓️ Automated Sprint Reports
 
@@ -65,6 +73,7 @@ Auto-generated sprint outputs and performance summaries.
 - Team-level breakdowns for quick review  
 
 ---
+![image](https://github.com/user-attachments/assets/3fc1fc6b-002c-4015-8c40-ffef4783ef8e)
 
 ### 4. 🌐 Automated Portals
 
@@ -77,6 +86,7 @@ Pulls all data from individual test case sheets into a real-time portal.
 - Ensures no duplication or data loss  
 
 ---
+![image](https://github.com/user-attachments/assets/01a3096c-cf45-4f0f-b7bf-49f01d8607a4)
 
 ### 5. 🧪 Automated Test Case Sheets
 
