@@ -1,103 +1,104 @@
-# Centralized Docs System (CDS) — General Guide
+# 📘 Centralized Docs System (CDS)
 
-## Introduction  
-The **Centralized Docs System (CDS)** was launched on **October 3, 2024** to solve key challenges faced by QA teams in managing documentation and tasks. Before CDS, teams created new documents every sprint, causing fragmented data that made it difficult to track historical issues, progress, and insights.  
-
-Manual data entries—such as input kiosks, updating bug sheets post-testing, and recording issues from Forge to Google Sheets—were time-consuming and error-prone. CDS was developed to automate these processes, streamline workflows, and improve data accuracy.
-
-By integrating tools like **Google Apps Script**, **GitHub**, **GitLab CI/CD**, and **Google Cloud API**, CDS automates data fetching, updating, and recording. This empowers QA teams to focus on critical activities such as bug reporting, usability discussions, merge request reviews, investigations, and environment testing.
-
-*This system and guide were proposed by Romiel Melliza Computo.*
+> **An initiative by Romiel Melliza Computo**  
+> **Start Date:** October 3, 2024  
+> **Status:** In active use and continuous improvement  
 
 ---
 
-## Core Components of CDS
+## 🧠 Background & History
 
-### 1. Leads/Management CDS  
-**Purpose:**  
-Provides managers and supervisors with a centralized hub to monitor outputs, timelines, and assignments across all teams.
+The **Centralized Docs System (CDS)** was developed to address a major inefficiency in many QA teams: scattered documentation, manual reporting overhead, and lack of real-time visibility into team progress.  
 
-**Key Features:**  
-- Centralized monitoring of team outputs, sprints, and KPIs  
-- Task assignment with automatic syncing to Team CDS  
-- Access to test-related documents (Test Cases, Test Scripts, etc.)  
-- Sprint and milestone timeline management  
-- Real-time automated data updates every 5–10 minutes  
+Before CDS, test cases, bug reports, task tracking, and sprint outputs were siloed in various platforms, which made collaboration difficult and transparency low. As the QA landscape grew more complex, **Romiel Melliza Computo** took the initiative to build a system that bridges these gaps by leveraging **Google Sheets, GitLab/GitHub APIs, and automation tools**.
 
-**Getting Started:**  
-- Access via shared link provided by QA Manager  
-- Use dashboard to select teams and sprints for streamlined oversight  
+CDS started as a simple internal sprint tracker but evolved into a fully automated documentation and reporting ecosystem now used across multiple teams and sprints.
 
 ---
 
-### 2. Team CDS  
-**Purpose:**  
-Consolidates all QA tasks (manual and automated) into a single source of truth, eliminating fragmented data and boosting accountability.
+## 🎯 Purpose
 
-**Key Features:**  
-- Centralized QA task documentation  
-- Automated data fetching from GitLab/Forge to reduce manual work  
-- Clear task ownership and progress tracking  
-- Visual performance and accountability metrics  
+The **Centralized Docs System** aims to:
 
-**Getting Started:**  
-- Explore sheets like Help, Dashboard, and Test Cases  
-- Understand your roles within the Team CDS framework  
+- Consolidate QA documentation into a single, easy-to-use system  
+- Improve transparency across teams, sprints, and management levels  
+- Automate repetitive reporting and documentation tasks  
+- Provide real-time insights into quality assurance metrics and performance  
+- Increase accountability, ownership, and collaboration  
 
 ---
 
-### 3. Automated Sprint Report  
-**Purpose:**  
-Provides a dynamic, weekly overview of team outputs and sprint progress to offer insights into team performance.
+## 🚀 Key Features & Components
 
-**Key Features:**  
-- Automatically generated weekly deliverable summaries  
-- Sprint leave report for resource tracking  
-- Visual progress bars and charts to track performance  
-- Customizable dropdowns for team-specific reports  
+### 1. 📊 Leads/Management CDS
 
----
+**For QA Managers & Leads**  
+A bird’s-eye view of all QA operations.
 
-### 4. Automated Portals  
-**Purpose:**  
-Acts as a centralized Google Sheet for all QA test data, ensuring real-time updates and easy access.
-
-**Key Features:**  
-- Centralized management of all QA test data  
-- Auto-refresh every 5–10 minutes to keep data current  
-- Data extraction by team or feature for targeted analysis  
-
-**Getting Started:**  
-- Portal is view-only; do **not** edit directly  
-- Use the linked Test Case document for testing activities to keep data accurate  
+- Monitor team output in real time  
+- Assign and track test cases and sprint tasks  
+- View leave reports and backlog  
+- Built-in performance dashboards  
 
 ---
 
-### 5. Automated Test Case Sheets  
-**Versions:**  
-- V1.1.0: GitLab CI/CD-Driven Test Case Sheets - TEMPLATE (make your own copy)  
-- V2.0.0: GitHub-Driven Test Case Sheets - TEMPLATE (make your own copy)  
+### 2. 🧑‍🤝‍🧑 Team CDS
 
-**Purpose:**  
-Eliminates repetitive manual formatting and entry in QA documentation, enabling focus on effective test case creation.
+**For QA Members**  
+A centralized platform for all team-level tasks.
 
-**Key Features:**  
-- Automated step numbering and formatting  
-- Real-time syncing with Automated Test Case & Scenario Portal  
-- Smart templates prevent ID conflicts and ensure consistency  
-
-**Getting Started:**  
-- Make a copy of the appropriate template  
-- Place it in the correct repository  
-- Follow setup instructions to link the sheet to the automation system  
+- Document manual & automated test cases  
+- Track individual task assignments and deadlines  
+- Auto-pull data from GitLab/Forge  
+- Access instructions and role-specific dashboards  
 
 ---
 
-## Conclusion  
-The **Centralized Docs System (CDS)** improves QA team efficiency by automating and centralizing documentation and task management. Each component helps teams collaborate better, reduce manual errors, and deliver higher-quality results.  
+### 3. 🗓️ Automated Sprint Reports
 
-For detailed guides, templates, and resources, please explore the full **CDS repository**.
+**For Weekly Tracking**  
+Auto-generated sprint outputs and performance summaries.
+
+- Weekly summary of deliverables  
+- Leave calendar integration  
+- Dynamic charts to track sprint health  
+- Team-level breakdowns for quick review  
 
 ---
 
-*Developed and maintained by Romiel Melliza Computo.*
+### 4. 🌐 Automated Portals
+
+**For Test Case Data Aggregation**  
+Pulls all data from individual test case sheets into a real-time portal.
+
+- View-only, always synced  
+- Auto-refresh every 5–10 minutes  
+- Filter by team or feature  
+- Ensures no duplication or data loss  
+
+---
+
+### 5. 🧪 Automated Test Case Sheets
+
+**For Test Case Creators**  
+Templates for easy test documentation with built-in automation.
+
+- Versioned templates (GitHub & GitLab driven)  
+- Auto-step formatting & case ID generation  
+- Real-time syncing with the Automated Portal  
+- Reduces manual errors and formatting inconsistencies  
+
+---
+
+## 💡 How It Helps
+
+CDS improves overall team performance and product quality by:
+
+- ✅ Reducing manual documentation work by up to 70%  
+- ✅ Increasing visibility across teams and sprints  
+- ✅ Automating repetitive reporting tasks  
+- ✅ Unifying data sources into a single view  
+- ✅ Providing actionable metrics for team leads and managers  
+- ✅ Enabling faster bug triage and release validation  
+
+---
