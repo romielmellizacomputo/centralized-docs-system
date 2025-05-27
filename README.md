@@ -102,3 +102,8 @@ CDS improves overall team performance and product quality by:
 - ✅ Enabling faster bug triage and release validation  
 
 ---
+## 📜 License
+
+This system is protected under a custom license. Any usage or distribution requires explicit written permission from the developer, **Romiel Melliza Computo**. Unauthorized use is strictly prohibited and may result in legal action.
+
+Please see the [LICENSE]([LICENSE](https://github.com/romielmellizacomputo/centralized-docs-system/blob/main/LICENSE)) file for full terms.
