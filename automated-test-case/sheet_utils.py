@@ -143,3 +143,32 @@ def create_border_request(sheet_id, start_row_idx, end_row_idx, start_col_idx, e
         }
     }
 
+
+def clear_sheet_range(service, spreadsheet_id, range_):
+    body = {}
+    return service.spreadsheets().values().clear(
+        spreadsheetId=spreadsheet_id,
+        range=range_,
+        body=body
+    ).execute()
+
+
+def batch_get_values(service, spreadsheet_id, ranges):
+    response = service.spreadsheets().values().batchGet(
+        spreadsheetId=spreadsheet_id,
+        ranges=ranges
+    ).execute()
+    return [r.get('values', []) for r in response.get('valueRanges', [])]
+
+
+def update_sheet_values(service, spreadsheet_id, range_, values):
+    body = {
+        'values': values
+    }
+    return service.spreadsheets().values().update(
+        spreadsheetId=spreadsheet_id,
+        range=range_,
+        valueInputOption='USER_ENTERED',
+        body=body
+    ).execute()
+
