@@ -8,10 +8,11 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-# Load environment variables
+# Load environment variables (assumes they're set in your environment)
 sheet_data = json.loads(os.environ['SHEET_DATA'])
 credentials_info = json.loads(os.environ['TEST_CASE_SERVICE_ACCOUNT_JSON'])
 
+# Constants
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 skip_sheets = ['ToC', 'Roster', 'Issues', 'HELP']
 
@@ -41,6 +42,7 @@ def update_values_with_retry(service, spreadsheet_id, range_, values):
             else:
                 raise
 
+# Retry helper
 def execute_with_retries(request_fn, max_retries=5, base_delay=5):
     for attempt in range(max_retries):
         try:
@@ -54,21 +56,21 @@ def execute_with_retries(request_fn, max_retries=5, base_delay=5):
                 print("❌ Non-retryable error encountered:")
                 raise
     raise Exception("❌ Exceeded maximum retries due to rate limits or server errors.")
-
+    
 def get_current_times():
+    # Define timezones
     ph_tz = pytz.timezone('Asia/Manila')
     ug_tz = pytz.timezone('Africa/Kampala')
+    # Get current UTC time
     now_utc = datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
+    # Convert to PH and UG timezones
     now_ph = now_utc.astimezone(ph_tz)
     now_ug = now_utc.astimezone(ug_tz)
+    # Format the date and time nicely
     ph_time_str = now_ph.strftime('%B %d, %Y %I:%M %p')
     ug_time_str = now_ug.strftime('%B %d, %Y %I:%M %p')
     return ph_time_str, ug_time_str
 
-def set_log_message(service, spreadsheet_id, sheet_name, message):
-    cell_range = f"'{sheet_name}'!F9"
-    values = [[message]]
-    update_values_with_retry(service, spreadsheet_id, cell_range, values)
 
 def main():
     spreadsheet_url = sheet_data['spreadsheetUrl']
@@ -86,9 +88,6 @@ def main():
             if name in skip_sheets:
                 continue
 
-            # Show log before starting
-            set_log_message(service, spreadsheet_id, name, "🔁 Autonumber is running...")
-
             sheet_meta = next(s for s in sheets if s['properties']['title'] == name)
             sheet_id = sheet_meta['properties']['sheetId']
             merges = sheet_meta.get('merges', [])
@@ -99,7 +98,7 @@ def main():
             start_row = 12
 
             requests = []
-            values = [[''] for _ in range(len(rows))]
+            values = [[''] for _ in range(len(rows))]  # list of single-item lists
             number = 1
             row = 0
 
@@ -168,12 +167,12 @@ def main():
 
                 row += merge_length
 
-            # Update autonumber values
+            # Update values with retry
             end_row = start_row + len(values) - 1
             value_range = f"'{name}'!E12:E{end_row}"
             update_values_with_retry(service, spreadsheet_id, value_range, values)
-
             if requests:
+                # Add a note to cell E10 (row 9 zero-based)
                 ph_time_str, ug_time_str = get_current_times()
                 note_text = (
                     f"This document was updated on {ph_time_str} (PH Time) / {ug_time_str} (UG Time). "
@@ -191,18 +190,15 @@ def main():
                         "fields": "note",
                         "range": {
                             "sheetId": sheet_id,
-                            "startRowIndex": 9,
+                            "startRowIndex": 9,  # E10 is zero-based index 9
                             "endRowIndex": 10,
-                            "startColumnIndex": 4,
+                            "startColumnIndex": 4,  # Column E → index 4
                             "endColumnIndex": 5
                         }
                     }
                 })
                 execute_with_retries(lambda: service.spreadsheets().batchUpdate(
                     spreadsheetId=spreadsheet_id, body={'requests': requests}).execute())
-
-            # Show log after done
-            set_log_message(service, spreadsheet_id, name, "✅ Autonumber was done.")
 
             print(f"✅ Updated: {name}")
 
