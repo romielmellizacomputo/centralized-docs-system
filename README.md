@@ -1,7 +1,7 @@
 # 📘 Centralized Docs System (CDS)
 
-> **An initiative by Romiel Melliza Computo**  
-> **Start Date:** October 3, 2024  
+> **Develop by Romiel Melliza Computo**  
+> **Started On:** October 3, 2024  
 > **Status:** In active use and continuous improvement  
 
 ---
