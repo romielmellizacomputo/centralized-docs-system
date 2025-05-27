@@ -1,4 +1,5 @@
-from config import sheet_data, credentials_info, AUTOMATED_PORTALS
+import os
+from config import sheet_data, credentials_info
 from constants import SCOPES
 from google_auth import get_sheet_service
 from sheet_utils import get_spreadsheet_id, get_sheet_metadata
@@ -6,6 +7,7 @@ from retry_utils import execute_with_retries
 from datetime import datetime
 import sys
 
+AUTOMATED_PORTALS = os.environ.get("AUTOMATED_PORTALS")
 
 def construct_log_entry(service, entry):
     spreadsheet_url = entry.get('spreadsheetUrl')
