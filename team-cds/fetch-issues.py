@@ -52,6 +52,11 @@ def preserve_hyperlink_format(value):
     # If it looks like a URL but isn't formatted as a hyperlink, leave it as is
     # Google Sheets will auto-detect URLs when using USER_ENTERED
     return value
+
+def pad_row_to_u(row):
+    """Pad row to 19 columns (C to U = 19 columns)"""
+    full_length = 19
+    return row + [''] * (full_length - len(row))
     """Pad row to 19 columns (C to U = 19 columns)"""
     full_length = 19
     return row + [''] * (full_length - len(row))
