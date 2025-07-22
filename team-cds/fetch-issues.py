@@ -21,117 +21,26 @@ from constants import (
 )
 
 def get_all_issues(sheets):
-    """Get all issues from the new GitLab Issues source (CBS_ID) with formulas preserved"""
-    # First get the values to know the data size
+    """Get all issues from the new GitLab Issues source (CBS_ID)"""
     result = sheets.spreadsheets().values().get(
         spreadsheetId=CBS_ID,
-        range=GITLAB_ISSUES,
-        valueRenderOption='FORMULA'  # Get formulas instead of just values
+        range=GITLAB_ISSUES
     ).execute()
     
     values = result.get('values', [])
     if not values:
         raise Exception(f"No data found in range {GITLAB_ISSUES}")
     
-    print(f"📋 Retrieved {len(values)} rows with formulas preserved")
     return values
 
-def get_all_issues_with_rich_text(sheets):
-    """Alternative method to get issues with rich text formatting preserved"""
-    try:
-        # Try to get both formulas and formatted values
-        batch_request = {
-            'requests': [{
-                'getSpreadsheet': {
-                    'spreadsheetId': CBS_ID,
-                    'ranges': [GITLAB_ISSUES],
-                    'includeGridData': True
-                }
-            }]
-        }
-        
-        # This approach preserves more formatting but is more complex
-        result = sheets.spreadsheets().get(
-            spreadsheetId=CBS_ID,
-            ranges=[GITLAB_ISSUES],
-            includeGridData=True
-        ).execute()
-        
-        sheets_data = result.get('sheets', [])
-        if not sheets_data:
-            print("⚠️ No sheets data found, falling back to formula method")
-            return get_all_issues(sheets)
-        
-        # Extract cell data with formatting
-        grid_data = sheets_data[0].get('data', [])
-        if not grid_data:
-            print("⚠️ No grid data found, falling back to formula method")
-            return get_all_issues(sheets)
-        
-        row_data = grid_data[0].get('rowData', [])
-        if not row_data:
-            print("⚠️ No row data found, falling back to formula method")
-            return get_all_issues(sheets)
-        
-        # Convert rich text data back to formula format
-        converted_values = []
-        for row in row_data:
-            row_values = []
-            cells = row.get('values', [])
-            
-            for cell in cells:
-                # Check for hyperlink
-                if 'hyperlink' in cell:
-                    # Create HYPERLINK formula
-                    url = cell['hyperlink']
-                    display_text = cell.get('formattedValue', url)
-                    if display_text != url:
-                        formula = f'=HYPERLINK("{url}","{display_text}")'
-                    else:
-                        formula = url
-                    row_values.append(formula)
-                elif 'userEnteredValue' in cell:
-                    # Get the user entered value (could be formula)
-                    user_value = cell['userEnteredValue']
-                    if 'formulaValue' in user_value:
-                        row_values.append(user_value['formulaValue'])
-                    else:
-                        row_values.append(cell.get('formattedValue', ''))
-                else:
-                    row_values.append(cell.get('formattedValue', ''))
-            
-            converted_values.append(row_values)
-        
-        print(f"📋 Retrieved {len(converted_values)} rows with rich text preserved")
-        return converted_values
-        
-    except Exception as e:
-        print(f"⚠️ Rich text extraction failed: {str(e)}")
-        print("📋 Falling back to formula method")
-        return get_all_issues(sheets)
+def clear_g_issues(sheets, sheet_id):
     """Clear existing data in G-Issues sheet"""
     sheets.spreadsheets().values().clear(
         spreadsheetId=sheet_id,
         range=f'{G_ISSUES_SHEET}!C4:U'
     ).execute()
 
-def preserve_hyperlink_format(value):
-    """Preserve hyperlink format if the value contains a hyperlink formula"""
-    if not value or not isinstance(value, str):
-        return value
-    
-    # Check if it's already a hyperlink formula
-    if value.strip().startswith('=HYPERLINK('):
-        return value
-    
-    # If it looks like a URL but isn't formatted as a hyperlink, leave it as is
-    # Google Sheets will auto-detect URLs when using USER_ENTERED
-    return value
-
 def pad_row_to_u(row):
-    """Pad row to 19 columns (C to U = 19 columns)"""
-    full_length = 19
-    return row + [''] * (full_length - len(row))
     """Pad row to 19 columns (C to U = 19 columns)"""
     full_length = 19
     return row + [''] * (full_length - len(row))
@@ -209,7 +118,7 @@ def insert_data_to_g_issues(sheets, sheet_id, data):
     sheets.spreadsheets().values().update(
         spreadsheetId=sheet_id,
         range=f'{G_ISSUES_SHEET}!C4',
-        valueInputOption='USER_ENTERED',  # Changed from 'RAW' to preserve hyperlinks
+        valueInputOption='RAW',
         body={'values': padded_data}
     ).execute()
 
@@ -219,7 +128,7 @@ def update_timestamp(sheets, sheet_id):
     sheets.spreadsheets().values().update(
         spreadsheetId=sheet_id,
         range=f'{DASHBOARD_SHEET}!W6',
-        valueInputOption='USER_ENTERED',  # Changed from 'RAW' to be consistent
+        valueInputOption='RAW',
         body={'values': [[timestamp]]}
     ).execute()
 
@@ -345,28 +254,28 @@ def main():
                     # Ensure row has enough columns (pad to at least 22 columns)
                     padded_row = row + [''] * (22 - len(row))
                     
-                    # Map columns from source to target format with hyperlink preservation
+                    # Map columns from source to target format
                     # Column mapping: B=0, C=1, D=2, E=3, F=4, G=5, H=6, I=7, J=8, K=9, L=10, etc.
                     mapped_row = [
-                        preserve_hyperlink_format(padded_row[0] if len(padded_row) > 0 else ''),   # C: ID (from B, index 0)
-                        '',                                                                          # D: IID (skip - not in source)
-                        preserve_hyperlink_format(padded_row[1] if len(padded_row) > 1 else ''),   # E: Issue Title (from C, index 1)
-                        preserve_hyperlink_format(padded_row[2] if len(padded_row) > 2 else ''),   # F: Issue Author (from D, index 2)
-                        '',                                                                          # G: Assignee (skip - not in source)
-                        preserve_hyperlink_format(padded_row[3] if len(padded_row) > 3 else ''),   # H: Labels (from E, index 3)
-                        preserve_hyperlink_format(padded_row[4] if len(padded_row) > 4 else ''),   # I: Milestone (from F, index 4)
-                        preserve_hyperlink_format(padded_row[5] if len(padded_row) > 5 else ''),   # J: Status (from G, index 5)
-                        preserve_hyperlink_format(padded_row[6] if len(padded_row) > 6 else ''),   # K: Created At (from H, index 6)
-                        preserve_hyperlink_format(padded_row[7] if len(padded_row) > 7 else ''),   # L: Closed At (from I, index 7)
-                        preserve_hyperlink_format(padded_row[9] if len(padded_row) > 9 else ''),   # M: Closed By (from K, index 9)
-                        preserve_hyperlink_format(padded_row[8] if len(padded_row) > 8 else ''),   # N: Project (from J, index 8)
-                        preserve_hyperlink_format(padded_row[16] if len(padded_row) > 16 else ''), # O: Reviewer (from R, index 16)
-                        preserve_hyperlink_format(padded_row[18] if len(padded_row) > 18 else ''), # P: Reopened? (from T, index 18)
-                        '',                                                                          # Q: Reopened By (skip - not in source)
-                        '',                                                                          # R: Date Reopened (skip - not in source)
-                        '',                                                                          # S: Local Status (skip - not in source)
-                        '',                                                                          # T: Status Date (skip - not in source)
-                        ''                                                                           # U: Duration/Status (skip - not in source)
+                        padded_row[0] if len(padded_row) > 0 else '',   # C: ID (from B, index 0)
+                        '',                                              # D: IID (skip - not in source)
+                        padded_row[1] if len(padded_row) > 1 else '',   # E: Issue Title (from C, index 1)
+                        padded_row[2] if len(padded_row) > 2 else '',   # F: Issue Author (from D, index 2)
+                        '',                                              # G: Assignee (skip - not in source)
+                        padded_row[3] if len(padded_row) > 3 else '',   # H: Labels (from E, index 3)
+                        padded_row[4] if len(padded_row) > 4 else '',   # I: Milestone (from F, index 4)
+                        padded_row[5] if len(padded_row) > 5 else '',   # J: Status (from G, index 5)
+                        padded_row[6] if len(padded_row) > 6 else '',   # K: Created At (from H, index 6)
+                        padded_row[7] if len(padded_row) > 7 else '',   # L: Closed At (from I, index 7)
+                        padded_row[9] if len(padded_row) > 9 else '',   # M: Closed By (from K, index 9)
+                        padded_row[8] if len(padded_row) > 8 else '',   # N: Project (from J, index 8)
+                        padded_row[16] if len(padded_row) > 16 else '', # O: Reviewer (from R, index 16)
+                        padded_row[18] if len(padded_row) > 18 else '', # P: Reopened? (from T, index 18)
+                        '',                                              # Q: Reopened By (skip - not in source)
+                        '',                                              # R: Date Reopened (skip - not in source)
+                        '',                                              # S: Local Status (skip - not in source)
+                        '',                                              # T: Status Date (skip - not in source)
+                        ''                                               # U: Duration/Status (skip - not in source)
                     ]
                     processed.append(mapped_row)
                 
