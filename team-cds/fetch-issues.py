@@ -68,37 +68,34 @@ def update_timestamp(sheets, sheet_id):
 
 def debug_milestone_matching(issues_data, milestones):
     """Debug function to help understand milestone matching issues"""
-    print("🔍 DEBUG: Analyzing milestone matching...")
+    print("🔍 DEBUG: Analyzing milestone data in column F (index 4)...")
     
-    # Get unique milestones from source data (column F, index 5)
+    if not issues_data:
+        print("🔍 No source data found!")
+        return
+    
+    # Show header row
+    header = issues_data[0] if issues_data else []
+    print(f"🔍 Header row: B={header[0] if len(header) > 0 else 'N/A'}, C={header[1] if len(header) > 1 else 'N/A'}, D={header[2] if len(header) > 2 else 'N/A'}, E={header[3] if len(header) > 3 else 'N/A'}, F={header[4] if len(header) > 4 else 'N/A'}, G={header[5] if len(header) > 5 else 'N/A'}")
+    
+    # Get unique milestones from source data (column F, index 4)
     source_milestones = set()
     for row in issues_data[1:]:  # Skip header row
-        if len(row) > 5 and row[5].strip():  # Check if milestone column exists and is not empty
-            source_milestones.add(row[5].strip())
+        if len(row) > 4 and row[4] and str(row[4]).strip():  # Column F is index 4
+            source_milestones.add(str(row[4]).strip())
     
-    print(f"🔍 Found {len(source_milestones)} unique milestones in source data")
+    print(f"🔍 Found {len(source_milestones)} unique milestones in column F")
     print(f"🔍 First 10 source milestones: {list(source_milestones)[:10]}")
     
     # Check for exact matches
     exact_matches = source_milestones.intersection(set(milestones))
     print(f"🔍 Exact matches: {len(exact_matches)} - {list(exact_matches)[:5]}")
     
-    # Check for partial matches (case-insensitive)
-    partial_matches = []
-    milestone_lower = [m.lower() for m in milestones]
-    for source_milestone in source_milestones:
-        for target_milestone in milestones:
-            if (source_milestone.lower() in target_milestone.lower() or 
-                target_milestone.lower() in source_milestone.lower()):
-                partial_matches.append((source_milestone, target_milestone))
-                break
-    
-    print(f"🔍 Partial matches found: {len(partial_matches)}")
-    if partial_matches:
-        print(f"🔍 First 5 partial matches: {partial_matches[:5]}")
+    # Show target milestones for comparison
+    print(f"🔍 Target milestones (first 5): {milestones[:5]}")
 
 def filter_issues_by_milestones(issues_data, milestones):
-    """Filter issues by milestones with improved matching logic"""
+    """Filter issues by milestones using column F (index 4)"""
     if not issues_data:
         return []
     
@@ -107,21 +104,22 @@ def filter_issues_by_milestones(issues_data, milestones):
     
     filtered = []
     milestone_set = set(milestones)
+    milestone_col_idx = 4  # Column F is index 4 (B=0, C=1, D=2, E=3, F=4)
     
-    # Skip header row (index 0) and process data rows
-    for i, row in enumerate(issues_data[1:], 1):  # Start from row 1, but count from 1
-        if len(row) <= 5:  # Row doesn't have enough columns
+    # Skip header row and process data rows
+    for i, row in enumerate(issues_data[1:], 1):
+        if len(row) <= milestone_col_idx:  # Row doesn't have enough columns
             continue
             
-        milestone = row[5].strip() if row[5] else ""  # Column F (index 5) is milestone
+        milestone = str(row[milestone_col_idx]).strip() if row[milestone_col_idx] else ""  # Column F (index 4)
         
         if milestone in milestone_set:
             filtered.append(row)
             if len(filtered) <= 5:  # Show first 5 matches for debugging
                 print(f"✅ Match found at row {i}: milestone='{milestone}'")
     
-    print(f"📊 Filtered {len(filtered)} issues from {len(issues_data)-1} total issues")
-    return filtered
+    print(f"📊 Filtered {len(filtered)} issues from {len(issues_data)-1} total issues using column F")
+    return filtered, milestone_col_idx
 
 def main():
     try:
@@ -165,8 +163,14 @@ def main():
                 issues_data = get_all_issues(sheets)
                 print(f"📋 Found {len(issues_data)} total rows (including header)")
                 
-                # Filter by milestones with improved logic
-                filtered = filter_issues_by_milestones(issues_data, milestones)
+                # Filter by milestones using correct column F (index 4)
+                filtered_result = filter_issues_by_milestones(issues_data, milestones)
+                
+                if isinstance(filtered_result, tuple):
+                    filtered, milestone_col_idx = filtered_result
+                else:
+                    print("❌ Error in filtering function, skipping...")
+                    continue
                 
                 if not filtered:
                     print(f"⚠️ No matching issues found for {sheet_id}")
@@ -182,26 +186,27 @@ def main():
                     padded_row = row + [''] * (22 - len(row))
                     
                     # Map columns from source to target format
+                    # Column mapping: B=0, C=1, D=2, E=3, F=4, G=5, H=6, I=7, J=8, K=9, L=10, etc.
                     mapped_row = [
-                        padded_row[1],   # C: ID (from B)
-                        '',              # D: IID (skip - not in source)
-                        padded_row[2],   # E: Issue Title (from C)
-                        padded_row[3],   # F: Issue Author (from D)
-                        '',              # G: Assignee (skip - not in source)
-                        padded_row[4],   # H: Labels (from E)
-                        padded_row[5],   # I: Milestone (from F)
-                        padded_row[6],   # J: Status (from G)
-                        padded_row[7],   # K: Created At (from H)
-                        padded_row[8],   # L: Closed At (from I)
-                        padded_row[10] if len(padded_row) > 10 else '',  # M: Closed By (from K)
-                        padded_row[9],   # N: Project (from J)
-                        padded_row[17] if len(padded_row) > 17 else '',  # O: Reviewer (from R)
-                        padded_row[19] if len(padded_row) > 19 else '',  # P: Reopened? (from T)
-                        '',              # Q: Reopened By (skip - not in source)
-                        '',              # R: Date Reopened (skip - not in source)
-                        '',              # S: Local Status (skip - not in source)
-                        '',              # T: Status Date (skip - not in source)
-                        ''               # U: Duration/Status (skip - not in source)
+                        padded_row[0] if len(padded_row) > 0 else '',   # C: ID (from B, index 0)
+                        '',                                              # D: IID (skip - not in source)
+                        padded_row[1] if len(padded_row) > 1 else '',   # E: Issue Title (from C, index 1)
+                        padded_row[2] if len(padded_row) > 2 else '',   # F: Issue Author (from D, index 2)
+                        '',                                              # G: Assignee (skip - not in source)
+                        padded_row[3] if len(padded_row) > 3 else '',   # H: Labels (from E, index 3)
+                        padded_row[4] if len(padded_row) > 4 else '',   # I: Milestone (from F, index 4)
+                        padded_row[5] if len(padded_row) > 5 else '',   # J: Status (from G, index 5)
+                        padded_row[6] if len(padded_row) > 6 else '',   # K: Created At (from H, index 6)
+                        padded_row[7] if len(padded_row) > 7 else '',   # L: Closed At (from I, index 7)
+                        padded_row[9] if len(padded_row) > 9 else '',   # M: Closed By (from K, index 9)
+                        padded_row[8] if len(padded_row) > 8 else '',   # N: Project (from J, index 8)
+                        padded_row[16] if len(padded_row) > 16 else '', # O: Reviewer (from R, index 16)
+                        padded_row[18] if len(padded_row) > 18 else '', # P: Reopened? (from T, index 18)
+                        '',                                              # Q: Reopened By (skip - not in source)
+                        '',                                              # R: Date Reopened (skip - not in source)
+                        '',                                              # S: Local Status (skip - not in source)
+                        '',                                              # T: Status Date (skip - not in source)
+                        ''                                               # U: Duration/Status (skip - not in source)
                     ]
                     processed.append(mapped_row)
                 
