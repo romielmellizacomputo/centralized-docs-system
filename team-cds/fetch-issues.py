@@ -95,10 +95,14 @@ def main():
                     continue
                 
                 # Get selected milestones for filtering
+                print(f"📋 Getting milestones from {sheet_id} - {G_MILESTONES}")
                 milestones = get_selected_milestones(sheets, sheet_id, G_MILESTONES)
+                print(f"📋 Found {len(milestones)} milestones: {milestones}")
                 
                 # Get all issues from the new GitLab source
+                print(f"📋 Getting issues from {CBS_ID} - {GITLAB_ISSUES}")
                 issues_data = get_all_issues(sheets)
+                print(f"📋 Found {len(issues_data)} total issues")
                 
                 # Filter by milestones (Milestone is now in column F, index 5 in source data)
                 filtered = [row for row in issues_data if len(row) > 5 and row[5] in milestones]
