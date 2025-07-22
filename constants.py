@@ -6,10 +6,17 @@ import pytz  # Make sure to install pytz: pip install pytz
 UTILS_SHEET_ID = os.getenv('LEADS_CDS_SID')
 CDS_MASTER_ROSTER = os.getenv('CDS_MASTER_ROSTER')
 
+# Source 001 (DEPRECATED)
 CENTRAL_ISSUE_SHEET_ID = os.getenv('SHEET_SYNC_SID')
 ALL_ISSUES = 'ALL ISSUES!C4:T'
 ALL_NTC = 'ALL ISSUES!C4:N'
 ALL_MR = 'ALL MRs!C4:S'
+
+# Source 002 (Centralized Bug Sheet "Luke")
+CBS_ID = os.getenv('CBS_SID')
+GITLAB_ISSUES = 'GITLAB ISSUES!B2:W'
+GITLAB_NTC = 'GITLAB ISSUES!C4:N'
+GITLAB_MR = 'GITLAB MRs!C4:S'
 
 DASHBOARD_SHEET = 'Dashboard'
 G_MILESTONES = 'G-Milestones'
