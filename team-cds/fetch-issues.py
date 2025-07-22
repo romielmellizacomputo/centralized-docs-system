@@ -1,5 +1,6 @@
 import sys
 import os
+from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from googleapiclient.discovery import build
@@ -43,6 +44,71 @@ def pad_row_to_u(row):
     """Pad row to 19 columns (C to U = 19 columns)"""
     full_length = 19
     return row + [''] * (full_length - len(row))
+
+def parse_date_safely(date_str):
+    """Safely parse date string and return datetime object or None"""
+    if not date_str or not isinstance(date_str, str):
+        return None
+    
+    date_str = date_str.strip()
+    if not date_str:
+        return None
+    
+    # Try common date formats
+    date_formats = [
+        '%Y-%m-%d %H:%M:%S',  # 2024-01-15 10:30:00
+        '%Y-%m-%d',           # 2024-01-15
+        '%m/%d/%Y %H:%M:%S',  # 01/15/2024 10:30:00
+        '%m/%d/%Y',           # 01/15/2024
+        '%d/%m/%Y %H:%M:%S',  # 15/01/2024 10:30:00
+        '%d/%m/%Y',           # 15/01/2024
+        '%Y-%m-%dT%H:%M:%S',  # ISO format without timezone
+        '%Y-%m-%dT%H:%M:%SZ', # ISO format with Z
+    ]
+    
+    for fmt in date_formats:
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    
+    print(f"⚠️ Could not parse date: '{date_str}'")
+    return None
+
+def sort_issues_by_date(filtered_issues):
+    """Sort issues by creation date (column H, index 6) - most recent first"""
+    print(f"📅 Sorting {len(filtered_issues)} issues by creation date...")
+    
+    def get_sort_key(row):
+        # Column H is index 6 (B=0, C=1, D=2, E=3, F=4, G=5, H=6)
+        created_date_str = row[6] if len(row) > 6 else ''
+        parsed_date = parse_date_safely(created_date_str)
+        
+        # Return parsed date if available, otherwise use epoch (very old date)
+        # This ensures unparseable dates go to the bottom
+        if parsed_date:
+            return parsed_date
+        else:
+            return datetime(1970, 1, 1)  # Epoch time for unparseable dates
+    
+    try:
+        # Sort in descending order (most recent first)
+        sorted_issues = sorted(filtered_issues, key=get_sort_key, reverse=True)
+        
+        # Debug: show first few dates
+        print("📅 First 3 sorted dates:")
+        for i, row in enumerate(sorted_issues[:3]):
+            date_str = row[6] if len(row) > 6 else 'N/A'
+            parsed = parse_date_safely(date_str)
+            print(f"  {i+1}. {date_str} -> {parsed}")
+        
+        print(f"✅ Successfully sorted {len(sorted_issues)} issues by date")
+        return sorted_issues
+        
+    except Exception as e:
+        print(f"❌ Error sorting issues by date: {str(e)}")
+        print("📄 Returning unsorted list...")
+        return filtered_issues
 
 def insert_data_to_g_issues(sheets, sheet_id, data):
     """Insert processed data to G-Issues sheet"""
@@ -179,9 +245,12 @@ def main():
                     update_timestamp(sheets, sheet_id)
                     continue
                 
+                # Sort by creation date (most recent first) before processing
+                sorted_filtered = sort_issues_by_date(filtered)
+                
                 # Map source columns to target columns
                 processed = []
-                for row in filtered:
+                for row in sorted_filtered:
                     # Ensure row has enough columns (pad to at least 22 columns)
                     padded_row = row + [''] * (22 - len(row))
                     
@@ -210,7 +279,7 @@ def main():
                     ]
                     processed.append(mapped_row)
                 
-                print(f"📊 Processing {len(processed)} filtered issues")
+                print(f"📊 Processing {len(processed)} filtered and sorted issues")
                 
                 # Clear existing data and insert new data
                 clear_g_issues(sheets, sheet_id)
