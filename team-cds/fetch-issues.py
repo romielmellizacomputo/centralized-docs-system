@@ -21,19 +21,94 @@ from constants import (
 )
 
 def get_all_issues(sheets):
-    """Get all issues from the new GitLab Issues source (CBS_ID)"""
+    """Get all issues from the new GitLab Issues source (CBS_ID) with formulas preserved"""
+    # First get the values to know the data size
     result = sheets.spreadsheets().values().get(
         spreadsheetId=CBS_ID,
-        range=GITLAB_ISSUES
+        range=GITLAB_ISSUES,
+        valueRenderOption='FORMULA'  # Get formulas instead of just values
     ).execute()
     
     values = result.get('values', [])
     if not values:
         raise Exception(f"No data found in range {GITLAB_ISSUES}")
     
+    print(f"📋 Retrieved {len(values)} rows with formulas preserved")
     return values
 
-def clear_g_issues(sheets, sheet_id):
+def get_all_issues_with_rich_text(sheets):
+    """Alternative method to get issues with rich text formatting preserved"""
+    try:
+        # Try to get both formulas and formatted values
+        batch_request = {
+            'requests': [{
+                'getSpreadsheet': {
+                    'spreadsheetId': CBS_ID,
+                    'ranges': [GITLAB_ISSUES],
+                    'includeGridData': True
+                }
+            }]
+        }
+        
+        # This approach preserves more formatting but is more complex
+        result = sheets.spreadsheets().get(
+            spreadsheetId=CBS_ID,
+            ranges=[GITLAB_ISSUES],
+            includeGridData=True
+        ).execute()
+        
+        sheets_data = result.get('sheets', [])
+        if not sheets_data:
+            print("⚠️ No sheets data found, falling back to formula method")
+            return get_all_issues(sheets)
+        
+        # Extract cell data with formatting
+        grid_data = sheets_data[0].get('data', [])
+        if not grid_data:
+            print("⚠️ No grid data found, falling back to formula method")
+            return get_all_issues(sheets)
+        
+        row_data = grid_data[0].get('rowData', [])
+        if not row_data:
+            print("⚠️ No row data found, falling back to formula method")
+            return get_all_issues(sheets)
+        
+        # Convert rich text data back to formula format
+        converted_values = []
+        for row in row_data:
+            row_values = []
+            cells = row.get('values', [])
+            
+            for cell in cells:
+                # Check for hyperlink
+                if 'hyperlink' in cell:
+                    # Create HYPERLINK formula
+                    url = cell['hyperlink']
+                    display_text = cell.get('formattedValue', url)
+                    if display_text != url:
+                        formula = f'=HYPERLINK("{url}","{display_text}")'
+                    else:
+                        formula = url
+                    row_values.append(formula)
+                elif 'userEnteredValue' in cell:
+                    # Get the user entered value (could be formula)
+                    user_value = cell['userEnteredValue']
+                    if 'formulaValue' in user_value:
+                        row_values.append(user_value['formulaValue'])
+                    else:
+                        row_values.append(cell.get('formattedValue', ''))
+                else:
+                    row_values.append(cell.get('formattedValue', ''))
+            
+            converted_values.append(row_values)
+        
+        print(f"📋 Retrieved {len(converted_values)} rows with rich text preserved")
+        return converted_values
+        
+    except Exception as e:
+        print(f"⚠️ Rich text extraction failed: {str(e)}")
+        print("📋 Falling back to formula method")
+        return get_all_issues(sheets)
     """Clear existing data in G-Issues sheet"""
     sheets.spreadsheets().values().clear(
         spreadsheetId=sheet_id,
