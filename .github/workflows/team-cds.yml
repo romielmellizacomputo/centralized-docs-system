@@ -1,54 +1,49 @@
 name: Team CDS Updater
-
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Every 15 minutes
+    - cron: '*/15 * * * *'  # Every 15 minutes (fixed cron syntax)
   workflow_dispatch:
     inputs:
       sheet_data:
         description: 'Optional sheet data from external trigger'
         required: false
         default: '{}'
-
 jobs:
   fetch:
     runs-on: ubuntu-latest
     continue-on-error: true
-
     steps:
       - uses: actions/checkout@v3
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'  # Use the desired version of Python
-
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install google-api-python-client
           pip install pytz  # Add pytz to the dependencies
-
       - name: Run fetch-issues.py
         run: python team-cds/fetch-issues.py
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
           LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
+          CBS_SID: ${{ secrets.CBS_SID }}  # Added CBS_SID environment variable
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
-
       - name: Run fetch-mr.py
         run: python team-cds/fetch-mr.py
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
           LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
+          CBS_SID: ${{ secrets.CBS_SID }}  # Added CBS_SID environment variable
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
-
       - name: Run fetch-ntc.py
         run: python team-cds/fetch-ntc.py
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
           LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
+          CBS_SID: ${{ secrets.CBS_SID }}  # Added CBS_SID environment variable
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
