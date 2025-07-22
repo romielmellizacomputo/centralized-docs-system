@@ -1,11 +1,17 @@
 // Source 001
 export const UTILS_SHEET_ID = process.env.LEADS_CDS_SID;
 
-// Source 002
+// Source 002 (Deprecated)
 export const CENTRAL_ISSUE_SHEET_ID = process.env.SHEET_SYNC_SID;
 export const ALL_ISSUES = 'ALL ISSUES!C4:T';
 export const ALL_NTC = 'ALL ISSUES!C4:N';
 export const ALL_MR = 'ALL MRs!C4:S';
+
+// Source 003 (Centralized Bug Sheet "Luke")
+export const CBS_ID = process.env.CBS_SID;
+export const GITLAB_ISSUES = 'GITLAB ISSUES!B2:W';
+export const GITLAB_NTC = 'ALL ISSUES!C4:N';
+export const GITLAB_MR = 'ALL MRs!C4:S';
 
 // Target
 export const DASHBOARD_SHEET = 'Dashboard';
