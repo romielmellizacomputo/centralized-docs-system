@@ -29,10 +29,10 @@ jobs:
         run: |
           echo "Sheet Data: ${{ github.event.inputs.sheet_data }}"
           python automated-test-case/update_request.py
+          python automated-test-case/update_toc.py
           python automated-test-case/auto_number.py
           python automated-test-case/auto_formatting.py
           python automated-test-case/auto_dropdown.py
-          python automated-test-case/update_toc.py
 
         env:
           SHEET_DATA: ${{ github.event.inputs.sheet_data }}
