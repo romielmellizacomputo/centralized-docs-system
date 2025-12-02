@@ -57,10 +57,78 @@ function formatDate(dateString) {
   }).format(date);
 }
 
+async function validateSheetExistsAndHasPermissions(sheets, spreadsheetId, sheetName) {
+  console.log(`🔍 Validating sheet "${sheetName}" exists...`);
+  
+  try {
+    // Check if spreadsheet and sheet exist
+    const meta = await sheets.spreadsheets.get({
+      spreadsheetId,
+      includeGridData: false,
+    });
+    
+    const sheet = meta.data.sheets.find((s) => s.properties.title === sheetName);
+    if (!sheet) {
+      throw new Error(`Sheet with name "${sheetName}" not found in spreadsheet`);
+    }
+    
+    console.log(`✅ Sheet "${sheetName}" exists`);
+    
+    // Test write permission by writing test data
+    console.log(`🔍 Testing write permissions...`);
+    const testRange = `${sheetName}!A4`;
+    const testValue = `TEST_${Date.now()}`;
+    
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: testRange,
+      valueInputOption: 'USER_ENTERED',
+      resource: {
+        values: [[testValue]],
+      },
+    });
+    
+    console.log(`✅ Write permission confirmed`);
+    
+    // Verify the test data was written
+    console.log(`🔍 Verifying test data...`);
+    const readResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: testRange,
+    });
+    
+    if (readResponse.data.values && readResponse.data.values[0][0] === testValue) {
+      console.log(`✅ Read permission confirmed`);
+    } else {
+      throw new Error('Failed to verify test data read');
+    }
+    
+    // Clean up test data
+    console.log(`🧹 Cleaning up test data...`);
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId,
+      range: testRange,
+    });
+    
+    console.log(`✅ Test data cleaned up successfully`);
+    console.log(`✅ All validations passed for sheet "${sheetName}"`);
+    
+    return sheet.properties.sheetId;
+    
+  } catch (error) {
+    console.error(`❌ Sheet validation failed: ${error.message}`);
+    if (error.code === 403) {
+      console.error(`❌ Permission denied. Make sure the service account has edit access to the spreadsheet.`);
+    } else if (error.code === 404) {
+      console.error(`❌ Spreadsheet or sheet not found. Check SHEET_SYNC_SID and sheet name.`);
+    }
+    throw error;
+  }
+}
+
 async function fetchIssuesForProject(projectId, config) {
   let page = 1;
   let issues = [];
-  // Log the project name from the config object
   console.log(`🔄 Fetching issues for project ID ${projectId} (${config.name})...`);
 
   while (true) {
@@ -107,16 +175,37 @@ async function fetchIssuesForProject(projectId, config) {
   return issues;
 }
 
+async function getSheetIdByName(sheets, spreadsheetId, sheetName) {
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId,
+    includeGridData: false,
+  });
+  const sheet = meta.data.sheets.find((s) => s.properties.title === sheetName);
+  if (!sheet) {
+    throw new Error(`Sheet with name "${sheetName}" not found`);
+  }
+  return sheet.properties.sheetId;
+}
+
 async function fetchAndUpdateIssuesForAllProjects() {
   const authClient = await auth.getClient();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
 
+  // ✅ VALIDATE SHEET FIRST - before fetching any GitLab data
+  console.log('🔍 Starting sheet validation...');
+  try {
+    await validateSheetExistsAndHasPermissions(sheets, SHEET_SYNC_SID, 'ALL ISSUES');
+  } catch (error) {
+    console.error('❌ Cannot proceed: Sheet validation failed');
+    console.error('❌ No GitLab data will be fetched to avoid wasted API calls');
+    process.exit(1);
+  }
+
   console.log('🔄 Fetching issues for all projects...');
 
-  // Fetch all new data first
+  // Fetch all new data after validation passes
   const issuesPromises = Object.keys(PROJECT_CONFIG).map(async (key) => {
     const config = PROJECT_CONFIG[key];
-    // Add the name property here explicitly so config.name exists
     config.name = key;
     const projectId = config.id;
     return fetchIssuesForProject(projectId, config);
@@ -224,18 +313,6 @@ async function fetchAndUpdateIssuesForAllProjects() {
   } catch (err) {
     console.error('❌ Error updating/inserting rows:', err.stack || err.message);
   }
-}
-
-async function getSheetIdByName(sheets, spreadsheetId, sheetName) {
-  const meta = await sheets.spreadsheets.get({
-    spreadsheetId,
-    includeGridData: false,
-  });
-  const sheet = meta.data.sheets.find((s) => s.properties.title === sheetName);
-  if (!sheet) {
-    throw new Error(`Sheet with name "${sheetName}" not found`);
-  }
-  return sheet.properties.sheetId;
 }
 
 fetchAndUpdateIssuesForAllProjects();
