@@ -2,6 +2,8 @@ import pLimit from 'p-limit';
 import { config } from 'dotenv';
 import { google } from 'googleapis';
 import axios from 'axios';
+import http from 'http';
+import https from 'https';
 
 config();
 
@@ -51,8 +53,8 @@ const axiosInstance = axios.create({
   headers: { 'PRIVATE-TOKEN': GITLAB_TOKEN },
   timeout: 30000,
   maxRedirects: 5,
-  httpAgent: new (require('http').Agent)({ keepAlive: true, maxSockets: 10 }),
-  httpsAgent: new (require('https').Agent)({ keepAlive: true, maxSockets: 10 }),
+  httpAgent: new http.Agent({ keepAlive: true, maxSockets: 10 }),
+  httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 10 }),
 });
 
 // Add retry interceptor
