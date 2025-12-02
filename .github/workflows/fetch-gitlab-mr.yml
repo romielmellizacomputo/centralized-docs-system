@@ -1,32 +1,25 @@
 name: Fetch GitLab MR Service
-
 on:
   schedule:
-  - cron: '0 12 * * *'  # Runs every day at noon
+  - cron: '0 14 * * *'  # Runs every day at 10PM Philippine Time (UTC+8 = 14:00 UTC)
   workflow_dispatch:
-
 jobs:
   run-github:
     runs-on: ubuntu-latest
     continue-on-error: true  # Allow this job to fail without failing the entire workflow
-
     env:
       PROJECT_CONFIG: ${{ secrets.PROJECT_CONFIG }}  # ✅ Set globally for the job
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
           node-version: '14'
-
       - name: Install dependencies
         run: |
           cd SheetSync
           npm install
-
       - name: Run fetchallmr.js
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
