@@ -1,32 +1,24 @@
 name: Fetch Additional Issue Info
-
 on:
   schedule:
-  - cron: '0 6 * * *'  # Runs every day at 6 AM
-
+  - cron: '0 16 * * *'  # Runs every day at midnight Philippine Time (16:00 UTC)
   workflow_dispatch:
-
 jobs:
   sync:
     runs-on: ubuntu-latest
-
     env:
       PROJECT_CONFIG: ${{ secrets.PROJECT_CONFIG }}  # ✅ Added this line
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-
       - name: Set up Node.js
         uses: actions/setup-node@v2
         with:
           node-version: '18'
-
       - name: Install dependencies
         run: |
           npm install
           # If you have a package-lock.json, you can use `npm ci` instead
-
       - name: Run additional issue data script
         env:
           GITLAB_URL: ${{ secrets.GITLAB_URL }}
