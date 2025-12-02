@@ -57,7 +57,7 @@ const axiosInstance = axios.create({
   httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 10 }),
 });
 
-// Add retry interceptor
+// Add retry interceptor with better rate limit handling
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -66,9 +66,11 @@ axiosInstance.interceptors.response.use(
     
     if (config.retry >= 3) return Promise.reject(error);
     
+    // Handle rate limiting (429) and connection errors
     if (error.response?.status === 429 || error.code === 'ECONNRESET') {
       config.retry += 1;
       const delay = Math.min(1000 * Math.pow(2, config.retry), 10000);
+      console.log(`⏸️  Rate limited, waiting ${delay}ms before retry...`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return axiosInstance(config);
     }
@@ -204,8 +206,8 @@ async function updateSheet(authClient, startRow, rows) {
 }
 
 async function processBatch(authClient, issuesBatch, batchStartIndex) {
-  // Reduce concurrency to avoid overwhelming GitLab
-  const limit = pLimit(3);
+  // Lower concurrency to respect GitLab rate limits (7200/hour = 2 req/sec)
+  const limit = pLimit(2);
   console.log(`⏳ Processing batch of ${issuesBatch.length} issues starting at row ${batchStartIndex + 4}...`);
 
   const results = await Promise.allSettled(
@@ -229,28 +231,38 @@ async function processBatch(authClient, issuesBatch, batchStartIndex) {
 
   await updateSheet(authClient, batchStartIndex + 4, rows);
   
-  // Small delay between batches to be nice to GitLab
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // Longer delay between batches to stay well under rate limits
+  // This gives GitLab breathing room and other users can work normally
+  await new Promise(resolve => setTimeout(resolve, 2000));
 }
 
 async function main() {
   console.log('🚀 Starting optimized sync process...');
+  console.log('⚙️  Rate-limited mode: 2 concurrent requests, 2s batch delay');
   const startTime = Date.now();
   
   const authClient = await auth.getClient();
   const issues = await fetchIssuesFromSheet(authClient);
 
   console.log(`📊 Total issues to process: ${issues.length}`);
+  console.log(`⏱️  Estimated time: ${Math.ceil(issues.length / 100 * 1.5)} minutes (approximate)\n`);
 
   // Smaller batch size for more frequent updates and better memory management
-  const batchSize = 250;
+  const batchSize = 100;
   
   for (let i = 0; i < issues.length; i += batchSize) {
     const batch = issues.slice(i, i + batchSize);
     const progress = ((i / issues.length) * 100).toFixed(1);
-    console.log(`\n📈 Progress: ${progress}% (${i}/${issues.length})`);
+    const elapsed = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
+    console.log(`\n📈 Progress: ${progress}% (${i}/${issues.length}) - ${elapsed}min elapsed`);
     
     await processBatch(authClient, batch, i);
+    
+    // Longer pause every 1000 rows to give GitLab extended breathing room
+    if (i % 1000 === 0 && i > 0) {
+      console.log('😴 Taking a 10-second break to be nice to GitLab...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
+    }
     
     // Clear cache periodically to manage memory
     if (i % 5000 === 0 && i > 0) {
@@ -261,7 +273,7 @@ async function main() {
 
   const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(2);
   console.log(`\n✅ All issues processed successfully in ${duration} minutes!`);
-  console.log(`📊 Cache hits would have saved ${issueCache.size} API calls`);
+  console.log(`📊 Cache hits saved ${issueCache.size} API calls`);
 }
 
 main().catch((error) => {
