@@ -151,11 +151,16 @@ def sort_mrs_by_date(mrs):
         return mrs
 
 def insert_data_to_cbs(sheets, data):
-    """Insert data to CBS_ID - ALL MRs sheet"""
+    """Clear existing data and insert new data to CBS_ID - ALL MRs sheet"""
     if not data:
         print("⚠️ No data to insert")
         return
     
+    # Clear the target sheet first (right before inserting)
+    print(f"🧹 Clearing CBS_ID - ALL MRs!C4:S before inserting new data")
+    clear_cbs_mrs(sheets)
+    
+    # Prepare and insert data
     padded_data = [pad_row_to_s(row) for row in data]
     print(f"📤 Inserting {len(padded_data)} rows to CBS_ID - ALL MRs!C4")
     
@@ -177,11 +182,13 @@ def main():
         credentials = authenticate()
         sheets = build('sheets', 'v4', credentials=credentials)
         
-        # Get all MRs from source (SHEET_SYNC_SID)
+        # Get all MRs from source (SHEET_SYNC_SID) FIRST
         mr_data = get_all_mr(sheets)
         
         if not mr_data:
-            print("⚠️ No MRs found, clearing CBS sheet")
+            print("⚠️ No MRs found in source")
+            # Clear CBS sheet only if there's no data
+            print(f"🧹 Clearing CBS_ID - ALL MRs!C4:S")
             clear_cbs_mrs(sheets)
             update_timestamp(sheets)  # Update timestamp even when no data
             print("✅ Process completed (no data)")
@@ -192,8 +199,7 @@ def main():
         
         print(f"📊 Processing {len(sorted_mrs)} MRs")
         
-        # Clear existing data and insert new data
-        clear_cbs_mrs(sheets)
+        # Insert data (this will clear the target sheet first, then insert)
         insert_data_to_cbs(sheets, sorted_mrs)
         
         # Update timestamp after successful sync
