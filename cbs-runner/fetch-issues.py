@@ -1,6 +1,7 @@
 import sys
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # Add the parent directory to sys.path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,6 +39,34 @@ def clear_cbs_issues(sheets):
         spreadsheetId=CBS_ID,
         range='ALL ISSUES!C4:T'
     ).execute()
+
+def update_timestamp(sheets):
+    """Update timestamp in F2 with Uganda and Philippines time"""
+    print(f"⏰ Updating timestamp in CBS_ID - ALL ISSUES!F2")
+    
+    # Get current time in both timezones
+    ug_tz = ZoneInfo('Africa/Kampala')  # Uganda timezone (EAT - UTC+3)
+    ph_tz = ZoneInfo('Asia/Manila')     # Philippines timezone (PHT - UTC+8)
+    
+    now_ug = datetime.now(ug_tz)
+    now_ph = datetime.now(ph_tz)
+    
+    # Format: "Sync on December 03, 2025, 06:20:35 AM (UG) / December 03, 2025, 11:20:35 AM (PH)"
+    timestamp = (
+        f"Sync on {now_ug.strftime('%B %d, %Y, %I:%M:%S %p')} (UG) / "
+        f"{now_ph.strftime('%B %d, %Y, %I:%M:%S %p')} (PH)"
+    )
+    
+    print(f"📝 Timestamp: {timestamp}")
+    
+    sheets.spreadsheets().values().update(
+        spreadsheetId=CBS_ID,
+        range='ALL ISSUES!F2',
+        valueInputOption='RAW',
+        body={'values': [[timestamp]]}
+    ).execute()
+    
+    print(f"✅ Timestamp updated in F2")
 
 def pad_row_to_t(row):
     """Pad row to 18 columns (C to T = 18 columns)"""
@@ -140,6 +169,7 @@ def main():
         if not issues_data:
             print("⚠️ No issues found, clearing CBS sheet")
             clear_cbs_issues(sheets)
+            update_timestamp(sheets)  # Update timestamp even when no data
             print("✅ Process completed (no data)")
             return
         
@@ -151,6 +181,9 @@ def main():
         # Clear existing data and insert new data
         clear_cbs_issues(sheets)
         insert_data_to_cbs(sheets, sorted_issues)
+        
+        # Update timestamp after successful sync
+        update_timestamp(sheets)
         
         print("=" * 60)
         print("✅ CBS ALL ISSUES Sync Completed Successfully")
