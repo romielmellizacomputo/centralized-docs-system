@@ -12,7 +12,7 @@ from googleapiclient.discovery import build
 from common import authenticate
 from constants import (
     SHEET_SYNC_SID,
-    CBS_SID
+    CBS_ID
 )
 
 def get_all_issues(sheets):
@@ -32,10 +32,10 @@ def get_all_issues(sheets):
     return values
 
 def clear_cbs_issues(sheets):
-    """Clear existing data in CBS_SID - ALL ISSUES sheet"""
-    print(f"🧹 Clearing CBS_SID - ALL ISSUES!C4:T")
+    """Clear existing data in CBS_ID - ALL ISSUES sheet"""
+    print(f"🧹 Clearing CBS_ID - ALL ISSUES!C4:T")
     sheets.spreadsheets().values().clear(
-        spreadsheetId=CBS_SID,
+        spreadsheetId=CBS_ID,
         range='ALL ISSUES!C4:T'
     ).execute()
 
@@ -108,16 +108,16 @@ def sort_issues_by_date(issues):
         return issues
 
 def insert_data_to_cbs(sheets, data):
-    """Insert data to CBS_SID - ALL ISSUES sheet"""
+    """Insert data to CBS_ID - ALL ISSUES sheet"""
     if not data:
         print("⚠️ No data to insert")
         return
     
     padded_data = [pad_row_to_t(row) for row in data]
-    print(f"📤 Inserting {len(padded_data)} rows to CBS_SID - ALL ISSUES!C4")
+    print(f"📤 Inserting {len(padded_data)} rows to CBS_ID - ALL ISSUES!C4")
     
     sheets.spreadsheets().values().update(
-        spreadsheetId=CBS_SID,
+        spreadsheetId=CBS_ID,
         range='ALL ISSUES!C4',
         valueInputOption='RAW',
         body={'values': padded_data}
