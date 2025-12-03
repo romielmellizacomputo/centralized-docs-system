@@ -21,6 +21,7 @@ GITLAB_MR = 'GITLAB MRs!C4:S'
 DASHBOARD_SHEET = 'Dashboard'
 G_MILESTONES = 'G-Milestones'
 G_ISSUES_SHEET = 'G-Issues'
+G_TC_SHEET = "G-TC"
 G_MR_SHEET = 'G-MR'
 NTC_SHEET = 'NTC'
 
