@@ -41,21 +41,35 @@ def clear_cbs_issues(sheets):
     ).execute()
 
 def update_timestamp(sheets):
-    """Update timestamp in F2 with Uganda and Philippines time"""
+    """Update timestamp in F2 with Kampala and Philippines time"""
     print(f"⏰ Updating timestamp in CBS_ID - ALL ISSUES!F2")
     
     # Get current time in both timezones
-    ug_tz = ZoneInfo('Africa/Kampala')  # Uganda timezone (EAT - UTC+3)
-    ph_tz = ZoneInfo('Asia/Manila')     # Philippines timezone (PHT - UTC+8)
+    kampala_tz = ZoneInfo('Africa/Kampala')  # Kampala/Uganda timezone (EAT - UTC+3)
+    ph_tz = ZoneInfo('Asia/Manila')          # Philippines timezone (PHT - UTC+8)
     
-    now_ug = datetime.now(ug_tz)
+    now_kampala = datetime.now(kampala_tz)
     now_ph = datetime.now(ph_tz)
     
-    # Format: "Sync on December 03, 2025, 06:20:35 AM (UG) / December 03, 2025, 11:20:35 AM (PH)"
-    timestamp = (
-        f"Sync on {now_ug.strftime('%B %d, %Y, %I:%M:%S %p')} (UG) / "
-        f"{now_ph.strftime('%B %d, %Y, %I:%M:%S %p')} (PH)"
-    )
+    # Check if dates are the same
+    kampala_date = now_kampala.strftime('%B %d, %Y')
+    ph_date = now_ph.strftime('%B %d, %Y')
+    
+    if kampala_date == ph_date:
+        # Same date: show date once
+        # Format: "Sync on December 03, 2025, 06:29:04 AM (Kampala) / 11:29:04 AM (PH)"
+        timestamp = (
+            f"Sync on {kampala_date}, "
+            f"{now_kampala.strftime('%I:%M:%S %p')} (Kampala) / "
+            f"{now_ph.strftime('%I:%M:%S %p')} (PH)"
+        )
+    else:
+        # Different dates: show both dates
+        # Format: "Sync on December 02, 2025, 11:30:00 PM (Kampala) / December 03, 2025, 04:30:00 AM (PH)"
+        timestamp = (
+            f"Sync on {now_kampala.strftime('%B %d, %Y, %I:%M:%S %p')} (Kampala) / "
+            f"{now_ph.strftime('%B %d, %Y, %I:%M:%S %p')} (PH)"
+        )
     
     print(f"📝 Timestamp: {timestamp}")
     
