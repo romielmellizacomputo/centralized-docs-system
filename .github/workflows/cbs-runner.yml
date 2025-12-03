@@ -26,6 +26,7 @@ jobs:
       - name: Run fetch-issues.py
         run: python cbs-runner/fetch-issues.py
         env:
+          PYTHONPATH: ${{ github.workspace }}
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
           CBS_SID: ${{ secrets.CBS_SID }}
@@ -33,6 +34,7 @@ jobs:
       - name: Run fetch-mrs.py
         run: python cbs-runner/fetch-mrs.py
         env:
+          PYTHONPATH: ${{ github.workspace }}
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
           SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
           CBS_SID: ${{ secrets.CBS_SID }}
