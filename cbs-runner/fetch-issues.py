@@ -151,11 +151,16 @@ def sort_issues_by_date(issues):
         return issues
 
 def insert_data_to_cbs(sheets, data):
-    """Insert data to CBS_ID - ALL ISSUES sheet"""
+    """Clear existing data and insert new data to CBS_ID - ALL ISSUES sheet"""
     if not data:
         print("⚠️ No data to insert")
         return
     
+    # Clear the target sheet first (right before inserting)
+    print(f"🧹 Clearing CBS_ID - ALL ISSUES!C4:T before inserting new data")
+    clear_cbs_issues(sheets)
+    
+    # Prepare and insert data
     padded_data = [pad_row_to_t(row) for row in data]
     print(f"📤 Inserting {len(padded_data)} rows to CBS_ID - ALL ISSUES!C4")
     
@@ -177,11 +182,13 @@ def main():
         credentials = authenticate()
         sheets = build('sheets', 'v4', credentials=credentials)
         
-        # Get all issues from source (SHEET_SYNC_SID)
+        # Get all issues from source (SHEET_SYNC_SID) FIRST
         issues_data = get_all_issues(sheets)
         
         if not issues_data:
-            print("⚠️ No issues found, clearing CBS sheet")
+            print("⚠️ No issues found in source")
+            # Clear CBS sheet only if there's no data
+            print(f"🧹 Clearing CBS_ID - ALL ISSUES!C4:T")
             clear_cbs_issues(sheets)
             update_timestamp(sheets)  # Update timestamp even when no data
             print("✅ Process completed (no data)")
@@ -192,8 +199,7 @@ def main():
         
         print(f"📊 Processing {len(sorted_issues)} issues")
         
-        # Clear existing data and insert new data
-        clear_cbs_issues(sheets)
+        # Insert data (this will clear the target sheet first, then insert)
         insert_data_to_cbs(sheets, sorted_issues)
         
         # Update timestamp after successful sync
