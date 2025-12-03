@@ -15,21 +15,20 @@ from constants import (
     G_MILESTONES,
     G_ISSUES_SHEET,
     DASHBOARD_SHEET,
-    CBS_ID,  # Updated to use CBS_ID instead of CENTRAL_ISSUE_SHEET_ID
-    GITLAB_ISSUES,  # Updated to use GITLAB_ISSUES instead of ALL_ISSUES
+    SHEET_SYNC_SID,  # Updated to use SHEET_SYNC_SID
     generate_timestamp_string
 )
 
 def get_all_issues(sheets):
-    """Get all issues from the new GitLab Issues source (CBS_ID)"""
+    """Get all issues from ALL ISSUES sheet (SHEET_SYNC_SID)"""
     result = sheets.spreadsheets().values().get(
-        spreadsheetId=CBS_ID,
-        range=GITLAB_ISSUES
+        spreadsheetId=SHEET_SYNC_SID,
+        range="ALL ISSUES!C4:T"
     ).execute()
     
     values = result.get('values', [])
     if not values:
-        raise Exception(f"No data found in range {GITLAB_ISSUES}")
+        raise Exception(f"No data found in range ALL ISSUES!C4:T")
     
     return values
 
@@ -37,12 +36,12 @@ def clear_g_issues(sheets, sheet_id):
     """Clear existing data in G-Issues sheet"""
     sheets.spreadsheets().values().clear(
         spreadsheetId=sheet_id,
-        range=f'{G_ISSUES_SHEET}!C4:U'
+        range=f'{G_ISSUES_SHEET}!C4:T'
     ).execute()
 
-def pad_row_to_u(row):
-    """Pad row to 19 columns (C to U = 19 columns)"""
-    full_length = 19
+def pad_row_to_t(row):
+    """Pad row to 18 columns (C to T = 18 columns)"""
+    full_length = 18
     return row + [''] * (full_length - len(row))
 
 def parse_date_safely(date_str):
@@ -76,11 +75,11 @@ def parse_date_safely(date_str):
     return None
 
 def sort_issues_by_date(filtered_issues):
-    """Sort issues by creation date (column H, index 6) - most recent first"""
+    """Sort issues by creation date (column I/index 6) - most recent first"""
     print(f"📅 Sorting {len(filtered_issues)} issues by creation date...")
     
     def get_sort_key(row):
-        # Column H is index 6 (B=0, C=1, D=2, E=3, F=4, G=5, H=6)
+        # Column I is index 6 (C=0, D=1, E=2, F=3, G=4, H=5, I=6)
         created_date_str = row[6] if len(row) > 6 else ''
         parsed_date = parse_date_safely(created_date_str)
         
@@ -112,7 +111,7 @@ def sort_issues_by_date(filtered_issues):
 
 def insert_data_to_g_issues(sheets, sheet_id, data):
     """Insert processed data to G-Issues sheet"""
-    padded_data = [pad_row_to_u(row) for row in data]
+    padded_data = [pad_row_to_t(row) for row in data]
     print(f"📤 Inserting {len(padded_data)} rows to {G_ISSUES_SHEET}!C4")
     
     sheets.spreadsheets().values().update(
@@ -134,23 +133,19 @@ def update_timestamp(sheets, sheet_id):
 
 def debug_milestone_matching(issues_data, milestones):
     """Debug function to help understand milestone matching issues"""
-    print("🔍 DEBUG: Analyzing milestone data in column F (index 4)...")
+    print("🔍 DEBUG: Analyzing milestone data in column G (index 4)...")
     
     if not issues_data:
         print("🔍 No source data found!")
         return
     
-    # Show header row
-    header = issues_data[0] if issues_data else []
-    print(f"🔍 Header row: B={header[0] if len(header) > 0 else 'N/A'}, C={header[1] if len(header) > 1 else 'N/A'}, D={header[2] if len(header) > 2 else 'N/A'}, E={header[3] if len(header) > 3 else 'N/A'}, F={header[4] if len(header) > 4 else 'N/A'}, G={header[5] if len(header) > 5 else 'N/A'}")
-    
-    # Get unique milestones from source data (column F, index 4)
+    # Get unique milestones from source data (column G, index 4)
     source_milestones = set()
-    for row in issues_data[1:]:  # Skip header row
-        if len(row) > 4 and row[4] and str(row[4]).strip():  # Column F is index 4
+    for row in issues_data:
+        if len(row) > 4 and row[4] and str(row[4]).strip():  # Column G is index 4
             source_milestones.add(str(row[4]).strip())
     
-    print(f"🔍 Found {len(source_milestones)} unique milestones in column F")
+    print(f"🔍 Found {len(source_milestones)} unique milestones in column G")
     print(f"🔍 First 10 source milestones: {list(source_milestones)[:10]}")
     
     # Check for exact matches
@@ -161,7 +156,7 @@ def debug_milestone_matching(issues_data, milestones):
     print(f"🔍 Target milestones (first 5): {milestones[:5]}")
 
 def filter_issues_by_milestones(issues_data, milestones):
-    """Filter issues by milestones using column F (index 4)"""
+    """Filter issues by milestones using column G (index 4)"""
     if not issues_data:
         return []
     
@@ -170,21 +165,21 @@ def filter_issues_by_milestones(issues_data, milestones):
     
     filtered = []
     milestone_set = set(milestones)
-    milestone_col_idx = 4  # Column F is index 4 (B=0, C=1, D=2, E=3, F=4)
+    milestone_col_idx = 4  # Column G is index 4 (C=0, D=1, E=2, F=3, G=4)
     
-    # Skip header row and process data rows
-    for i, row in enumerate(issues_data[1:], 1):
+    # Process data rows (no header in C4:T range)
+    for i, row in enumerate(issues_data, 1):
         if len(row) <= milestone_col_idx:  # Row doesn't have enough columns
             continue
             
-        milestone = str(row[milestone_col_idx]).strip() if row[milestone_col_idx] else ""  # Column F (index 4)
+        milestone = str(row[milestone_col_idx]).strip() if row[milestone_col_idx] else ""  # Column G (index 4)
         
         if milestone in milestone_set:
             filtered.append(row)
             if len(filtered) <= 5:  # Show first 5 matches for debugging
                 print(f"✅ Match found at row {i}: milestone='{milestone}'")
     
-    print(f"📊 Filtered {len(filtered)} issues from {len(issues_data)-1} total issues using column F")
+    print(f"📊 Filtered {len(filtered)} issues from {len(issues_data)} total issues using column G")
     return filtered, milestone_col_idx
 
 def main():
@@ -224,12 +219,12 @@ def main():
                     print(f"⚠️ No milestones found for {sheet_id}, skipping...")
                     continue
                 
-                # Get all issues from the new GitLab source
-                print(f"📋 Getting issues from {CBS_ID} - {GITLAB_ISSUES}")
+                # Get all issues from SHEET_SYNC_SID - ALL ISSUES sheet
+                print(f"📋 Getting issues from {SHEET_SYNC_SID} - ALL ISSUES!C4:T")
                 issues_data = get_all_issues(sheets)
-                print(f"📋 Found {len(issues_data)} total rows (including header)")
+                print(f"📋 Found {len(issues_data)} total rows")
                 
-                # Filter by milestones using correct column F (index 4)
+                # Filter by milestones using column G (index 4)
                 filtered_result = filter_issues_by_milestones(issues_data, milestones)
                 
                 if isinstance(filtered_result, tuple):
@@ -245,45 +240,14 @@ def main():
                     update_timestamp(sheets, sheet_id)
                     continue
                 
-                # Sort by creation date (most recent first) before processing
+                # Sort by creation date (most recent first)
                 sorted_filtered = sort_issues_by_date(filtered)
                 
-                # Map source columns to target columns
-                processed = []
-                for row in sorted_filtered:
-                    # Ensure row has enough columns (pad to at least 22 columns)
-                    padded_row = row + [''] * (22 - len(row))
-                    
-                    # Map columns from source to target format
-                    # Column mapping: B=0, C=1, D=2, E=3, F=4, G=5, H=6, I=7, J=8, K=9, L=10, etc.
-                    mapped_row = [
-                        padded_row[0] if len(padded_row) > 0 else '',   # C: ID (from B, index 0)
-                        '',                                              # D: IID (skip - not in source)
-                        padded_row[1] if len(padded_row) > 1 else '',   # E: Issue Title (from C, index 1)
-                        padded_row[2] if len(padded_row) > 2 else '',   # F: Issue Author (from D, index 2)
-                        '',                                              # G: Assignee (skip - not in source)
-                        padded_row[3] if len(padded_row) > 3 else '',   # H: Labels (from E, index 3)
-                        padded_row[4] if len(padded_row) > 4 else '',   # I: Milestone (from F, index 4)
-                        padded_row[5] if len(padded_row) > 5 else '',   # J: Status (from G, index 5)
-                        padded_row[6] if len(padded_row) > 6 else '',   # K: Created At (from H, index 6)
-                        padded_row[7] if len(padded_row) > 7 else '',   # L: Closed At (from I, index 7)
-                        padded_row[9] if len(padded_row) > 9 else '',   # M: Closed By (from K, index 9)
-                        padded_row[8] if len(padded_row) > 8 else '',   # N: Project (from J, index 8)
-                        padded_row[16] if len(padded_row) > 16 else '', # O: Reviewer (from R, index 16)
-                        padded_row[18] if len(padded_row) > 18 else '', # P: Reopened? (from T, index 18)
-                        '',                                              # Q: Reopened By (skip - not in source)
-                        '',                                              # R: Date Reopened (skip - not in source)
-                        '',                                              # S: Local Status (skip - not in source)
-                        '',                                              # T: Status Date (skip - not in source)
-                        ''                                               # U: Duration/Status (skip - not in source)
-                    ]
-                    processed.append(mapped_row)
-                
-                print(f"📊 Processing {len(processed)} filtered and sorted issues")
+                print(f"📊 Processing {len(sorted_filtered)} filtered and sorted issues")
                 
                 # Clear existing data and insert new data
                 clear_g_issues(sheets, sheet_id)
-                insert_data_to_g_issues(sheets, sheet_id, processed)
+                insert_data_to_g_issues(sheets, sheet_id, sorted_filtered)
                 update_timestamp(sheets, sheet_id)
                 
                 print(f"✅ Finished: {sheet_id}")
