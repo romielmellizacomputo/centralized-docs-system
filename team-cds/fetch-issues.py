@@ -75,12 +75,12 @@ def parse_date_safely(date_str):
     return None
 
 def sort_issues_by_date(filtered_issues):
-    """Sort issues by creation date (column I/index 6) - most recent first"""
+    """Sort issues by creation date (column K/index 8) - most recent first"""
     print(f"📅 Sorting {len(filtered_issues)} issues by creation date...")
     
     def get_sort_key(row):
-        # Column I is index 6 (C=0, D=1, E=2, F=3, G=4, H=5, I=6)
-        created_date_str = row[6] if len(row) > 6 else ''
+        # Column K is index 8 (C=0, D=1, E=2, F=3, G=4, H=5, I=6, J=7, K=8)
+        created_date_str = row[8] if len(row) > 8 else ''
         parsed_date = parse_date_safely(created_date_str)
         
         # Return parsed date if available, otherwise use epoch (very old date)
@@ -97,7 +97,7 @@ def sort_issues_by_date(filtered_issues):
         # Debug: show first few dates
         print("📅 First 3 sorted dates:")
         for i, row in enumerate(sorted_issues[:3]):
-            date_str = row[6] if len(row) > 6 else 'N/A'
+            date_str = row[8] if len(row) > 8 else 'N/A'
             parsed = parse_date_safely(date_str)
             print(f"  {i+1}. {date_str} -> {parsed}")
         
@@ -133,19 +133,19 @@ def update_timestamp(sheets, sheet_id):
 
 def debug_milestone_matching(issues_data, milestones):
     """Debug function to help understand milestone matching issues"""
-    print("🔍 DEBUG: Analyzing milestone data in column G (index 4)...")
+    print("🔍 DEBUG: Analyzing milestone data in column I (index 6)...")
     
     if not issues_data:
         print("🔍 No source data found!")
-        return
+        return 6  # Return column I index
     
-    # Get unique milestones from source data (column G, index 4)
+    # Get unique milestones from source data (column I, index 6)
     source_milestones = set()
     for row in issues_data:
-        if len(row) > 4 and row[4] and str(row[4]).strip():  # Column G is index 4
-            source_milestones.add(str(row[4]).strip())
+        if len(row) > 6 and row[6] and str(row[6]).strip():  # Column I is index 6
+            source_milestones.add(str(row[6]).strip())
     
-    print(f"🔍 Found {len(source_milestones)} unique milestones in column G")
+    print(f"🔍 Found {len(source_milestones)} unique milestones in column I")
     print(f"🔍 First 10 source milestones: {list(source_milestones)[:10]}")
     
     # Check for exact matches
@@ -154,32 +154,37 @@ def debug_milestone_matching(issues_data, milestones):
     
     # Show target milestones for comparison
     print(f"🔍 Target milestones (first 5): {milestones[:5]}")
+    
+    return 6  # Return column I index
 
 def filter_issues_by_milestones(issues_data, milestones):
-    """Filter issues by milestones using column G (index 4)"""
+    """Filter issues by milestones using column I (index 6)"""
     if not issues_data:
         return []
     
     # Debug milestone matching
-    debug_milestone_matching(issues_data, milestones)
+    milestone_col_idx = debug_milestone_matching(issues_data, milestones)
+    
+    if milestone_col_idx is None:
+        print("❌ Could not find milestone column!")
+        return [], None
     
     filtered = []
     milestone_set = set(milestones)
-    milestone_col_idx = 4  # Column G is index 4 (C=0, D=1, E=2, F=3, G=4)
     
     # Process data rows (no header in C4:T range)
     for i, row in enumerate(issues_data, 1):
         if len(row) <= milestone_col_idx:  # Row doesn't have enough columns
             continue
             
-        milestone = str(row[milestone_col_idx]).strip() if row[milestone_col_idx] else ""  # Column G (index 4)
+        milestone = str(row[milestone_col_idx]).strip() if row[milestone_col_idx] else ""
         
         if milestone in milestone_set:
             filtered.append(row)
             if len(filtered) <= 5:  # Show first 5 matches for debugging
                 print(f"✅ Match found at row {i}: milestone='{milestone}'")
     
-    print(f"📊 Filtered {len(filtered)} issues from {len(issues_data)} total issues using column G")
+    print(f"📊 Filtered {len(filtered)} issues from {len(issues_data)} total issues using column I")
     return filtered, milestone_col_idx
 
 def main():
