@@ -9,9 +9,7 @@ from googleapiclient.discovery import build
 from common import authenticate
 from constants import (
     SHEET_SYNC_SID,
-    CBS_SID,
-    DASHBOARD_SHEET,
-    generate_timestamp_string
+    CBS_SID
 )
 
 def get_all_mr(sheets):
@@ -124,20 +122,6 @@ def insert_data_to_cbs(sheets, data):
     
     print(f"✅ Successfully inserted {len(padded_data)} rows")
 
-def update_timestamp(sheets):
-    """Update timestamp in CBS_SID - Dashboard sheet"""
-    timestamp = generate_timestamp_string()
-    print(f"🕐 Updating timestamp: {timestamp}")
-    
-    sheets.spreadsheets().values().update(
-        spreadsheetId=CBS_SID,
-        range=f'{DASHBOARD_SHEET}!W6',
-        valueInputOption='RAW',
-        body={'values': [[timestamp]]}
-    ).execute()
-    
-    print(f"✅ Timestamp updated")
-
 def main():
     try:
         print("=" * 60)
@@ -151,9 +135,8 @@ def main():
         mr_data = get_all_mr(sheets)
         
         if not mr_data:
-            print("⚠️ No MRs found, clearing CBS sheet and updating timestamp")
+            print("⚠️ No MRs found, clearing CBS sheet")
             clear_cbs_mrs(sheets)
-            update_timestamp(sheets)
             print("✅ Process completed (no data)")
             return
         
@@ -165,7 +148,6 @@ def main():
         # Clear existing data and insert new data
         clear_cbs_mrs(sheets)
         insert_data_to_cbs(sheets, sorted_mrs)
-        update_timestamp(sheets)
         
         print("=" * 60)
         print("✅ CBS ALL MRs Sync Completed Successfully")
