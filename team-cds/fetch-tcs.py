@@ -17,6 +17,26 @@ from constants import (
     generate_timestamp_string
 )
 
+def get_team_members(sheets, sheet_id):
+    """Get team member names from Dashboard sheet Q34:Q49"""
+    try:
+        result = sheets.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=f'{DASHBOARD_SHEET}!Q34:Q49'
+        ).execute()
+        
+        values = result.get('values', [])
+        # Flatten the list and filter out empty values
+        team_members = [row[0].strip() for row in values if row and row[0] and row[0].strip()]
+        
+        print(f"📋 Found {len(team_members)} team members in Dashboard Q34:Q49")
+        print(f"📋 Team members: {team_members[:5]}..." if len(team_members) > 5 else f"📋 Team members: {team_members}")
+        
+        return team_members
+    except Exception as e:
+        print(f"⚠️ Error getting team members: {str(e)}")
+        return []
+
 def get_all_test_cases(sheets):
     """Get all test cases from ALL ISSUES sheet (SHEET_SYNC_SID)"""
     result = sheets.spreadsheets().values().get(
@@ -129,53 +149,95 @@ def update_timestamp(sheets, sheet_id):
         body={'values': [[timestamp]]}
     ).execute()
 
-def debug_qa_team_filtering(test_cases_data):
+def debug_qa_team_filtering(test_cases_data, team_members):
     """Debug function to show QA TEAM filtering details"""
-    print("🔍 DEBUG: Analyzing milestone data in column I (index 6)...")
+    print("🔍 DEBUG: Analyzing filtering criteria...")
+    print(f"🔍 Column F (index 3): Issue Author")
+    print(f"🔍 Column I (index 6): Milestone")
     
     if not test_cases_data:
         print("🔍 No source data found!")
         return
     
-    # Get unique milestones from source data (column I, index 6)
+    # Get unique milestones and authors
     source_milestones = set()
+    source_authors = set()
     qa_team_count = 0
+    team_member_count = 0
+    both_conditions_count = 0
     
     for row in test_cases_data:
-        if len(row) > 6 and row[6] and str(row[6]).strip():  # Column I is index 6
-            milestone = str(row[6]).strip()
+        milestone = str(row[6]).strip() if len(row) > 6 and row[6] else ""
+        author = str(row[3]).strip() if len(row) > 3 and row[3] else ""
+        
+        if milestone:
             source_milestones.add(milestone)
             if milestone == "QA TEAM":
                 qa_team_count += 1
+        
+        if author:
+            source_authors.add(author)
+            if author in team_members:
+                team_member_count += 1
+        
+        if milestone == "QA TEAM" and author in team_members:
+            both_conditions_count += 1
     
     print(f"🔍 Found {len(source_milestones)} unique milestones in column I")
-    print(f"🔍 First 10 source milestones: {list(source_milestones)[:10]}")
+    print(f"🔍 Found {len(source_authors)} unique authors in column F")
     print(f"🔍 Rows with 'QA TEAM' milestone: {qa_team_count}")
+    print(f"🔍 Rows with team member authors: {team_member_count}")
+    print(f"🔍 Rows matching BOTH conditions: {both_conditions_count}")
+    print(f"🔍 First 10 source milestones: {list(source_milestones)[:10]}")
+    print(f"🔍 First 10 source authors: {list(source_authors)[:10]}")
 
-def filter_test_cases_by_qa_team(test_cases_data):
-    """Filter test cases by 'QA TEAM' milestone in column I (index 6)"""
+def filter_test_cases_by_qa_team_and_author(test_cases_data, team_members):
+    """Filter test cases by 'QA TEAM' milestone (column I) AND team member author (column F)"""
     if not test_cases_data:
         return []
     
-    # Debug QA TEAM filtering
-    debug_qa_team_filtering(test_cases_data)
+    if not team_members:
+        print("⚠️ No team members found, cannot filter by author")
+        return []
+    
+    # Debug filtering
+    debug_qa_team_filtering(test_cases_data, team_members)
     
     filtered = []
     milestone_col_idx = 6  # Column I is index 6 (C=0, D=1, E=2, F=3, G=4, H=5, I=6)
+    author_col_idx = 3     # Column F is index 3 (C=0, D=1, E=2, F=3)
     
-    # Process data rows (no header in C4:M range)
+    team_members_set = set(team_members)
+    
+    print(f"\n📋 Filtering with criteria:")
+    print(f"   - Milestone (Column I) = 'QA TEAM'")
+    print(f"   - Author (Column F) in team members list\n")
+    
+    # Process data rows (no header in C4:N range)
     for i, row in enumerate(test_cases_data, 1):
-        if len(row) <= milestone_col_idx:  # Row doesn't have enough columns
+        if len(row) <= milestone_col_idx or len(row) <= author_col_idx:
             continue
-            
-        milestone = str(row[milestone_col_idx]).strip() if row[milestone_col_idx] else ""
         
-        if milestone == "QA TEAM":
+        milestone = str(row[milestone_col_idx]).strip() if row[milestone_col_idx] else ""
+        author = str(row[author_col_idx]).strip() if row[author_col_idx] else ""
+        
+        milestone_match = milestone == "QA TEAM"
+        author_match = author in team_members_set
+        
+        if milestone_match and author_match:
             filtered.append(row)
             if len(filtered) <= 5:  # Show first 5 matches for debugging
-                print(f"✅ Match found at row {i}: milestone='{milestone}'")
+                print(f"✅ Match found at row {i}: milestone='{milestone}', author='{author}'")
+        elif i <= 10:  # Show first 10 non-matches for debugging
+            reasons = []
+            if not milestone_match:
+                reasons.append(f"milestone '{milestone}' != 'QA TEAM'")
+            if not author_match:
+                reasons.append(f"author '{author}' not in team")
+            print(f"❌ Row {i} skipped — {', '.join(reasons)}")
     
-    print(f"📊 Filtered {len(filtered)} test cases from {len(test_cases_data)} total rows using 'QA TEAM' milestone")
+    print(f"\n📊 Filtered {len(filtered)} test cases from {len(test_cases_data)} total rows")
+    print(f"   ✅ Milestone = 'QA TEAM' AND Author in team members")
     return filtered
 
 def main():
@@ -202,16 +264,28 @@ def main():
                     print(f"⚠️ Skipping {sheet_id} — missing '{G_TC_SHEET}' sheet")
                     continue
                 
+                if DASHBOARD_SHEET not in titles:
+                    print(f"⚠️ Skipping {sheet_id} — missing '{DASHBOARD_SHEET}' sheet")
+                    continue
+                
+                # Get team members from Dashboard Q34:Q49
+                print(f"📋 Getting team members from {sheet_id} - {DASHBOARD_SHEET}!Q34:Q49")
+                team_members = get_team_members(sheets, sheet_id)
+                
+                if not team_members:
+                    print(f"⚠️ No team members found for {sheet_id}, skipping...")
+                    continue
+                
                 # Get all test cases from SHEET_SYNC_SID - ALL ISSUES sheet
                 print(f"📋 Getting test cases from {SHEET_SYNC_SID} - ALL ISSUES!C4:N")
                 test_cases_data = get_all_test_cases(sheets)
                 print(f"📋 Found {len(test_cases_data)} total rows")
                 
-                # Filter by 'QA TEAM' milestone in column I (index 6)
-                filtered = filter_test_cases_by_qa_team(test_cases_data)
+                # Filter by 'QA TEAM' milestone AND team member author
+                filtered = filter_test_cases_by_qa_team_and_author(test_cases_data, team_members)
                 
                 if not filtered:
-                    print(f"⚠️ No test cases with 'QA TEAM' milestone found for {sheet_id}")
+                    print(f"⚠️ No test cases matching criteria found for {sheet_id}")
                     # Still clear the sheet and update timestamp
                     clear_g_tc(sheets, sheet_id)
                     update_timestamp(sheets, sheet_id)
