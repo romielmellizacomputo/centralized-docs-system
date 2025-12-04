@@ -20,59 +20,44 @@ def get_all_issues_with_formulas(sheets):
     """Get all issues from SHEET_SYNC_SID - ALL ISSUES sheet with formulas preserved"""
     print(f"📋 Getting issues with formulas from {SHEET_SYNC_SID} - ALL ISSUES!C4:T")
     
-    # Get the spreadsheet data including formulas
-    result = sheets.spreadsheets().get(
+    # First, get all values (display text)
+    values_result = sheets.spreadsheets().values().get(
         spreadsheetId=SHEET_SYNC_SID,
-        ranges=['ALL ISSUES!C4:T'],
-        includeGridData=True
+        range="ALL ISSUES!C4:T"
     ).execute()
     
-    if 'sheets' not in result or not result['sheets']:
-        print("⚠️ No sheets found")
+    values = values_result.get('values', [])
+    if not values:
+        print("⚠️ No data found in range ALL ISSUES!C4:T")
         return []
     
-    sheet_data = result['sheets'][0]
-    if 'data' not in sheet_data or not sheet_data['data']:
-        print("⚠️ No data found")
-        return []
+    print(f"📋 Found {len(values)} total rows")
     
-    grid_data = sheet_data['data'][0]
-    if 'rowData' not in grid_data:
-        print("⚠️ No row data found")
-        return []
+    # Then, get formulas for column E specifically
+    print(f"📋 Getting formulas for column E (hyperlinks)...")
+    formulas_result = sheets.spreadsheets().values().get(
+        spreadsheetId=SHEET_SYNC_SID,
+        range="ALL ISSUES!E4:E",
+        valueRenderOption='FORMULA'
+    ).execute()
     
+    formulas = formulas_result.get('values', [])
+    
+    # Merge the data: replace column E values with formulas if they exist
     rows = []
-    for row_data in grid_data['rowData']:
-        if 'values' not in row_data:
-            continue
+    for i, row in enumerate(values):
+        new_row = list(row)  # Make a copy
         
-        row = []
-        for i, cell in enumerate(row_data['values']):
-            # Column E is index 2 (C=0, D=1, E=2)
-            if i == 2:  # Column E - check for hyperlink
-                if 'hyperlink' in cell:
-                    # Create HYPERLINK formula
-                    url = cell['hyperlink']
-                    display_text = cell.get('formattedValue', url)
-                    # Escape quotes in display text
-                    display_text = display_text.replace('"', '""')
-                    row.append(f'=HYPERLINK("{url}","{display_text}")')
-                elif 'userEnteredValue' in cell:
-                    # Check if it's already a formula
-                    user_value = cell['userEnteredValue']
-                    if 'formulaValue' in user_value:
-                        row.append(user_value['formulaValue'])
-                    else:
-                        row.append(cell.get('formattedValue', ''))
-                else:
-                    row.append(cell.get('formattedValue', ''))
-            else:
-                # For other columns, just get the formatted value
-                row.append(cell.get('formattedValue', ''))
+        # Column E is index 2 in the C:T range (C=0, D=1, E=2)
+        if i < len(formulas) and formulas[i]:
+            formula = formulas[i][0]
+            # If it's a HYPERLINK formula, use it; otherwise keep the original value
+            if formula.startswith('=HYPERLINK('):
+                new_row[2] = formula
         
-        rows.append(row)
+        rows.append(new_row)
     
-    print(f"📋 Found {len(rows)} total rows")
+    print(f"✅ Successfully processed {len(rows)} rows with hyperlinks")
     return rows
 
 def clear_cbs_issues(sheets):
