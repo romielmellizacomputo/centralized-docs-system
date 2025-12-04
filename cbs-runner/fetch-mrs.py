@@ -16,21 +16,49 @@ from constants import (
     CBS_ID
 )
 
-def get_all_mr(sheets):
-    """Get all MRs from SHEET_SYNC_SID - ALL MRs sheet"""
-    print(f"📋 Getting MRs from {SHEET_SYNC_SID} - ALL MRs!C4:S")
-    result = sheets.spreadsheets().values().get(
+def get_all_mr_with_formulas(sheets):
+    """Get all MRs from SHEET_SYNC_SID - ALL MRs sheet with formulas preserved"""
+    print(f"📋 Getting MRs with formulas from {SHEET_SYNC_SID} - ALL MRs!C4:S")
+    
+    # First, get all values (display text)
+    values_result = sheets.spreadsheets().values().get(
         spreadsheetId=SHEET_SYNC_SID,
         range="ALL MRs!C4:S"
     ).execute()
     
-    values = result.get('values', [])
+    values = values_result.get('values', [])
     if not values:
         print("⚠️ No data found in range ALL MRs!C4:S")
         return []
     
     print(f"📋 Found {len(values)} total rows")
-    return values
+    
+    # Then, get formulas for column E specifically
+    print(f"📋 Getting formulas for column E (hyperlinks)...")
+    formulas_result = sheets.spreadsheets().values().get(
+        spreadsheetId=SHEET_SYNC_SID,
+        range="ALL MRs!E4:E",
+        valueRenderOption='FORMULA'
+    ).execute()
+    
+    formulas = formulas_result.get('values', [])
+    
+    # Merge the data: replace column E values with formulas if they exist
+    rows = []
+    for i, row in enumerate(values):
+        new_row = list(row)  # Make a copy
+        
+        # Column E is index 2 in the C:S range (C=0, D=1, E=2)
+        if i < len(formulas) and formulas[i]:
+            formula = formulas[i][0]
+            # If it's a HYPERLINK formula, use it; otherwise keep the original value
+            if formula.startswith('=HYPERLINK('):
+                new_row[2] = formula
+        
+        rows.append(new_row)
+    
+    print(f"✅ Successfully processed {len(rows)} rows with hyperlinks")
+    return rows
 
 def clear_cbs_mrs(sheets):
     """Clear existing data in CBS_ID - ALL MRs sheet"""
@@ -164,10 +192,11 @@ def insert_data_to_cbs(sheets, data):
     padded_data = [pad_row_to_s(row) for row in data]
     print(f"📤 Inserting {len(padded_data)} rows to CBS_ID - ALL MRs!C4")
     
+    # Use USER_ENTERED to preserve formulas (including HYPERLINK formulas)
     sheets.spreadsheets().values().update(
         spreadsheetId=CBS_ID,
         range='ALL MRs!C4',
-        valueInputOption='RAW',
+        valueInputOption='USER_ENTERED',  # Changed from RAW to USER_ENTERED
         body={'values': padded_data}
     ).execute()
     
@@ -182,8 +211,8 @@ def main():
         credentials = authenticate()
         sheets = build('sheets', 'v4', credentials=credentials)
         
-        # Get all MRs from source (SHEET_SYNC_SID) FIRST
-        mr_data = get_all_mr(sheets)
+        # Get all MRs from source (SHEET_SYNC_SID) with formulas preserved
+        mr_data = get_all_mr_with_formulas(sheets)
         
         if not mr_data:
             print("⚠️ No MRs found in source")
