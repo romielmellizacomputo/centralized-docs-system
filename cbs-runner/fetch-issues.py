@@ -16,21 +16,64 @@ from constants import (
     CBS_ID
 )
 
-def get_all_issues(sheets):
-    """Get all issues from SHEET_SYNC_SID - ALL ISSUES sheet"""
-    print(f"📋 Getting issues from {SHEET_SYNC_SID} - ALL ISSUES!C4:T")
-    result = sheets.spreadsheets().values().get(
+def get_all_issues_with_formulas(sheets):
+    """Get all issues from SHEET_SYNC_SID - ALL ISSUES sheet with formulas preserved"""
+    print(f"📋 Getting issues with formulas from {SHEET_SYNC_SID} - ALL ISSUES!C4:T")
+    
+    # Get the spreadsheet data including formulas
+    result = sheets.spreadsheets().get(
         spreadsheetId=SHEET_SYNC_SID,
-        range="ALL ISSUES!C4:T"
+        ranges=['ALL ISSUES!C4:T'],
+        includeGridData=True
     ).execute()
     
-    values = result.get('values', [])
-    if not values:
-        print("⚠️ No data found in range ALL ISSUES!C4:T")
+    if 'sheets' not in result or not result['sheets']:
+        print("⚠️ No sheets found")
         return []
     
-    print(f"📋 Found {len(values)} total rows")
-    return values
+    sheet_data = result['sheets'][0]
+    if 'data' not in sheet_data or not sheet_data['data']:
+        print("⚠️ No data found")
+        return []
+    
+    grid_data = sheet_data['data'][0]
+    if 'rowData' not in grid_data:
+        print("⚠️ No row data found")
+        return []
+    
+    rows = []
+    for row_data in grid_data['rowData']:
+        if 'values' not in row_data:
+            continue
+        
+        row = []
+        for i, cell in enumerate(row_data['values']):
+            # Column E is index 2 (C=0, D=1, E=2)
+            if i == 2:  # Column E - check for hyperlink
+                if 'hyperlink' in cell:
+                    # Create HYPERLINK formula
+                    url = cell['hyperlink']
+                    display_text = cell.get('formattedValue', url)
+                    # Escape quotes in display text
+                    display_text = display_text.replace('"', '""')
+                    row.append(f'=HYPERLINK("{url}","{display_text}")')
+                elif 'userEnteredValue' in cell:
+                    # Check if it's already a formula
+                    user_value = cell['userEnteredValue']
+                    if 'formulaValue' in user_value:
+                        row.append(user_value['formulaValue'])
+                    else:
+                        row.append(cell.get('formattedValue', ''))
+                else:
+                    row.append(cell.get('formattedValue', ''))
+            else:
+                # For other columns, just get the formatted value
+                row.append(cell.get('formattedValue', ''))
+        
+        rows.append(row)
+    
+    print(f"📋 Found {len(rows)} total rows")
+    return rows
 
 def clear_cbs_issues(sheets):
     """Clear existing data in CBS_ID - ALL ISSUES sheet"""
@@ -164,10 +207,11 @@ def insert_data_to_cbs(sheets, data):
     padded_data = [pad_row_to_t(row) for row in data]
     print(f"📤 Inserting {len(padded_data)} rows to CBS_ID - ALL ISSUES!C4")
     
+    # Use USER_ENTERED to preserve formulas (including HYPERLINK formulas)
     sheets.spreadsheets().values().update(
         spreadsheetId=CBS_ID,
         range='ALL ISSUES!C4',
-        valueInputOption='RAW',
+        valueInputOption='USER_ENTERED',  # Changed from RAW to USER_ENTERED
         body={'values': padded_data}
     ).execute()
     
@@ -182,8 +226,8 @@ def main():
         credentials = authenticate()
         sheets = build('sheets', 'v4', credentials=credentials)
         
-        # Get all issues from source (SHEET_SYNC_SID) FIRST
-        issues_data = get_all_issues(sheets)
+        # Get all issues from source (SHEET_SYNC_SID) with formulas preserved
+        issues_data = get_all_issues_with_formulas(sheets)
         
         if not issues_data:
             print("⚠️ No issues found in source")
