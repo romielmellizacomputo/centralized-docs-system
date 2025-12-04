@@ -60,15 +60,15 @@ def update_timestamp(sheets):
         # Format: "Sync on December 03, 2025, 06:29:04 AM (Kampala) / 11:29:04 AM (PH)"
         timestamp = (
             f"Sync on {kampala_date}, "
-            f"{now_kampala.strftime('%I:%M:%S %p')} (Kampala) / "
-            f"{now_ph.strftime('%I:%M:%S %p')} (PH)"
+            f"{now_kampala.strftime('%I:%M:%S %p')} (EAT) / "
+            f"{now_ph.strftime('%I:%M:%S %p')} (PHT)"
         )
     else:
         # Different dates: show both dates
         # Format: "Sync on December 02, 2025, 11:30:00 PM (Kampala) / December 03, 2025, 04:30:00 AM (PH)"
         timestamp = (
-            f"Sync on {now_kampala.strftime('%B %d, %Y, %I:%M:%S %p')} (Kampala) / "
-            f"{now_ph.strftime('%B %d, %Y, %I:%M:%S %p')} (PH)"
+            f"Sync on {now_kampala.strftime('%B %d, %Y, %I:%M:%S %p')} (EAT) / "
+            f"{now_ph.strftime('%B %d, %Y, %I:%M:%S %p')} (PHT)"
         )
     
     print(f"📝 Timestamp: {timestamp}")
