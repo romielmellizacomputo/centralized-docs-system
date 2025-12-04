@@ -1,7 +1,7 @@
 name: CBS Updater
 on:
   schedule:
-    - cron: '0 18 * * *'  # Every day at 2 AM PH time (UTC+8)
+    - cron: '30 19 * * *'  # Every day at 3:30 AM PH time (UTC+8)
   workflow_dispatch:
     inputs:
       sheet_data:
