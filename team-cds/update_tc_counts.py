@@ -144,6 +144,7 @@ def process_batch(sheets, sheet_id, batch_urls, batch_num, total_batches):
     print(f"{'='*60}")
     
     updates = []
+    notes = []  # Store notes to be added
     processed = 0
     skipped = 0
     api_calls = 0
@@ -184,10 +185,19 @@ def process_batch(sheets, sheet_id, batch_urls, batch_num, total_batches):
                 counts_str = ', '.join([f"{count} {cat}" for cat, count in test_case_counts.items()])
                 print(f"Row {row_num}: {counts_str}")
             
-            # Queue update
+            # Create note text
+            note_text = create_note_text(test_case_counts)
+            
+            # Queue update for count
             updates.append({
                 'range': f"'{TC_REVIEW_SHEET}'!K{row_num}",
                 'values': [[total_sheets]]
+            })
+            
+            # Queue note to be added
+            notes.append({
+                'range': f"'{TC_REVIEW_SHEET}'!K{row_num}",
+                'note': note_text
             })
             
             print(f"Row {row_num}: ✅ Count = {total_sheets}")
@@ -206,10 +216,18 @@ def process_batch(sheets, sheet_id, batch_urls, batch_num, total_batches):
                     total_sheets, test_case_counts = count_test_cases_in_sheet_optimized(sheets, spreadsheet_id)
                     api_calls += 2
                     
+                    note_text = create_note_text(test_case_counts)
+                    
                     updates.append({
                         'range': f"'{TC_REVIEW_SHEET}'!K{row_num}",
                         'values': [[total_sheets]]
                     })
+                    
+                    notes.append({
+                        'range': f"'{TC_REVIEW_SHEET}'!K{row_num}",
+                        'note': note_text
+                    })
+                    
                     print(f"Row {row_num}: ✅ Retry successful - Count = {total_sheets}")
                     processed += 1
                 except Exception as retry_error:
@@ -221,7 +239,7 @@ def process_batch(sheets, sheet_id, batch_urls, batch_num, total_batches):
     
     # Apply all updates for this batch
     if updates:
-        print(f"\n📤 Applying {len(updates)} updates from batch {batch_num}...")
+        print(f"\n📤 Applying {len(updates)} count updates from batch {batch_num}...")
         try:
             batch_update_body = {
                 'valueInputOption': 'RAW',
@@ -231,9 +249,18 @@ def process_batch(sheets, sheet_id, batch_urls, batch_num, total_batches):
                 spreadsheetId=sheet_id,
                 body=batch_update_body
             ).execute()
-            print(f"✅ Batch {batch_num} updates applied successfully")
+            print(f"✅ Batch {batch_num} count updates applied successfully")
         except Exception as e:
-            print(f"❌ Error applying batch {batch_num} updates: {e}")
+            print(f"❌ Error applying batch {batch_num} count updates: {e}")
+    
+    # Add notes to cells
+    if notes:
+        print(f"\n📝 Adding {len(notes)} notes to cells...")
+        notes_added = 0
+        for note_info in notes:
+            if add_note_to_cell(sheets, sheet_id, note_info['range'], note_info['note']):
+                notes_added += 1
+        print(f"✅ Added {notes_added}/{len(notes)} notes successfully")
     
     print(f"\n📊 Batch {batch_num} Summary:")
     print(f"   ✅ Processed: {processed}")
