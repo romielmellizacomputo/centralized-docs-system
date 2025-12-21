@@ -1,4 +1,4 @@
-name: Team CDS Updater
+name: Team CDS Daily Runner
 on:
   schedule:
     - cron: '30 19 * * *'  # Every day at 3:30 AM PH time (UTC+8)
@@ -25,6 +25,14 @@ jobs:
           pip install pytz  # Add pytz to the dependencies
       - name: Run update_tc_review.py
         run: python team-cds/update_tc_review.py
+        env:
+          TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
+          LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
+          SHEET_SYNC_SID: ${{ secrets.SHEET_SYNC_SID }}
+          CBS_SID: ${{ secrets.CBS_SID }}  # Added CBS_SID environment variable
+          SHEET_DATA: ${{ github.event.inputs.sheet_data }}
+      - name: Run update_tc_counts.py
+        run: python team-cds/update_tc_counts.py
         env:
           TEAM_CDS_SERVICE_ACCOUNT_JSON: ${{ secrets.TEAM_CDS_SERVICE_ACCOUNT_JSON }}
           LEADS_CDS_SID: ${{ secrets.LEADS_CDS_SID }}
