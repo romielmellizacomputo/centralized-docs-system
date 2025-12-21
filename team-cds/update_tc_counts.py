@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import json
+import time
 from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -27,7 +28,10 @@ SHEETS_TO_SKIP = ["HELP", "ToC", "Issues", "Roster"]
 
 # File to store last processed state
 STATE_FILE = 'tc_review_state.json'
-ROWS_TO_PROCESS_PER_RUN = 300
+ROWS_TO_PROCESS_PER_RUN = 50  # Reduced from 300 to avoid rate limits
+
+# Rate limiting
+REQUEST_DELAY = 1.0  # Seconds between requests
 
 def load_last_processed_state(sheet_id):
     """Load the last processed row for a specific sheet"""
@@ -108,47 +112,53 @@ def get_tc_review_urls(sheets, sheet_id):
     print(f"✅ Found {len(urls)} rows with potential URLs")
     return urls
 
-def count_test_cases_in_sheet(sheets, spreadsheet_id):
+def count_test_cases_in_sheet_optimized(sheets, spreadsheet_id):
     """
-    Count test cases in an external spreadsheet
+    OPTIMIZED: Count test cases with a single batch request instead of multiple API calls
     Returns: (total_sheets_processed, test_case_counts_dict)
     """
     try:
-        # Get all sheets in the spreadsheet
-        spreadsheet = sheets.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
+        # OPTIMIZATION 1: Get spreadsheet metadata and all C5 values in ONE request
+        spreadsheet = sheets.spreadsheets().get(
+            spreadsheetId=spreadsheet_id,
+            includeGridData=False  # Don't fetch all cell data, just metadata
+        ).execute()
+        
         all_sheets = spreadsheet.get('sheets', [])
         
-        test_case_counts = {}
-        total_sheets_processed = 0
+        # Filter out sheets to skip
+        sheets_to_process = [
+            sheet_info for sheet_info in all_sheets
+            if sheet_info['properties']['title'] not in SHEETS_TO_SKIP
+        ]
         
-        for sheet_info in all_sheets:
-            sheet_name = sheet_info['properties']['title']
+        if not sheets_to_process:
+            return 0, {}
+        
+        total_sheets_processed = len(sheets_to_process)
+        
+        # OPTIMIZATION 2: Build batch ranges for all C5 cells at once
+        ranges = [f"'{sheet_info['properties']['title']}'!C5" for sheet_info in sheets_to_process]
+        
+        # OPTIMIZATION 3: Single batchGet request for all C5 values
+        result = sheets.spreadsheets().values().batchGet(
+            spreadsheetId=spreadsheet_id,
+            ranges=ranges,
+            valueRenderOption='UNFORMATTED_VALUE'
+        ).execute()
+        
+        value_ranges = result.get('valueRanges', [])
+        
+        # Count test case categories
+        test_case_counts = {}
+        
+        for value_range in value_ranges:
+            values = value_range.get('values', [])
+            c5_value = str(values[0][0]).strip() if values and values[0] and len(values[0]) > 0 and values[0][0] else ''
             
-            # Skip specified sheets
-            if sheet_name in SHEETS_TO_SKIP:
-                continue
-            
-            total_sheets_processed += 1
-            
-            # Get value from C5
-            try:
-                result = sheets.spreadsheets().values().get(
-                    spreadsheetId=spreadsheet_id,
-                    range=f"'{sheet_name}'!C5",
-                    valueRenderOption='UNFORMATTED_VALUE'
-                ).execute()
-                
-                values = result.get('values', [])
-                c5_value = str(values[0][0]).strip() if values and values[0] and values[0][0] else ''
-                
-                # Count only if C5 has a value
-                if c5_value:
-                    test_case_counts[c5_value] = test_case_counts.get(c5_value, 0) + 1
-                    
-            except Exception as e:
-                # If we can't read C5, just skip this sheet
-                print(f"  ⚠️ Could not read C5 from sheet '{sheet_name}': {e}")
-                continue
+            # Count only if C5 has a value
+            if c5_value:
+                test_case_counts[c5_value] = test_case_counts.get(c5_value, 0) + 1
         
         return total_sheets_processed, test_case_counts
         
@@ -190,6 +200,7 @@ def update_tc_review_counts(sheets, sheet_id):
     
     updates = []
     processed_count = 0
+    skipped_count = 0
     
     for url_info in rows_to_process:
         row_num = url_info['row']
@@ -199,26 +210,26 @@ def update_tc_review_counts(sheets, sheet_id):
         
         # Skip empty or invalid URLs
         if not is_valid_google_sheets_url(url):
-            print(f"Row {row_num}: Invalid or missing URL")
+            print(f"Row {row_num}: Invalid or missing URL - skipping")
+            skipped_count += 1
             continue
         
         # Extract spreadsheet ID
         spreadsheet_id = extract_spreadsheet_id(url)
         if not spreadsheet_id:
             print(f"Row {row_num}: Could not extract spreadsheet ID from URL")
+            skipped_count += 1
             continue
         
         print(f"Row {row_num}: Spreadsheet ID = {spreadsheet_id}")
         
-        # Count test cases
+        # Count test cases with optimized method
         try:
-            total_sheets, test_case_counts = count_test_cases_in_sheet(sheets, spreadsheet_id)
+            total_sheets, test_case_counts = count_test_cases_in_sheet_optimized(sheets, spreadsheet_id)
             
             print(f"Row {row_num}: Found {total_sheets} test case sheets")
-            print(f"Row {row_num}: Categories: {test_case_counts}")
-            
-            # Create note text
-            note_text = create_note_text(test_case_counts)
+            if test_case_counts:
+                print(f"Row {row_num}: Categories: {test_case_counts}")
             
             # Update K column with total count
             updates.append({
@@ -226,43 +237,55 @@ def update_tc_review_counts(sheets, sheet_id):
                 'values': [[total_sheets]]
             })
             
-            # Note: Google Sheets API doesn't support adding notes directly
-            # We can only update cell values. Notes would need Sheets API v4 with 
-            # spreadsheets.batchUpdate and UpdateCellsRequest
-            # For now, we'll just update the count
-            
             print(f"Row {row_num}: ✅ Will update with count = {total_sheets}")
             processed_count += 1
             
+            # RATE LIMITING: Add delay between processing external spreadsheets
+            time.sleep(REQUEST_DELAY)
+            
         except Exception as e:
-            print(f"Row {row_num}: ❌ Error processing - {e}")
-            continue
+            error_msg = str(e)
+            if '429' in error_msg or 'Quota exceeded' in error_msg:
+                print(f"Row {row_num}: ⚠️ Rate limit hit - saving progress and stopping")
+                # Save current progress before stopping
+                save_last_processed_state(sheet_id, row_num)
+                print(f"💾 Saved progress at row {row_num}")
+                print(f"⏸️ Please wait a few minutes and run the script again to continue")
+                break
+            else:
+                print(f"Row {row_num}: ❌ Error processing - {e}")
+                skipped_count += 1
+                continue
     
     # Batch update all changes
     if updates:
         print(f"\n📤 Applying {len(updates)} updates...")
-        batch_update_body = {
-            'valueInputOption': 'RAW',
-            'data': updates
-        }
+        try:
+            batch_update_body = {
+                'valueInputOption': 'RAW',
+                'data': updates
+            }
+            
+            sheets.spreadsheets().values().batchUpdate(
+                spreadsheetId=sheet_id,
+                body=batch_update_body
+            ).execute()
+            
+            print(f"✅ Successfully applied all updates")
+        except Exception as e:
+            print(f"❌ Error applying updates: {e}")
+    
+    # Update last processed row only if we completed without hitting rate limit
+    if processed_count > 0:
+        next_row = end_row
+        if next_row > len(url_data) + 1:
+            next_row = 2  # Reset to beginning
+            print("🔄 All rows processed. Resetting to start.")
         
-        sheets.spreadsheets().values().batchUpdate(
-            spreadsheetId=sheet_id,
-            body=batch_update_body
-        ).execute()
-        
-        print(f"✅ Successfully applied all updates")
+        save_last_processed_state(sheet_id, next_row)
+        print(f"📍 Next run will start from row {next_row}")
     
-    # Update last processed row
-    next_row = end_row
-    if next_row > len(url_data) + 1:
-        next_row = 2  # Reset to beginning
-        print("🔄 All rows processed. Resetting to start.")
-    
-    save_last_processed_state(sheet_id, next_row)
-    
-    print(f"\n📊 Summary: Processed {processed_count} URLs")
-    print(f"📍 Next run will start from row {next_row}")
+    print(f"\n📊 Summary: Processed {processed_count} URLs, Skipped {skipped_count} URLs")
 
 def update_timestamp(sheets, sheet_id):
     """Update timestamp in Dashboard sheet"""
@@ -310,12 +333,20 @@ def main():
                 print(f"\n✅ Finished: {sheet_id}")
                 
             except Exception as e:
-                print(f"❌ Error processing {sheet_id}: {str(e)}")
-                import traceback
-                traceback.print_exc()
+                error_msg = str(e)
+                if '429' in error_msg or 'Quota exceeded' in error_msg:
+                    print(f"⚠️ Rate limit reached for {sheet_id}")
+                    print(f"💾 Progress has been saved")
+                    print(f"⏸️ Please wait a few minutes and run the script again")
+                    break  # Stop processing other sheets
+                else:
+                    print(f"❌ Error processing {sheet_id}: {error_msg}")
+                    import traceback
+                    traceback.print_exc()
         
         print("\n" + "="*60)
-        print("✅ Script completed successfully")
+        print("✅ Script completed")
+        print("💡 If rate limited, run again in a few minutes to continue")
         print("="*60)
         
     except Exception as e:
