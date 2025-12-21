@@ -137,6 +137,78 @@ def count_test_cases_in_sheet_optimized(sheets, spreadsheet_id):
         print(f"❌ Error accessing spreadsheet {spreadsheet_id}: {e}")
         return 0, {}
 
+def create_note_text(test_case_counts):
+    """Create note text based on test case counts"""
+    if not test_case_counts or len(test_case_counts) == 0:
+        return "Test Case does not match the current Test Case Template. Please check and make sure to use updated test case template."
+    
+    note_lines = ["Test Case Counts:"]
+    for category, count in sorted(test_case_counts.items()):
+        note_lines.append(f"* {count} {category}")
+    
+    return '\n'.join(note_lines)
+
+def add_note_to_cell(sheets, sheet_id, cell_range, note_text):
+    """Add a note/comment to a specific cell using batchUpdate"""
+    try:
+        # Parse the cell range to get row and column indices
+        # Format: 'TC Review'!K2 -> sheet_name='TC Review', column='K', row=2
+        match = re.match(r"'([^']+)'!([A-Z]+)(\d+)", cell_range)
+        if not match:
+            print(f"⚠️ Could not parse cell range: {cell_range}")
+            return False
+        
+        sheet_name = match.group(1)
+        column_letter = match.group(2)
+        row_number = int(match.group(3))
+        
+        # Convert column letter to index (A=0, B=1, ... K=10)
+        column_index = sum((ord(c) - ord('A') + 1) * (26 ** i) for i, c in enumerate(reversed(column_letter))) - 1
+        row_index = row_number - 1  # 0-indexed
+        
+        # Get the sheet ID (gid) for the specific sheet
+        spreadsheet = sheets.spreadsheets().get(spreadsheetId=sheet_id).execute()
+        sheet_gid = None
+        for sheet in spreadsheet.get('sheets', []):
+            if sheet['properties']['title'] == sheet_name:
+                sheet_gid = sheet['properties']['sheetId']
+                break
+        
+        if sheet_gid is None:
+            print(f"⚠️ Could not find sheet: {sheet_name}")
+            return False
+        
+        # Create the request to update cell note
+        requests = [{
+            'updateCells': {
+                'range': {
+                    'sheetId': sheet_gid,
+                    'startRowIndex': row_index,
+                    'endRowIndex': row_index + 1,
+                    'startColumnIndex': column_index,
+                    'endColumnIndex': column_index + 1
+                },
+                'rows': [{
+                    'values': [{
+                        'note': note_text
+                    }]
+                }],
+                'fields': 'note'
+            }
+        }]
+        
+        body = {'requests': requests}
+        sheets.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body=body
+        ).execute()
+        
+        return True
+        
+    except Exception as e:
+        print(f"⚠️ Error adding note to {cell_range}: {e}")
+        return False
+
 def process_batch(sheets, sheet_id, batch_urls, batch_num, total_batches):
     """Process a batch of URLs with rate limiting"""
     print(f"\n{'='*60}")
