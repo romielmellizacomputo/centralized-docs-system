@@ -54,28 +54,35 @@ def extract_spreadsheet_id(url):
 
 def get_tc_review_urls(sheets, sheet_id):
     """Get all URLs from TC Review sheet column I"""
-    print(f"📋 Fetching URLs from TC Review sheet in {sheet_id}")
+    print(f"📋 Fetching URLs from '{TC_REVIEW_SHEET}' sheet...")
     
-    # Get data from column I starting at row 2
-    result = sheets.spreadsheets().values().get(
-        spreadsheetId=sheet_id,
-        range=f"'{TC_REVIEW_SHEET}'!I2:I",
-        valueRenderOption='UNFORMATTED_VALUE'
-    ).execute()
-    
-    values = result.get('values', [])
-    if not values:
-        print("⚠️ No URLs found in TC Review sheet")
+    try:
+        # Get data from column I starting at row 2
+        result = sheets.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range=f"'{TC_REVIEW_SHEET}'!I2:I",
+            valueRenderOption='UNFORMATTED_VALUE'
+        ).execute()
+        
+        values = result.get('values', [])
+        if not values:
+            print("⚠️ No data found in column I")
+            return []
+        
+        # Flatten the list and get actual URLs
+        urls = []
+        for idx, row in enumerate(values, start=2):
+            url = row[0] if row and row[0] else ''
+            urls.append({'row': idx, 'url': str(url).strip() if url else ''})
+        
+        # Count valid URLs
+        valid_count = sum(1 for u in urls if is_valid_google_sheets_url(u['url']))
+        print(f"✅ Found {len(urls)} total rows, {valid_count} with valid URLs")
+        return urls
+        
+    except Exception as e:
+        print(f"❌ Error fetching URLs: {e}")
         return []
-    
-    # Flatten the list and get actual URLs
-    urls = []
-    for idx, row in enumerate(values, start=2):
-        url = row[0] if row and row[0] else ''
-        urls.append({'row': idx, 'url': str(url).strip() if url else ''})
-    
-    print(f"✅ Found {len(urls)} rows with potential URLs")
-    return urls
 
 def count_test_cases_in_sheet_optimized(sheets, spreadsheet_id):
     """
@@ -237,7 +244,7 @@ def process_batch(sheets, sheet_id, batch_urls, batch_num, total_batches):
 
 def update_tc_review_counts(sheets, sheet_id):
     """Update test case counts in TC Review sheet - Process ALL rows"""
-    print(f"\n🔄 Processing TC Review counts for {sheet_id}")
+    print(f"\n📊 Starting test case count updates...")
     
     # Get all URLs
     url_data = get_tc_review_urls(sheets, sheet_id)
@@ -246,15 +253,24 @@ def update_tc_review_counts(sheets, sheet_id):
         print("⚠️ No URLs to process")
         return
     
+    # Filter to only valid URLs
+    valid_urls = [u for u in url_data if is_valid_google_sheets_url(u['url'])]
+    
+    if not valid_urls:
+        print("⚠️ No valid URLs found to process")
+        return
+    
+    print(f"📊 Processing {len(valid_urls)} valid URLs out of {len(url_data)} total rows")
+    
     # Split into batches
     batches = []
-    for i in range(0, len(url_data), BATCH_SIZE):
-        batches.append(url_data[i:i + BATCH_SIZE])
+    for i in range(0, len(valid_urls), BATCH_SIZE):
+        batches.append(valid_urls[i:i + BATCH_SIZE])
     
     total_batches = len(batches)
-    print(f"\n📦 Total URLs: {len(url_data)}")
-    print(f"📦 Batches: {total_batches} (max {BATCH_SIZE} URLs per batch)")
+    print(f"📦 Split into {total_batches} batches of up to {BATCH_SIZE} URLs each")
     print(f"⏱️  Estimated time: ~{(total_batches * BATCH_SIZE * REQUEST_DELAY + (total_batches - 1) * BATCH_COOLDOWN) / 60:.1f} minutes")
+    print("")
     
     total_processed = 0
     total_skipped = 0
@@ -267,15 +283,21 @@ def update_tc_review_counts(sheets, sheet_id):
         
         # Wait between batches (except after the last batch)
         if batch_num < total_batches:
-            print(f"\n⏸️  Batch {batch_num} complete. Cooling down for {BATCH_COOLDOWN}s to reset API quota...")
-            print(f"📊 Overall progress: {batch_num}/{total_batches} batches ({total_processed + total_skipped}/{len(url_data)} URLs)")
-            time.sleep(BATCH_COOLDOWN)
+            print(f"\n⏸️  Batch {batch_num}/{total_batches} complete. Cooling down for {BATCH_COOLDOWN}s to reset API quota...")
+            print(f"📊 Overall progress: {batch_num}/{total_batches} batches, {total_processed + total_skipped}/{len(valid_urls)} URLs processed")
+            
+            # Countdown timer for cooldown
+            for remaining in range(BATCH_COOLDOWN, 0, -10):
+                print(f"   ⏳ {remaining}s remaining...", flush=True)
+                time.sleep(10)
+            print("   ✅ Cooldown complete, resuming...")
     
     print(f"\n{'='*60}")
-    print(f"🎉 ALL BATCHES COMPLETE")
+    print(f"🎉 ALL PROCESSING COMPLETE FOR THIS SHEET")
     print(f"{'='*60}")
-    print(f"✅ Total processed: {total_processed}/{len(url_data)}")
-    print(f"⏭️  Total skipped: {total_skipped}/{len(url_data)}")
+    print(f"✅ Successfully processed: {total_processed}/{len(valid_urls)}")
+    print(f"⏭️  Skipped (errors): {total_skipped}/{len(valid_urls)}")
+    print(f"📊 Total rows checked: {len(url_data)}")
 
 def update_timestamp(sheets, sheet_id):
     """Update timestamp in Dashboard sheet"""
@@ -289,52 +311,74 @@ def update_timestamp(sheets, sheet_id):
     print(f"🕐 Updated timestamp in Dashboard: {timestamp}")
 
 def main():
+    print("🚀 Starting TC Review Counts Update Script")
+    print(f"⏰ Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
     try:
+        print("\n🔐 Authenticating...")
         credentials = authenticate()
+        print("✅ Authentication successful")
+        
+        print("🔗 Building Sheets API client...")
         sheets = build('sheets', 'v4', credentials=credentials)
+        print("✅ Sheets API client ready")
         
         # Get all Team CDS sheet IDs from UTILS
+        print(f"\n📋 Fetching Team CDS sheet IDs from UTILS: {UTILS_SHEET_ID}")
         sheet_ids = get_all_team_cds_sheet_ids(sheets, UTILS_SHEET_ID)
         
         if not sheet_ids:
             print("❌ No Team CDS sheet IDs found in UTILS!B2:B")
             return
         
+        print(f"✅ Found {len(sheet_ids)} Team CDS sheets to process")
+        
         # Process each sheet
-        for sheet_id in sheet_ids:
+        for idx, sheet_id in enumerate(sheet_ids, start=1):
             try:
                 print(f"\n{'#'*60}")
-                print(f"# Processing Sheet: {sheet_id}")
+                print(f"# Sheet {idx}/{len(sheet_ids)}: {sheet_id}")
                 print(f"{'#'*60}")
                 
                 # Verify TC Review sheet exists
+                print(f"🔍 Checking for '{TC_REVIEW_SHEET}' sheet...")
                 titles = get_sheet_titles(sheets, sheet_id)
+                print(f"📄 Found sheets: {', '.join(titles[:5])}{'...' if len(titles) > 5 else ''}")
                 
                 if TC_REVIEW_SHEET not in titles:
                     print(f"⚠️ Skipping {sheet_id} — missing '{TC_REVIEW_SHEET}' sheet")
                     continue
                 
+                print(f"✅ '{TC_REVIEW_SHEET}' sheet found")
+                
                 # Update TC Review test case counts (processes ALL rows)
                 update_tc_review_counts(sheets, sheet_id)
                 
                 # Update timestamp in Dashboard
+                print("\n🕐 Updating timestamp...")
                 update_timestamp(sheets, sheet_id)
                 
-                print(f"\n✅ Finished: {sheet_id}")
+                print(f"\n✅ Finished sheet {idx}/{len(sheet_ids)}: {sheet_id}")
                 
             except Exception as e:
-                print(f"❌ Error processing {sheet_id}: {str(e)}")
+                print(f"❌ Error processing sheet {idx}/{len(sheet_ids)} ({sheet_id}): {str(e)}")
                 import traceback
                 traceback.print_exc()
+                print("⏭️  Continuing to next sheet...")
         
         print("\n" + "="*60)
         print("✅ Script completed successfully - All sheets processed")
+        print(f"⏰ End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("="*60)
         
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"❌ Fatal error: {str(e)}")
         import traceback
         traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == '__main__':
+    print("="*60)
+    print("TC REVIEW TEST CASE COUNTS UPDATE")
+    print("="*60)
     main()
