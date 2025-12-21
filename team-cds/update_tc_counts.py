@@ -28,10 +28,11 @@ SHEETS_TO_SKIP = ["HELP", "ToC", "Issues", "Roster"]
 
 # File to store last processed state
 STATE_FILE = 'tc_review_state.json'
-ROWS_TO_PROCESS_PER_RUN = 50  # Reduced from 300 to avoid rate limits
+ROWS_TO_PROCESS_PER_RUN = 20  # Process only 20 URLs per run
 
-# Rate limiting
-REQUEST_DELAY = 1.0  # Seconds between requests
+# Rate limiting - More aggressive to stay under 60 requests/minute
+REQUEST_DELAY = 2.0  # 2 seconds between requests (max 30 spreadsheets/minute)
+# With 2 API calls per spreadsheet, that's 60 requests/minute = at the limit
 
 def load_last_processed_state(sheet_id):
     """Load the last processed row for a specific sheet"""
@@ -197,16 +198,18 @@ def update_tc_review_counts(sheets, sheet_id):
     rows_to_process = url_data[last_processed_row - 2:end_row - 2]  # Adjust for 0-indexing
     
     print(f"📊 Processing rows {last_processed_row} to {end_row - 1} ({len(rows_to_process)} rows)")
+    print(f"⏱️ Estimated time: ~{len(rows_to_process) * REQUEST_DELAY / 60:.1f} minutes")
     
     updates = []
     processed_count = 0
     skipped_count = 0
+    api_calls_made = 0
     
-    for url_info in rows_to_process:
+    for idx, url_info in enumerate(rows_to_process, start=1):
         row_num = url_info['row']
         url = url_info['url']
         
-        print(f"\nRow {row_num}: Processing...")
+        print(f"\n[{idx}/{len(rows_to_process)}] Row {row_num}: Processing...")
         
         # Skip empty or invalid URLs
         if not is_valid_google_sheets_url(url):
@@ -225,7 +228,13 @@ def update_tc_review_counts(sheets, sheet_id):
         
         # Count test cases with optimized method
         try:
+            # RATE LIMITING: Add delay BEFORE making the request
+            if processed_count > 0:
+                print(f"⏳ Waiting {REQUEST_DELAY}s to respect rate limits...")
+                time.sleep(REQUEST_DELAY)
+            
             total_sheets, test_case_counts = count_test_cases_in_sheet_optimized(sheets, spreadsheet_id)
+            api_calls_made += 2  # Each spreadsheet requires 2 API calls
             
             print(f"Row {row_num}: Found {total_sheets} test case sheets")
             if test_case_counts:
@@ -238,20 +247,35 @@ def update_tc_review_counts(sheets, sheet_id):
             })
             
             print(f"Row {row_num}: ✅ Will update with count = {total_sheets}")
+            print(f"📊 API calls so far: {api_calls_made}/60")
             processed_count += 1
-            
-            # RATE LIMITING: Add delay between processing external spreadsheets
-            time.sleep(REQUEST_DELAY)
             
         except Exception as e:
             error_msg = str(e)
             if '429' in error_msg or 'Quota exceeded' in error_msg:
-                print(f"Row {row_num}: ⚠️ Rate limit hit - saving progress and stopping")
+                print(f"Row {row_num}: ⚠️ Rate limit hit after {api_calls_made} API calls")
                 # Save current progress before stopping
                 save_last_processed_state(sheet_id, row_num)
                 print(f"💾 Saved progress at row {row_num}")
-                print(f"⏸️ Please wait a few minutes and run the script again to continue")
-                break
+                print(f"⏸️ Please wait 60 seconds and run the script again to continue")
+                
+                # Apply updates collected so far
+                if updates:
+                    print(f"\n📤 Applying {len(updates)} updates before stopping...")
+                    try:
+                        batch_update_body = {
+                            'valueInputOption': 'RAW',
+                            'data': updates
+                        }
+                        sheets.spreadsheets().values().batchUpdate(
+                            spreadsheetId=sheet_id,
+                            body=batch_update_body
+                        ).execute()
+                        print(f"✅ Successfully applied updates")
+                    except Exception as update_error:
+                        print(f"❌ Error applying updates: {update_error}")
+                
+                return  # Exit function early
             else:
                 print(f"Row {row_num}: ❌ Error processing - {e}")
                 skipped_count += 1
@@ -275,7 +299,7 @@ def update_tc_review_counts(sheets, sheet_id):
         except Exception as e:
             print(f"❌ Error applying updates: {e}")
     
-    # Update last processed row only if we completed without hitting rate limit
+    # Update last processed row
     if processed_count > 0:
         next_row = end_row
         if next_row > len(url_data) + 1:
@@ -286,6 +310,7 @@ def update_tc_review_counts(sheets, sheet_id):
         print(f"📍 Next run will start from row {next_row}")
     
     print(f"\n📊 Summary: Processed {processed_count} URLs, Skipped {skipped_count} URLs")
+    print(f"📈 Total API calls made: {api_calls_made}")
 
 def update_timestamp(sheets, sheet_id):
     """Update timestamp in Dashboard sheet"""
