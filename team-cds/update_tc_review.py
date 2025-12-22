@@ -39,7 +39,10 @@ PROJECT_MAPPING = {
     'APPLYBPO': 'APPLYBPO',
     'MINISTRY': 'MINISTRY',
     'SCALEMA': 'SCALEMA',
-    'BPOSEATS': 'BPOSEATS.COM'
+    'BPOSEATS': 'BACKEND',  # The repo "bposeats" is actually Backend
+    'BPOSEATS-DESKTOP': 'DESKTOP',
+    'MINISTRY-VUEJS': 'MINISTRY',
+    'BPOSEATS.COM': 'BPOSEATS.COM'
 }
 
 def get_source_issues(sheets):
@@ -139,6 +142,14 @@ def parse_gitlab_url(url):
     """
     Parse GitLab URL to extract project name and IID
     Expected format: https://forge.bposeats.com/<group>/<project>/-/issues/<iid>
+    
+    Examples:
+    - hqzen.com -> HQZEN
+    - ministry-vuejs -> MINISTRY
+    - bposeats-desktop -> DESKTOP
+    - applybpo.com -> APPLYBPO
+    - bposeats -> BACKEND
+    - bposeats.com -> BPOSEATS.COM
     """
     if not url:
         return None, None
@@ -149,16 +160,18 @@ def parse_gitlab_url(url):
     if not match:
         return None, None
     
-    project_name = match.group(1)  # e.g., "hqzen.com"
+    project_name = match.group(1)  # e.g., "hqzen.com", "ministry-vuejs", "bposeats-desktop"
     issue_iid = match.group(2)     # e.g., "11681"
     
-    # Clean project name (remove .com, convert to uppercase)
-    clean_project = project_name.replace('.com', '').upper().strip()
+    # Clean project name (remove .com, convert to uppercase, replace hyphens with underscores for mapping)
+    clean_project = project_name.replace('.com', '').upper().strip().replace('-', '-')
     
     # Apply project mapping
-    clean_project = PROJECT_MAPPING.get(clean_project, clean_project)
+    mapped_project = PROJECT_MAPPING.get(clean_project, clean_project)
     
-    return issue_iid, clean_project
+    print(f"    URL Parse: '{project_name}' -> '{clean_project}' -> '{mapped_project}'")
+    
+    return issue_iid, mapped_project
 
 def get_tc_review_data(sheets, sheet_id):
     """Get all data from TC Review sheet starting from row 2"""
