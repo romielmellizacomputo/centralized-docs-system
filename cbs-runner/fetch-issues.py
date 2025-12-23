@@ -69,8 +69,8 @@ def clear_cbs_issues(sheets):
     ).execute()
 
 def update_timestamp(sheets):
-    """Update timestamp in F2 with Kampala and Philippines time"""
-    print(f"⏰ Updating timestamp in CBS_ID - ALL ISSUES!F2")
+    """Update timestamp in E2 with Kampala and Philippines time"""
+    print(f"⏰ Updating timestamp in CBS_ID - ALL ISSUES!E2")
     
     # Get current time in both timezones
     kampala_tz = ZoneInfo('Africa/Kampala')  # Kampala/Uganda timezone (EAT - UTC+3)
@@ -103,12 +103,12 @@ def update_timestamp(sheets):
     
     sheets.spreadsheets().values().update(
         spreadsheetId=CBS_ID,
-        range='ALL ISSUES!F2',
+        range='ALL ISSUES!E2',
         valueInputOption='RAW',
         body={'values': [[timestamp]]}
     ).execute()
     
-    print(f"✅ Timestamp updated in F2")
+    print(f"✅ Timestamp updated in E2")
 
 def pad_row_to_t(row):
     """Pad row to 18 columns (C to T = 18 columns)"""
