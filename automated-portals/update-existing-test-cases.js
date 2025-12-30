@@ -16,9 +16,6 @@ const SHEETS_TO_SKIP = [
   'Test Scenario Portal',
   'Scenario Extractor',
   'Case Extractor',
-  `Feature Change Log`,
-  `Logs`,
-  `UTILS`,
   'TEMPLATE'
 ];
 const MAX_URLS = 20;
@@ -318,7 +315,8 @@ async function syncWithTargetSheets(auth, sourceDataMap, sourceByC24) {
     }
 
     // Step 1b: Find rows that exist in target but NOT in source (using composite key)
-    // Only check within the same C24 group
+    // IMPORTANT: Only check within C24 groups that exist in source
+    // Do NOT delete rows from C24 groups that this source doesn't contain
     
     for (let i = 0; i < c3Column.length; i++) {
       const c3Value = c3Column[i];
@@ -348,25 +346,22 @@ async function syncWithTargetSheets(auth, sourceDataMap, sourceByC24) {
       const compositeKey = `${c24Value}|${c3Value}`;
       targetCompositeKeys.add(compositeKey);
 
-      // Check if this C24 exists in source
+      // CRITICAL: Only check rows if this C24 group exists in source
+      // If C24 doesn't exist in source, leave it alone (it's from another source URL)
       if (!sourceByC24.has(c24Value)) {
-        // This entire C24 group doesn't exist in source - delete
+        console.log(`      ⏭️  Row ${rowIndex} - C24 '${c24Value}' not in this source, skipping (may be from another URL)`);
+        continue;
+      }
+      
+      // C24 exists in source, now check if this specific C3 exists within that C24 group
+      const sourceC3Set = sourceByC24.get(c24Value);
+      
+      if (!sourceC3Set.has(c3Value)) {
+        // This C3 doesn't exist within this C24 group in source - delete
         const alreadyMarked = rowsToDelete.some(r => r.rowIndex === rowIndex);
         if (!alreadyMarked) {
-          rowsToDelete.push({ rowIndex, c24Value, c3Value, reason: `C24 '${c24Value}' not in source` });
-          console.log(`      🗑️  Row ${rowIndex} - C24 '${c24Value}' not in source, will delete`);
-        }
-      } else {
-        // C24 exists in source, now check if this specific C3 exists within that C24 group
-        const sourceC3Set = sourceByC24.get(c24Value);
-        
-        if (!sourceC3Set.has(c3Value)) {
-          // This C3 doesn't exist within this C24 group in source - delete
-          const alreadyMarked = rowsToDelete.some(r => r.rowIndex === rowIndex);
-          if (!alreadyMarked) {
-            rowsToDelete.push({ rowIndex, c24Value, c3Value, reason: `C3 '${c3Value}' not in C24 '${c24Value}' group` });
-            console.log(`      🗑️  Row ${rowIndex} - C24 '${c24Value}', C3 '${c3Value}' not in source, will delete`);
-          }
+          rowsToDelete.push({ rowIndex, c24Value, c3Value, reason: `C3 '${c3Value}' not in C24 '${c24Value}' group` });
+          console.log(`      🗑️  Row ${rowIndex} - C24 '${c24Value}', C3 '${c3Value}' not in source, will delete`);
         }
       }
     }
