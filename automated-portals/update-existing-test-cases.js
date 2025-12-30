@@ -8,6 +8,7 @@ const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Boards Test Cases'; // Fetch from "Boards Test Cases"
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues', "HELP"];
 const MAX_URLS = 20;
+const START_DATA_ROW = 3; // Skip first 2 rows (headers) when checking for data
 
 // Enhanced rate limiting configuration
 const RATE_LIMITS = {
@@ -259,11 +260,26 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
     let updateCount = 0;
 
     // Step 1: Find rows that exist in target but NOT in source (to delete)
+    // Skip header rows and filter out invalid C3 values
+    
     for (let i = 0; i < c3Column.length; i++) {
       const c3Value = c3Column[i];
       const rowIndex = i + 1;
 
-      if (!c3Value) continue; // Skip empty rows
+      // Skip empty rows
+      if (!c3Value) continue;
+      
+      // Skip likely header/formula rows (containing only %, numbers, or very short values)
+      if (c3Value === '%' || c3Value === '0%' || /^[0-9]+%?$/.test(c3Value)) {
+        console.log(`      ⏭️  Row ${rowIndex} - Skipping invalid C3 '${c3Value}' (likely formula/header)`);
+        continue;
+      }
+      
+      // Skip rows before START_DATA_ROW (headers)
+      if (rowIndex < START_DATA_ROW) {
+        console.log(`      ⏭️  Row ${rowIndex} - Skipping header row`);
+        continue;
+      }
       
       targetC3Values.add(c3Value);
 
@@ -280,6 +296,16 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
       const rowIndex = i + 1;
 
       if (!c3Value) continue;
+      
+      // Skip likely header/formula rows
+      if (c3Value === '%' || c3Value === '0%' || /^[0-9]+%?$/.test(c3Value)) {
+        continue;
+      }
+      
+      // Skip rows before START_DATA_ROW (headers)
+      if (rowIndex < START_DATA_ROW) {
+        continue;
+      }
 
       if (sourceDataMap.has(c3Value)) {
         // This C3 exists in both source and target - update it
@@ -320,11 +346,30 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
       // Sort in descending order to delete from bottom to top
       rowsToDelete.sort((a, b) => b.rowIndex - a.rowIndex);
       
+      let deleteSuccessCount = 0;
+      let deleteFailCount = 0;
+      
       for (const { rowIndex, c3Value } of rowsToDelete) {
-        await deleteRow(auth, sheetTitle, rowIndex);
-        await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-        await logData(auth, `Deleted row ${rowIndex} from '${sheetTitle}' - C3 '${c3Value}' not in source`);
-        console.log(`      ✅ Deleted row ${rowIndex}`);
+        try {
+          await deleteRow(auth, sheetTitle, rowIndex);
+          await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+          await logData(auth, `Deleted row ${rowIndex} from '${sheetTitle}' - C3 '${c3Value}' not in source`);
+          console.log(`      ✅ Deleted row ${rowIndex}`);
+          deleteSuccessCount++;
+        } catch (error) {
+          deleteFailCount++;
+          if (error.message.includes('protected') || error.message.includes('permission')) {
+            console.log(`      ⚠️  Cannot delete row ${rowIndex} - Protected cell/range`);
+            await logData(auth, `Cannot delete row ${rowIndex} - Protected: ${c3Value}`);
+          } else {
+            console.log(`      ❌ Error deleting row ${rowIndex}: ${error.message}`);
+            await logData(auth, `Error deleting row ${rowIndex}: ${error.message}`);
+          }
+        }
+      }
+      
+      if (deleteFailCount > 0) {
+        console.log(`\n      ⚠️  Warning: ${deleteFailCount} rows could not be deleted (likely protected)`);
       }
     }
 
