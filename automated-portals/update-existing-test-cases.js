@@ -197,8 +197,10 @@ async function processUrl(url, auth, urlIndex, totalUrls) {
 
   console.log(`   📊 Found ${sheetTitles.length} sheets to process`);
 
-  // Step 2: Collect data from all sheets
-  const sourceDataMap = new Map(); // Map of C3 -> data
+  // Step 2: Collect data from all sheets - using composite key (C24+C3)
+  const sourceDataMap = new Map(); // Map of "C24|C3" -> data
+  const sourceByC24 = new Map(); // Map of C24 -> Set of C3 values
+  
   for (let i = 0; i < sheetTitles.length; i++) {
     const sheetTitle = sheetTitles[i];
     console.log(`   🔄 [${i + 1}/${sheetTitles.length}] Collecting data from: ${sheetTitle}`);
@@ -206,11 +208,19 @@ async function processUrl(url, auth, urlIndex, totalUrls) {
     const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
     
     if (data !== null && Object.values(data).some(v => v !== null && v !== '')) {
-      if (data.C3) {
-        sourceDataMap.set(data.C3, data);
-        console.log(`      ✅ Valid data collected for C3: ${data.C3}`);
+      if (data.C3 && data.C24) {
+        const compositeKey = `${data.C24}|${data.C3}`;
+        sourceDataMap.set(compositeKey, data);
+        
+        // Track which C3 values belong to each C24
+        if (!sourceByC24.has(data.C24)) {
+          sourceByC24.set(data.C24, new Set());
+        }
+        sourceByC24.get(data.C24).add(data.C3);
+        
+        console.log(`      ✅ Valid data collected for C24: ${data.C24}, C3: ${data.C3}`);
       } else {
-        console.log(`      ⏭️  No C3 identifier found`);
+        console.log(`      ⏭️  Missing C24 or C3 identifier`);
       }
     } else {
       console.log(`      ⏭️  No valid data`);
@@ -223,20 +233,20 @@ async function processUrl(url, auth, urlIndex, totalUrls) {
   }
 
   console.log(`\n   📦 Collected ${sourceDataMap.size} valid data entries from source`);
+  console.log(`   📊 Source has ${sourceByC24.size} unique C24 values (Scenario IDs)`);
   await logData(auth, `Collected ${sourceDataMap.size} entries from URL: ${url}`);
 
-  // Step 3: Sync with target sheets
-  await syncWithTargetSheets(auth, sourceDataMap);
+  // Step 3: Sync with target sheets using composite key validation
+  await syncWithTargetSheets(auth, sourceDataMap, sourceByC24);
 
   console.log(`   ✅ URL processing complete`);
 }
 
-async function syncWithTargetSheets(auth, sourceDataMap) {
+async function syncWithTargetSheets(auth, sourceDataMap, sourceByC24) {
   const targetSheetTitles = await getTargetSheetTitles(auth);
-  const sourceC3Values = new Set(sourceDataMap.keys());
-
+  
   console.log(`\n   🔄 Syncing with target sheets...`);
-  console.log(`   📊 Source has ${sourceC3Values.size} unique C3 values`);
+  console.log(`   📊 Source has ${sourceDataMap.size} unique C24+C3 pairs`);
 
   for (const sheetTitle of targetSheetTitles) {
     if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
@@ -254,20 +264,48 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
     const c3Column = await getColumnValues(auth, sheetTitle, validateCol2);
     await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
 
-    const targetC3Values = new Set();
+    const targetCompositeKeys = new Set(); // Track "C24|C3" pairs in target
     const rowsToDelete = [];
     const rowsToInsert = [];
     let updateCount = 0;
 
-    // Step 1: Find rows that exist in target but NOT in source (to delete)
-    // Skip header rows and filter out invalid C3 values
+    // Step 1a: Find rows where BOTH B and C are empty (to delete)
+    for (let i = 0; i < Math.max(c24Column.length, c3Column.length); i++) {
+      const c24Value = c24Column[i];
+      const c3Value = c3Column[i];
+      const rowIndex = i + 1;
+      
+      // Skip header rows
+      if (rowIndex < START_DATA_ROW) {
+        continue;
+      }
+      
+      // Check if both B and C are empty
+      const c24Empty = !c24Value || c24Value.trim() === '';
+      const c3Empty = !c3Value || c3Value.trim() === '';
+      
+      if (c24Empty && c3Empty) {
+        // Both columns are empty - mark for deletion
+        rowsToDelete.push({ rowIndex, c24Value: '(empty)', c3Value: '(empty)', reason: 'Both B and C empty' });
+        console.log(`      🗑️  Row ${rowIndex} - Both B and C are empty, will delete`);
+      }
+    }
+
+    // Step 1b: Find rows that exist in target but NOT in source (using composite key)
+    // Only check within the same C24 group
     
     for (let i = 0; i < c3Column.length; i++) {
       const c3Value = c3Column[i];
+      const c24Value = c24Column[i];
       const rowIndex = i + 1;
 
-      // Skip empty rows
-      if (!c3Value) continue;
+      // Skip empty rows (already handled above)
+      const c24Empty = !c24Value || c24Value.trim() === '';
+      const c3Empty = !c3Value || c3Value.trim() === '';
+      if (c24Empty && c3Empty) continue;
+      
+      // Skip if either is empty (we only check pairs)
+      if (!c3Value || !c24Value) continue;
       
       // Skip likely header/formula rows (containing only %, numbers, or very short values)
       if (c3Value === '%' || c3Value === '0%' || /^[0-9]+%?$/.test(c3Value)) {
@@ -281,21 +319,39 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
         continue;
       }
       
-      targetC3Values.add(c3Value);
+      const compositeKey = `${c24Value}|${c3Value}`;
+      targetCompositeKeys.add(compositeKey);
 
-      if (!sourceC3Values.has(c3Value)) {
-        // This C3 exists in target but not in source - mark for deletion
-        rowsToDelete.push({ rowIndex, c3Value });
-        console.log(`      🗑️  Row ${rowIndex} - C3 '${c3Value}' not in source, will delete`);
+      // Check if this C24 exists in source
+      if (!sourceByC24.has(c24Value)) {
+        // This entire C24 group doesn't exist in source - delete
+        const alreadyMarked = rowsToDelete.some(r => r.rowIndex === rowIndex);
+        if (!alreadyMarked) {
+          rowsToDelete.push({ rowIndex, c24Value, c3Value, reason: `C24 '${c24Value}' not in source` });
+          console.log(`      🗑️  Row ${rowIndex} - C24 '${c24Value}' not in source, will delete`);
+        }
+      } else {
+        // C24 exists in source, now check if this specific C3 exists within that C24 group
+        const sourceC3Set = sourceByC24.get(c24Value);
+        
+        if (!sourceC3Set.has(c3Value)) {
+          // This C3 doesn't exist within this C24 group in source - delete
+          const alreadyMarked = rowsToDelete.some(r => r.rowIndex === rowIndex);
+          if (!alreadyMarked) {
+            rowsToDelete.push({ rowIndex, c24Value, c3Value, reason: `C3 '${c3Value}' not in C24 '${c24Value}' group` });
+            console.log(`      🗑️  Row ${rowIndex} - C24 '${c24Value}', C3 '${c3Value}' not in source, will delete`);
+          }
+        }
       }
     }
 
-    // Step 2: Update existing rows that match
+    // Step 2: Update existing rows that match (using composite key)
     for (let i = 0; i < c3Column.length; i++) {
       const c3Value = c3Column[i];
+      const c24Value = c24Column[i];
       const rowIndex = i + 1;
 
-      if (!c3Value) continue;
+      if (!c3Value || !c24Value) continue;
       
       // Skip likely header/formula rows
       if (c3Value === '%' || c3Value === '0%' || /^[0-9]+%?$/.test(c3Value)) {
@@ -307,41 +363,37 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
         continue;
       }
 
-      if (sourceDataMap.has(c3Value)) {
-        // This C3 exists in both source and target - update it
-        const sourceData = sourceDataMap.get(c3Value);
+      const compositeKey = `${c24Value}|${c3Value}`;
+      
+      if (sourceDataMap.has(compositeKey)) {
+        // This C24+C3 pair exists in both source and target - update it
+        const sourceData = sourceDataMap.get(compositeKey);
         
-        // Also validate C24 matches
-        const targetC24 = c24Column[i];
-        if (targetC24 === sourceData.C24 || !targetC24) {
-          console.log(`      ✏️  Row ${rowIndex} - Updating C3 '${c3Value}'`);
-          
-          await clearRowData(auth, sheetTitle, rowIndex, isAllTestCases);
-          await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-          
-          await insertDataInRow(auth, sheetTitle, rowIndex, sourceData, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
-          await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-          
-          await logData(auth, `Updated row ${rowIndex} in sheet '${sheetTitle}' for C3: ${c3Value}`);
-          updateCount++;
-        } else {
-          console.log(`      ⚠️  Row ${rowIndex} - C24 mismatch. Target: '${targetC24}', Source: '${sourceData.C24}'`);
-        }
+        console.log(`      ✏️  Row ${rowIndex} - Updating C24 '${c24Value}', C3 '${c3Value}'`);
+        
+        await clearRowData(auth, sheetTitle, rowIndex, isAllTestCases);
+        await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+        
+        await insertDataInRow(auth, sheetTitle, rowIndex, sourceData, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
+        await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+        
+        await logData(auth, `Updated row ${rowIndex} in sheet '${sheetTitle}' for C24: ${c24Value}, C3: ${c3Value}`);
+        updateCount++;
       }
     }
 
-    // Step 3: Find rows that exist in source but NOT in target (to insert)
-    for (const [c3Value, sourceData] of sourceDataMap.entries()) {
-      if (!targetC3Values.has(c3Value)) {
-        // This C3 exists in source but not in target - need to insert
-        rowsToInsert.push({ c3Value, data: sourceData });
-        console.log(`      ➕ C3 '${c3Value}' from source not in target, will insert`);
+    // Step 3: Find C24+C3 pairs that exist in source but NOT in target (to insert)
+    for (const [compositeKey, sourceData] of sourceDataMap.entries()) {
+      if (!targetCompositeKeys.has(compositeKey)) {
+        // This C24+C3 pair exists in source but not in target - need to insert
+        rowsToInsert.push({ compositeKey, data: sourceData });
+        console.log(`      ➕ C24 '${sourceData.C24}', C3 '${sourceData.C3}' from source not in target, will insert`);
       }
     }
 
     // Step 4: Delete rows that don't exist in source (in reverse order to maintain indices)
     if (rowsToDelete.length > 0) {
-      console.log(`\n      🗑️  Deleting ${rowsToDelete.length} rows that don't exist in source...`);
+      console.log(`\n      🗑️  Deleting ${rowsToDelete.length} rows...`);
       
       // Sort in descending order to delete from bottom to top
       rowsToDelete.sort((a, b) => b.rowIndex - a.rowIndex);
@@ -349,18 +401,18 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
       let deleteSuccessCount = 0;
       let deleteFailCount = 0;
       
-      for (const { rowIndex, c3Value } of rowsToDelete) {
+      for (const { rowIndex, c24Value, c3Value, reason } of rowsToDelete) {
         try {
           await deleteRow(auth, sheetTitle, rowIndex);
           await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-          await logData(auth, `Deleted row ${rowIndex} from '${sheetTitle}' - C3 '${c3Value}' not in source`);
-          console.log(`      ✅ Deleted row ${rowIndex}`);
+          await logData(auth, `Deleted row ${rowIndex} from '${sheetTitle}' - ${reason}`);
+          console.log(`      ✅ Deleted row ${rowIndex} (${reason})`);
           deleteSuccessCount++;
         } catch (error) {
           deleteFailCount++;
           if (error.message.includes('protected') || error.message.includes('permission')) {
             console.log(`      ⚠️  Cannot delete row ${rowIndex} - Protected cell/range`);
-            await logData(auth, `Cannot delete row ${rowIndex} - Protected: ${c3Value}`);
+            await logData(auth, `Cannot delete row ${rowIndex} - Protected: C24=${c24Value}, C3=${c3Value}`);
           } else {
             console.log(`      ❌ Error deleting row ${rowIndex}: ${error.message}`);
             await logData(auth, `Error deleting row ${rowIndex}: ${error.message}`);
@@ -377,7 +429,7 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
     if (rowsToInsert.length > 0) {
       console.log(`\n      ➕ Inserting ${rowsToInsert.length} new rows from source...`);
       
-      for (const { c3Value, data } of rowsToInsert) {
+      for (const { compositeKey, data } of rowsToInsert) {
         // Find the last row with matching C24 to insert after
         let lastC24Index = -1;
         for (let i = 0; i < c24Column.length; i++) {
@@ -395,14 +447,14 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
           await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
           await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
           
-          await logData(auth, `Inserted new row after ${lastC24Index} in '${sheetTitle}' for C3: ${c3Value}`);
-          console.log(`      ✅ Inserted C3 '${c3Value}' at row ${newRowIndex}`);
+          await logData(auth, `Inserted new row after ${lastC24Index} in '${sheetTitle}' for C24: ${data.C24}, C3: ${data.C3}`);
+          console.log(`      ✅ Inserted C24 '${data.C24}', C3 '${data.C3}' at row ${newRowIndex}`);
           
           // Update c24Column to reflect the new row for subsequent inserts
           c24Column.splice(lastC24Index, 0, data.C24);
         } else {
-          console.log(`      ⚠️  No matching C24 '${data.C24}' found for C3 '${c3Value}' - skipping insert`);
-          await logData(auth, `Cannot insert C3 '${c3Value}' - no matching C24 '${data.C24}' in '${sheetTitle}'`);
+          console.log(`      ⚠️  No matching C24 '${data.C24}' found for C3 '${data.C3}' - skipping insert`);
+          await logData(auth, `Cannot insert C24 '${data.C24}', C3 '${data.C3}' - no matching C24 in '${sheetTitle}'`);
         }
       }
     }
@@ -411,7 +463,7 @@ async function syncWithTargetSheets(auth, sourceDataMap) {
     console.log(`         - Updated: ${updateCount} rows`);
     console.log(`         - Deleted: ${rowsToDelete.length} rows`);
     console.log(`         - Inserted: ${rowsToInsert.length} rows`);
-    console.log(`         - Target had ${targetC3Values.size} entries, source has ${sourceC3Values.size} entries`);
+    console.log(`         - Target had ${targetCompositeKeys.size} entries, source has ${sourceDataMap.size} entries`);
 
     // Rate limiting between processing different target sheets
     await sleep(RATE_LIMITS.BETWEEN_SHEETS);
