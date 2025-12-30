@@ -6,7 +6,21 @@ dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Boards Test Cases'; // Fetch from "Boards Test Cases"
-const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues', "HELP"];
+const SHEETS_TO_SKIP = [
+  'ToC', 
+  'Roster', 
+  'Issues', 
+  'HELP',
+  'Metrics Comparison',
+  'Test Case Portal',
+  'Test Scenario Portal',
+  'Scenario Extractor',
+  'Case Extractor',
+  `Feature Change Log`,
+  `Logs`,
+  `UTILS`,
+  'TEMPLATE'
+];
 const MAX_URLS = 20;
 const START_DATA_ROW = 3; // Skip first 2 rows (headers) when checking for data
 
@@ -247,9 +261,21 @@ async function syncWithTargetSheets(auth, sourceDataMap, sourceByC24) {
   
   console.log(`\n   🔄 Syncing with target sheets...`);
   console.log(`   📊 Source has ${sourceDataMap.size} unique C24+C3 pairs`);
+  
+  // Show which sheets will be processed vs skipped
+  const sheetsToProcess = targetSheetTitles.filter(title => !SHEETS_TO_SKIP.includes(title));
+  const sheetsToSkip = targetSheetTitles.filter(title => SHEETS_TO_SKIP.includes(title));
+  
+  console.log(`   📋 Will process ${sheetsToProcess.length} sheets: [${sheetsToProcess.join(', ')}]`);
+  if (sheetsToSkip.length > 0) {
+    console.log(`   ⏭️  Will skip ${sheetsToSkip.length} sheets: [${sheetsToSkip.join(', ')}]`);
+  }
 
   for (const sheetTitle of targetSheetTitles) {
-    if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
+    if (SHEETS_TO_SKIP.includes(sheetTitle)) {
+      console.log(`\n   ⏭️  Skipping sheet: ${sheetTitle} (in skip list)`);
+      continue;
+    }
 
     console.log(`\n   🔄 Processing target sheet: ${sheetTitle}`);
 
