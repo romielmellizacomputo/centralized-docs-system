@@ -6,23 +6,8 @@ dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Boards Test Cases'; // Fetch from "Boards Test Cases"
-const SHEETS_TO_SKIP = [
-  'ToC', 
-  'Roster', 
-  'Issues', 
-  'HELP',
-  'Metrics Comparison',
-  'Test Case Portal',
-  'Test Scenario Portal',
-  'Scenario Extractor',
-  'Case Extractor',
-  `Feature Change Log`,
-  `Logs`,
-  `UTILS`,
-  'TEMPLATE'
-];
+const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues', "HELP"];
 const MAX_URLS = 20;
-const START_DATA_ROW = 3; // Skip first 2 rows (headers) when checking for data
 
 // Enhanced rate limiting configuration
 const RATE_LIMITS = {
@@ -210,10 +195,8 @@ async function processUrl(url, auth, urlIndex, totalUrls) {
 
   console.log(`   📊 Found ${sheetTitles.length} sheets to process`);
 
-  // Step 1: Collect all data using composite key (C24+C3)
-  const sourceDataMap = new Map(); // Map of "C24|C3" -> data
-  const sourceByC24 = new Map(); // Map of C24 -> Set of C3 values
-  
+  // Process sheets SEQUENTIALLY with rate limiting (not parallel!)
+  const validData = [];
   for (let i = 0; i < sheetTitles.length; i++) {
     const sheetTitle = sheetTitles[i];
     console.log(`   🔄 [${i + 1}/${sheetTitles.length}] Collecting data from: ${sheetTitle}`);
@@ -221,232 +204,89 @@ async function processUrl(url, auth, urlIndex, totalUrls) {
     const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
     
     if (data !== null && Object.values(data).some(v => v !== null && v !== '')) {
-      if (data.C3 && data.C24) {
-        const compositeKey = `${data.C24}|${data.C3}`;
-        sourceDataMap.set(compositeKey, data);
-        
-        if (!sourceByC24.has(data.C24)) {
-          sourceByC24.set(data.C24, new Set());
-        }
-        sourceByC24.get(data.C24).add(data.C3);
-        
-        console.log(`      ✅ Valid data collected for C24: ${data.C24}, C3: ${data.C3}`);
-      } else {
-        console.log(`      ⏭️  Missing C24 or C3 identifier`);
-      }
+      validData.push(data);
+      console.log(`      ✅ Valid data collected`);
     } else {
       console.log(`      ⏭️  No valid data`);
     }
     
+    // Rate limit between collecting data from different sheets
     if (i < sheetTitles.length - 1) {
       await cooldownWithProgress(RATE_LIMITS.BETWEEN_SHEETS, `Cooling down before next sheet`);
     }
   }
 
-  console.log(`\n   📦 Collected ${sourceDataMap.size} valid data entries`);
-  console.log(`   📊 Source has ${sourceByC24.size} unique C24 groups`);
-  await logData(auth, `Collected ${sourceDataMap.size} entries from URL: ${url}`);
+  console.log(`\n   📦 Processing ${validData.length} valid data entries...`);
 
-  // Step 2: Validate and sync
-  await validateAndSyncData(auth, sourceDataMap, sourceByC24);
+  for (let i = 0; i < validData.length; i++) {
+    const data = validData[i];
+    console.log(`   🔄 [${i + 1}/${validData.length}] Validating and inserting: ${data.sheetName}`);
+    await logData(auth, `Fetched data from sheet: ${data.sheetName}`);
+    await validateAndInsertData(auth, data);
+  }
 
   console.log(`   ✅ URL processing complete`);
 }
 
-async function validateAndSyncData(auth, sourceDataMap, sourceByC24) {
+async function validateAndInsertData(auth, data) {
+  const sheets = google.sheets({ version: 'v4', auth });
   const targetSheetTitles = await getTargetSheetTitles(auth);
-  
-  console.log(`\n   🔄 Syncing with target sheets...`);
-  
-  const sheetsToProcess = targetSheetTitles.filter(title => !SHEETS_TO_SKIP.includes(title));
-  const sheetsToSkip = targetSheetTitles.filter(title => SHEETS_TO_SKIP.includes(title));
-  
-  console.log(`   📋 Will process ${sheetsToProcess.length} sheets`);
-  if (sheetsToSkip.length > 0) {
-    console.log(`   ⏭️  Will skip ${sheetsToSkip.length} protected sheets`);
-  }
+  let processed = false;
 
   for (const sheetTitle of targetSheetTitles) {
-    if (SHEETS_TO_SKIP.includes(sheetTitle)) {
-      console.log(`\n   ⏭️  Skipping: ${sheetTitle}`);
-      continue;
-    }
-
-    console.log(`\n   🔄 Processing: ${sheetTitle}`);
+    if (SHEETS_TO_SKIP.includes(sheetTitle)) continue;
 
     const isAllTestCases = sheetTitle === "ALL TEST CASES";
     const validateCol1 = isAllTestCases ? 'C' : 'B';
     const validateCol2 = isAllTestCases ? 'D' : 'C';
 
-    const c24Column = await getColumnValues(auth, sheetTitle, validateCol1);
+    const firstColumn = await getColumnValues(auth, sheetTitle, validateCol1);
     await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
     
-    const c3Column = await getColumnValues(auth, sheetTitle, validateCol2);
+    const secondColumn = await getColumnValues(auth, sheetTitle, validateCol2);
     await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
 
-    const targetCompositeKeys = new Set();
-    const rowsToDelete = [];
-    const rowsToInsert = [];
-    let updateCount = 0;
+    let lastC24Index = -1;
+    let existingC3Index = -1;
 
-    // Find empty rows
-    for (let i = 0; i < Math.max(c24Column.length, c3Column.length); i++) {
-      const c24Value = c24Column[i];
-      const c3Value = c3Column[i];
-      const rowIndex = i + 1;
-      
-      if (rowIndex < START_DATA_ROW) continue;
-      
-      const c24Empty = !c24Value || c24Value.trim() === '';
-      const c3Empty = !c3Value || c3Value.trim() === '';
-      
-      if (c24Empty && c3Empty) {
-        rowsToDelete.push({ rowIndex, c24Value: '(empty)', c3Value: '(empty)', reason: 'Empty' });
-        console.log(`      🗑️  Row ${rowIndex} - Empty row`);
+    for (let i = 0; i < firstColumn.length; i++) {
+      if (firstColumn[i] === data.C24) lastC24Index = i + 1;
+      if (secondColumn[i] === data.C3) {
+        existingC3Index = i + 1;
+        break;
       }
     }
 
-    // Find rows to delete within source C24 groups
-    for (let i = 0; i < c3Column.length; i++) {
-      const c3Value = c3Column[i];
-      const c24Value = c24Column[i];
-      const rowIndex = i + 1;
-
-      const c24Empty = !c24Value || c24Value.trim() === '';
-      const c3Empty = !c3Value || c3Value.trim() === '';
-      if (c24Empty && c3Empty) continue;
-      if (!c3Value || !c24Value) continue;
-      if (c3Value === '%' || c3Value === '0%' || /^[0-9]+%?$/.test(c3Value)) {
-        console.log(`      ⏭️  Row ${rowIndex} - Invalid C3 '${c3Value}'`);
-        continue;
-      }
-      if (rowIndex < START_DATA_ROW) continue;
+    if (existingC3Index !== -1) {
+      await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
+      await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
-      const compositeKey = `${c24Value}|${c3Value}`;
-      targetCompositeKeys.add(compositeKey);
-
-      // CRITICAL: Only check if C24 exists in THIS source
-      if (!sourceByC24.has(c24Value)) {
-        console.log(`      ⏭️  Row ${rowIndex} - C24 '${c24Value}' not in this source`);
-        continue;
-      }
+      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
+      await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
-      const sourceC3Set = sourceByC24.get(c24Value);
-      if (!sourceC3Set.has(c3Value)) {
-        const alreadyMarked = rowsToDelete.some(r => r.rowIndex === rowIndex);
-        if (!alreadyMarked) {
-          rowsToDelete.push({ rowIndex, c24Value, c3Value, reason: `Not in ${c24Value} group` });
-          console.log(`      🗑️  Row ${rowIndex} - C3 '${c3Value}' not in ${c24Value} group`);
-        }
-      }
+      await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
+      processed = true;
+    } else if (lastC24Index !== -1) {
+      const newRowIndex = lastC24Index + 1;
+      await insertRowWithFormat(auth, sheetTitle, lastC24Index);
+      await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+      
+      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
+      await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+      
+      await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
+      processed = true;
     }
 
-    // Update matching rows
-    for (let i = 0; i < c3Column.length; i++) {
-      const c3Value = c3Column[i];
-      const c24Value = c24Column[i];
-      const rowIndex = i + 1;
-
-      if (!c3Value || !c24Value) continue;
-      if (c3Value === '%' || c3Value === '0%' || /^[0-9]+%?$/.test(c3Value)) continue;
-      if (rowIndex < START_DATA_ROW) continue;
-
-      const compositeKey = `${c24Value}|${c3Value}`;
-      
-      if (sourceDataMap.has(compositeKey)) {
-        const sourceData = sourceDataMap.get(compositeKey);
-        console.log(`      ✏️  Row ${rowIndex} - Updating`);
-        
-        await clearRowData(auth, sheetTitle, rowIndex, isAllTestCases);
-        await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-        
-        await insertDataInRow(auth, sheetTitle, rowIndex, sourceData, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
-        await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-        
-        await logData(auth, `Updated row ${rowIndex} in '${sheetTitle}'`);
-        updateCount++;
-      }
-    }
-
-    // Find rows to insert
-    for (const [compositeKey, sourceData] of sourceDataMap.entries()) {
-      if (!targetCompositeKeys.has(compositeKey)) {
-        rowsToInsert.push({ compositeKey, data: sourceData });
-        console.log(`      ➕ Will insert C24 '${sourceData.C24}', C3 '${sourceData.C3}'`);
-      }
-    }
-
-    // Delete rows
-    if (rowsToDelete.length > 0) {
-      console.log(`\n      🗑️  Deleting ${rowsToDelete.length} rows...`);
-      rowsToDelete.sort((a, b) => b.rowIndex - a.rowIndex);
-      
-      for (const { rowIndex, reason } of rowsToDelete) {
-        try {
-          await deleteRow(auth, sheetTitle, rowIndex);
-          await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-          await logData(auth, `Deleted row ${rowIndex} - ${reason}`);
-          console.log(`      ✅ Deleted row ${rowIndex}`);
-        } catch (error) {
-          if (error.message.includes('protected')) {
-            console.log(`      ⚠️  Row ${rowIndex} protected`);
-          } else {
-            console.log(`      ❌ Error deleting row ${rowIndex}`);
-          }
-        }
-      }
-    }
-
-    // Insert rows
-    if (rowsToInsert.length > 0) {
-      console.log(`\n      ➕ Inserting ${rowsToInsert.length} rows...`);
-      
-      for (const { data } of rowsToInsert) {
-        let lastC24Index = -1;
-        for (let i = 0; i < c24Column.length; i++) {
-          if (c24Column[i] === data.C24) lastC24Index = i + 1;
-        }
-
-        if (lastC24Index !== -1) {
-          const newRowIndex = lastC24Index + 1;
-          await insertRowWithFormat(auth, sheetTitle, lastC24Index);
-          await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-          
-          await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
-          await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-          
-          await logData(auth, `Inserted row for ${data.C24}|${data.C3}`);
-          console.log(`      ✅ Inserted at row ${newRowIndex}`);
-          
-          c24Column.splice(lastC24Index, 0, data.C24);
-        }
-      }
-    }
-
-    console.log(`\n      📊 Summary: Updated ${updateCount}, Deleted ${rowsToDelete.length}, Inserted ${rowsToInsert.length}`);
+    // Rate limiting between processing different target sheets
     await sleep(RATE_LIMITS.BETWEEN_SHEETS);
   }
-}
 
-async function deleteRow(auth, sheetTitle, rowIndex) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const sheetId = await getSheetId(auth, sheetTitle);
+  if (!processed) {
+    await logData(auth, `No matches found for C24 ('${data.C24}') or C3 ('${data.C3}') in any sheet.`);
+  }
 
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SHEET_ID,
-    requestBody: {
-      requests: [{
-        deleteDimension: {
-          range: {
-            sheetId: sheetId,
-            dimension: 'ROWS',
-            startIndex: rowIndex - 1,
-            endIndex: rowIndex
-          }
-        }
-      }]
-    }
-  });
+  return processed;
 }
 
 async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
@@ -455,19 +295,23 @@ async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SHEET_ID,
     requestBody: {
-      requests: [{
-        insertDimension: {
-          range: {
-            sheetId: await getSheetId(auth, sheetTitle),
-            dimension: 'ROWS',
-            startIndex: sourceRowIndex,
-            endIndex: sourceRowIndex + 1
-          },
-          inheritFromBefore: true
+      requests: [
+        {
+          insertDimension: {
+            range: {
+              sheetId: await getSheetId(auth, sheetTitle),
+              dimension: 'ROWS',
+              startIndex: sourceRowIndex,
+              endIndex: sourceRowIndex + 1
+            },
+            inheritFromBefore: true
+          }
         }
-      }]
+      ]
     }
   });
+
+  console.log(`      📝 Inserted new row after row ${sourceRowIndex} in sheet '${sheetTitle}'`);
 }
 
 async function getSheetId(auth, sheetTitle) {
@@ -479,6 +323,7 @@ async function getSheetId(auth, sheetTitle) {
 
 async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
   const sheets = google.sheets({ version: 'v4', auth });
+
   const isAllTestCases = sheetTitle === "ALL TEST CASES";
 
   const values = [
@@ -501,13 +346,17 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
     data.C21
   ];
 
-  if (isAllTestCases) values.push(data.C21);
+  if (isAllTestCases) {
+    values.push(data.C21);
+  }
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`,
     valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [values] }
+    requestBody: {
+      values: [values]
+    }
   });
 }
 
@@ -535,23 +384,23 @@ async function getColumnValues(auth, sheetTitle, column) {
 
 async function updateTestCasesInLibrary() {
   console.log('='.repeat(70));
-  console.log('  📋 Boards Test Cases Updater - Enhanced 1:1 Sync');
+  console.log('  📋 Boards Test Cases Updater with Rate Limiting');
   console.log('='.repeat(70));
   console.log(`⏰ Started at: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}\n`);
   
   const startTime = Date.now();
   const authClient = await auth.getClient();
   
-  console.log(`📥 Fetching URLs from "${SHEET_NAME}"...`);
+  console.log(`📥 Fetching URLs from sheet "${SHEET_NAME}"...`);
   const urlsWithIndices = await fetchUrls(authClient);
 
   if (!urlsWithIndices.length) {
     await logData(authClient, 'No URLs to process.');
-    console.log('\n⚠️  No URLs found.');
+    console.log('\n⚠️  No URLs found to process.');
     return;
   }
 
-  console.log(`\n✅ Found ${urlsWithIndices.length} URL(s)\n`);
+  console.log(`\n✅ Found ${urlsWithIndices.length} URL(s) to process\n`);
   await logData(authClient, `Found ${urlsWithIndices.length} URL(s) to process`);
 
   const uniqueUrls = new Set();
@@ -564,8 +413,8 @@ async function updateTestCasesInLibrary() {
     
     if (uniqueUrls.has(url)) {
       duplicateCount++;
-      await logData(authClient, `Duplicate URL: ${url}`);
-      console.log(`⚠️  [${i + 1}/${urlsWithIndices.length}] Skipping duplicate`);
+      await logData(authClient, `Duplicate URL found: ${url}`);
+      console.log(`⚠️  [${i + 1}/${urlsWithIndices.length}] Skipping duplicate URL`);
       continue;
     }
 
@@ -579,25 +428,26 @@ async function updateTestCasesInLibrary() {
       failCount++;
       
       if (error.message.includes('Quota exceeded') || error.code === 429) {
-        await logData(authClient, `Quota exceeded, retrying...`);
-        await cooldownWithProgress(RATE_LIMITS.QUOTA_EXCEEDED_WAIT, 'Quota exceeded');
+        await logData(authClient, `⚠️  Quota exceeded for URL: ${url}. Retrying after cooldown...`);
+        await cooldownWithProgress(RATE_LIMITS.QUOTA_EXCEEDED_WAIT, 'Quota exceeded - cooling down');
         
         try {
           await processUrl(url, authClient, i + 1, urlsWithIndices.length);
           successCount++;
           failCount--;
         } catch (retryError) {
-          await logData(authClient, `Error on retry: ${retryError.message}`);
+          await logData(authClient, `❌ Error processing URL on retry: ${url}. Error: ${retryError.message}`);
         }
       } else {
-        await logData(authClient, `Error: ${error.message}`);
+        await logData(authClient, `❌ Error processing URL: ${url}. Error: ${error.message}`);
       }
     }
 
+    // CRITICAL: Add cooldown between processing different URLs
     if (i < urlsWithIndices.length - 1) {
       await cooldownWithProgress(
         RATE_LIMITS.BETWEEN_URLS, 
-        `Cooling down (${i + 1}/${urlsWithIndices.length} complete)`
+        `Cooling down before next URL (${i + 1}/${urlsWithIndices.length} complete)`
       );
     }
   }
@@ -605,16 +455,20 @@ async function updateTestCasesInLibrary() {
   const totalTime = Date.now() - startTime;
   
   console.log('\n' + '='.repeat(70));
-  console.log('  📊 SUMMARY');
+  console.log('  📊 PROCESSING SUMMARY');
   console.log('='.repeat(70));
-  console.log(`✅ Success: ${successCount}/${urlsWithIndices.length}`);
-  if (duplicateCount > 0) console.log(`⏭️  Duplicates: ${duplicateCount}`);
-  if (failCount > 0) console.log(`❌ Failed: ${failCount}`);
-  console.log(`⏱️  Time: ${formatTime(totalTime)}`);
-  console.log(`⏰ Finished: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`);
+  console.log(`✅ Successful: ${successCount}/${urlsWithIndices.length}`);
+  if (duplicateCount > 0) {
+    console.log(`⏭️  Duplicates skipped: ${duplicateCount}`);
+  }
+  if (failCount > 0) {
+    console.log(`❌ Failed: ${failCount}/${urlsWithIndices.length}`);
+  }
+  console.log(`⏱️  Total time: ${formatTime(totalTime)}`);
+  console.log(`⏰ Finished at: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`);
   console.log('='.repeat(70));
 
-  await logData(authClient, "Complete - 1:1 sync with composite key validation");
+  await logData(authClient, "Processing complete.");
 }
 
 updateTestCasesInLibrary().catch(console.error);
