@@ -2,25 +2,29 @@ name: Update Existing Test Cases In Portal
 
 on:
   schedule:
-    # Run every 6 hours to process different batches
-    - cron: '0 */6 * * *'
+    # Run every 2 hours to process different batches (12 batches per day)
+    - cron: '0 */2 * * *'
   workflow_dispatch:
     inputs:
       batch_number:
-        description: 'Batch number to process (0-indexed)'
+        description: 'Batch number to process (leave empty for auto-increment)'
         required: false
         type: number
-        default: 0
       batch_size:
         description: 'Number of URLs per batch'
         required: false
         type: number
         default: 50
+      auto_increment:
+        description: 'Auto-increment from last batch (uncheck to use specific batch number)'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   update-portal:
     runs-on: ubuntu-latest
-    timeout-minutes: 330 # 5.5 hours max
+    timeout-minutes: 110 # ~2 hours max (since we run every 2 hours)
     
     steps:
       - name: Checkout repository
@@ -37,16 +41,24 @@ jobs:
       - name: Determine batch number
         id: batch
         run: |
-          # If manually triggered, use input; otherwise calculate based on time
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "BATCH_NUMBER=${{ github.event.inputs.batch_number }}" >> $GITHUB_OUTPUT
+            # Manual trigger
+            if [ "${{ github.event.inputs.auto_increment }}" == "true" ]; then
+              echo "AUTO_INCREMENT=true" >> $GITHUB_OUTPUT
+              echo "BATCH_NUMBER=0" >> $GITHUB_OUTPUT
+              echo "🔄 Manual run with auto-increment enabled"
+            else
+              echo "AUTO_INCREMENT=false" >> $GITHUB_OUTPUT
+              echo "BATCH_NUMBER=${{ github.event.inputs.batch_number }}" >> $GITHUB_OUTPUT
+              echo "📌 Manual run with specific batch: ${{ github.event.inputs.batch_number }}"
+            fi
             echo "BATCH_SIZE=${{ github.event.inputs.batch_size }}" >> $GITHUB_OUTPUT
           else
-            # Calculate batch based on current hour (4 batches per day)
-            HOUR=$(date +%H)
-            BATCH=$((HOUR / 6))
-            echo "BATCH_NUMBER=$BATCH" >> $GITHUB_OUTPUT
+            # Scheduled run - always auto-increment
+            echo "AUTO_INCREMENT=true" >> $GITHUB_OUTPUT
+            echo "BATCH_NUMBER=0" >> $GITHUB_OUTPUT
             echo "BATCH_SIZE=50" >> $GITHUB_OUTPUT
+            echo "⏰ Scheduled run with auto-increment enabled"
           fi
           
       - name: Run update script
@@ -55,15 +67,24 @@ jobs:
           CDS_PORTALS_SERVICE_ACCOUNT_JSON: ${{ secrets.CDS_PORTALS_SERVICE_ACCOUNT_JSON }}
           BATCH_NUMBER: ${{ steps.batch.outputs.BATCH_NUMBER }}
           BATCH_SIZE: ${{ steps.batch.outputs.BATCH_SIZE }}
+          AUTO_INCREMENT: ${{ steps.batch.outputs.AUTO_INCREMENT }}
         run: |
-          echo "Processing batch $BATCH_NUMBER with size $BATCH_SIZE"
+          echo "=========================================="
+          echo "🚀 Starting batch processing"
+          echo "=========================================="
+          echo "Auto-increment: $AUTO_INCREMENT"
+          if [ "$AUTO_INCREMENT" != "true" ]; then
+            echo "Batch number: $BATCH_NUMBER"
+          fi
+          echo "Batch size: $BATCH_SIZE"
+          echo "=========================================="
           node automated-portals/update-existing-test-cases.js
           
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: error-logs-batch-${{ steps.batch.outputs.BATCH_NUMBER }}
+          name: error-logs-run-${{ github.run_number }}
           path: |
             *.log
             automated-portals/*.log
