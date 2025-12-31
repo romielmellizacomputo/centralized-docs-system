@@ -261,7 +261,7 @@ async function validateAndInsertData(auth, data) {
       await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
+      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B');
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
@@ -271,7 +271,7 @@ async function validateAndInsertData(auth, data) {
       await insertRowWithFormat(auth, sheetTitle, lastC24Index);
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
+      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B');
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
@@ -321,12 +321,31 @@ async function getSheetId(auth, sheetTitle) {
   return sheet.properties.sheetId;
 }
 
-async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
+function columnToNumber(col) {
+  let num = 0;
+  for (let i = 0; i < col.length; i++) {
+    num *= 26;
+    num += col.charCodeAt(i) - 64;
+  }
+  return num;
+}
+
+function numberToColumn(n) {
+  let result = '';
+  while (n > 0) {
+    let remainder = (n - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    n = Math.floor((n - 1) / 26);
+  }
+  return result;
+}
+
+async function insertDataInRow(auth, sheetTitle, row, data, startCol) {
   const sheets = google.sheets({ version: 'v4', auth });
 
   const isAllTestCases = sheetTitle === "ALL TEST CASES";
 
-  const values = [
+  const rowValues = [
     data.C24,
     data.C3,
     `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
@@ -347,15 +366,21 @@ async function insertDataInRow(auth, sheetTitle, row, data, startCol, endCol) {
   ];
 
   if (isAllTestCases) {
-    values.push(data.C21);
+    rowValues.push(data.C21);
   }
+
+  const startIndex = columnToNumber(startCol);
+  const endIndex = startIndex + rowValues.length - 1;
+  const endCol = numberToColumn(endIndex);
+
+  const range = `${sheetTitle}!${startCol}${row}:${endCol}${row}`;
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `${sheetTitle}!${startCol}${row}:${endCol}${row}`,
+    range,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
-      values: [values]
+      values: [rowValues]
     }
   });
 }
