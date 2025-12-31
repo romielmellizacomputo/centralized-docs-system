@@ -5,9 +5,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
-const SHEET_NAME = 'Logs';
+const SHEET_NAME = 'Boards Test Cases'; // Fetch from "Boards Test Cases"
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues', "HELP"];
-const MAX_URLS = 5;
+const MAX_URLS = 20;
 
 // Enhanced rate limiting configuration
 const RATE_LIMITS = {
@@ -59,26 +59,64 @@ async function cooldownWithProgress(ms, message = 'Cooling down') {
   console.log(`\r   ✅ Cooldown complete!${' '.repeat(50)}`);
 }
 
+// Fetch URLs from the D column of "Boards Test Cases"
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${SHEET_NAME}!B3:B`;
+  const range = `${SHEET_NAME}!D3:D17`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   const values = response.data.values || [];
-  return values.map((row, index) => ({ url: row[0], rowIndex: index + 3 })).filter(entry => entry.url);
-}
 
-async function clearFetchedRows(auth, rowIndices) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const ranges = rowIndices.map(rowIndex => `${SHEET_NAME}!${rowIndex}:${rowIndex}`);
-  if (ranges.length === 0) return;
+  console.log(`   📥 Fetching URLs from ${range}...`);
+  
+  const urls = [];
+  
+  // Process URLs sequentially with rate limiting
+  for (let index = 0; index < values.length; index++) {
+    const row = values[index];
+    const rowIndex = index + 3;
+    const cellRange = `${SHEET_NAME}!D${rowIndex}`;
 
-  await sheets.spreadsheets.values.batchClear({
-    spreadsheetId: SHEET_ID,
-    requestBody: { ranges }
-  });
+    try {
+      const text = row[0] || null;
+      if (!text) {
+        console.log(`   ⏭️  No text found for cell D${rowIndex}`);
+        continue;
+      }
 
-  console.log(`   📝 Cleared ${ranges.length} entire rows from Logs sheet.`);
-  await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+      const linkResponse = await sheets.spreadsheets.get({
+        spreadsheetId: SHEET_ID,
+        ranges: [cellRange],
+        includeGridData: true,
+        fields: 'sheets.data.rowData.values.hyperlink'
+      });
+
+      await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+
+      const hyperlink = linkResponse.data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values?.[0]?.hyperlink;
+
+      if (hyperlink) {
+        urls.push({ url: hyperlink, rowIndex });
+        console.log(`   ✅ Found URL in cell D${rowIndex}`);
+        continue;
+      }
+
+      const urlRegex = /https?:\/\/\S+/;
+      const match = text.match(urlRegex);
+      const url = match ? match[0] : null;
+
+      if (!url) {
+        console.log(`   ⚠️  No URL found in text for cell D${rowIndex}`);
+        continue;
+      }
+
+      urls.push({ url, rowIndex });
+      console.log(`   ✅ Found URL in cell D${rowIndex}`);
+    } catch (error) {
+      console.error(`   ❌ Error processing URL for cell D${rowIndex}:`, error.message);
+    }
+  }
+
+  return urls.filter(entry => entry && entry.url);
 }
 
 async function logData(auth, message) {
@@ -223,7 +261,7 @@ async function validateAndInsertData(auth, data) {
       await clearRowData(auth, sheetTitle, existingC3Index, isAllTestCases);
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
-      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
+      await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B');
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
       await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
@@ -233,7 +271,7 @@ async function validateAndInsertData(auth, data) {
       await insertRowWithFormat(auth, sheetTitle, lastC24Index);
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
-      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B', isAllTestCases ? 'R' : 'Q');
+      await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B');
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
       await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
@@ -371,39 +409,43 @@ async function getColumnValues(auth, sheetTitle, column) {
 
 async function updateTestCasesInLibrary() {
   console.log('='.repeat(70));
-  console.log('  📋 Google Sheets Test Case Updater with Rate Limiting');
+  console.log('  📋 Boards Test Cases Updater with Rate Limiting');
   console.log('='.repeat(70));
   console.log(`⏰ Started at: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}\n`);
   
   const startTime = Date.now();
   const authClient = await auth.getClient();
+  
+  console.log(`📥 Fetching URLs from sheet "${SHEET_NAME}"...`);
   const urlsWithIndices = await fetchUrls(authClient);
 
   if (!urlsWithIndices.length) {
     await logData(authClient, 'No URLs to process.');
+    console.log('\n⚠️  No URLs found to process.');
     return;
   }
 
+  console.log(`\n✅ Found ${urlsWithIndices.length} URL(s) to process\n`);
   await logData(authClient, `Found ${urlsWithIndices.length} URL(s) to process`);
 
   const uniqueUrls = new Set();
-  const processedRowIndices = [];
   let successCount = 0;
   let failCount = 0;
+  let duplicateCount = 0;
 
   for (let i = 0; i < urlsWithIndices.length; i++) {
-    const { url, rowIndex } = urlsWithIndices[i];
+    const { url } = urlsWithIndices[i];
     
     if (uniqueUrls.has(url)) {
+      duplicateCount++;
       await logData(authClient, `Duplicate URL found: ${url}`);
+      console.log(`⚠️  [${i + 1}/${urlsWithIndices.length}] Skipping duplicate URL`);
       continue;
     }
 
     uniqueUrls.add(url);
-    processedRowIndices.push(rowIndex);
-    await clearFetchedRows(authClient, processedRowIndices);
-    await logData(authClient, `Cleared row for URL: ${url}`);
-
+    await logData(authClient, `Processing URL: ${url}`);
+    
     try {
       await processUrl(url, authClient, i + 1, urlsWithIndices.length);
       successCount++;
@@ -441,6 +483,9 @@ async function updateTestCasesInLibrary() {
   console.log('  📊 PROCESSING SUMMARY');
   console.log('='.repeat(70));
   console.log(`✅ Successful: ${successCount}/${urlsWithIndices.length}`);
+  if (duplicateCount > 0) {
+    console.log(`⏭️  Duplicates skipped: ${duplicateCount}`);
+  }
   if (failCount > 0) {
     console.log(`❌ Failed: ${failCount}/${urlsWithIndices.length}`);
   }
