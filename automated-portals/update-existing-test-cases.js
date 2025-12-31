@@ -7,25 +7,30 @@ dotenv.config();
 const SHEET_ID = process.env.CDS_PORTAL_SPREADSHEET_ID;
 const SHEET_NAME = 'Boards Test Cases';
 const SHEETS_TO_SKIP = ['ToC', 'Roster', 'Issues', "HELP"];
-
-// Progress tracking
 const PROGRESS_TRACKER_CELL = 'J1';
-
-// Batch processing configuration
-const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '50');
+const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '30'); // REDUCED from 50
 const BATCH_NUMBER = parseInt(process.env.BATCH_NUMBER || '0');
 const AUTO_INCREMENT = process.env.AUTO_INCREMENT === 'true';
 const PROCESS_ALL_BATCHES = process.env.PROCESS_ALL_BATCHES === 'true';
-const MAX_RUNTIME = 1.8 * 60 * 60 * 1000; // 1.8 hours
+const MAX_RUNTIME = 1.8 * 60 * 60 * 1000;
 
-// Optimized rate limiting configuration
+// AGGRESSIVE rate limiting
 const RATE_LIMITS = {
-  BETWEEN_SHEETS: 2000,
-  BETWEEN_URLS: 5000,
-  BETWEEN_OPERATIONS: 300,
-  QUOTA_EXCEEDED_WAIT: 60000,
-  BETWEEN_BATCHES: 10000
+  BETWEEN_SHEETS: 4000,
+  BETWEEN_URLS: 10000,
+  BETWEEN_OPERATIONS: 600,
+  QUOTA_EXCEEDED_WAIT: 120000,
+  BETWEEN_BATCHES: 20000,
+  BETWEEN_VALIDATIONS: 3000,
+  AFTER_BATCH_GET: 1000,
+  AFTER_WRITE: 1500
 };
+
+// Track API calls per minute
+let apiCallCount = 0;
+let lastResetTime = Date.now();
+const MAX_CALLS_PER_MINUTE = 50; // Conservative limit
+const MINUTE = 60000;
 
 const auth = new GoogleAuth({
   credentials: JSON.parse(process.env.CDS_PORTALS_SERVICE_ACCOUNT_JSON),
@@ -34,6 +39,26 @@ const auth = new GoogleAuth({
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+async function trackApiCall() {
+  apiCallCount++;
+  const now = Date.now();
+  
+  if (now - lastResetTime > MINUTE) {
+    console.log(`   📊 Resetting API counter. Previous minute: ${apiCallCount} calls`);
+    apiCallCount = 1;
+    lastResetTime = now;
+    return;
+  }
+  
+  if (apiCallCount >= MAX_CALLS_PER_MINUTE - 3) {
+    const waitTime = MINUTE - (now - lastResetTime) + 2000; // Extra 2s buffer
+    console.log(`   ⚠️  Rate limit protection: ${apiCallCount} calls made, pausing for ${formatTime(waitTime)}`);
+    await cooldownWithProgress(waitTime, 'Rate limit protection');
+    apiCallCount = 1;
+    lastResetTime = Date.now();
+  }
+}
+
 function formatTime(ms) {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -41,12 +66,8 @@ function formatTime(ms) {
   const remainingMinutes = minutes % 60;
   const remainingSeconds = seconds % 60;
   
-  if (hours > 0) {
-    return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${remainingSeconds}s`;
-  }
+  if (hours > 0) return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
+  if (minutes > 0) return `${minutes}m ${remainingSeconds}s`;
   return `${seconds}s`;
 }
 
@@ -77,23 +98,45 @@ async function cooldownWithProgress(ms, message = 'Cooling down') {
   console.log(`\r   ✅ Cooldown complete!${' '.repeat(50)}`);
 }
 
+async function withRetry(fn, maxRetries = 2, baseDelay = RATE_LIMITS.QUOTA_EXCEEDED_WAIT) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      const isQuotaError = error.message.includes('Quota exceeded') || error.code === 429;
+      const isLastAttempt = attempt === maxRetries;
+      
+      if (isQuotaError && !isLastAttempt) {
+        const delay = baseDelay * (attempt + 1);
+        console.log(`   ⚠️  Quota error (attempt ${attempt + 1}/${maxRetries + 1}), waiting ${formatTime(delay)}`);
+        await cooldownWithProgress(delay, `Quota recovery attempt ${attempt + 1}`);
+        continue;
+      }
+      
+      throw error;
+    }
+  }
+}
+
 async function getLastProcessedBatch(auth) {
   try {
-    const sheets = google.sheets({ version: 'v4', auth });
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: `${SHEET_NAME}!${PROGRESS_TRACKER_CELL}`
+    return await withRetry(async () => {
+      await trackApiCall();
+      const sheets = google.sheets({ version: 'v4', auth });
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_NAME}!${PROGRESS_TRACKER_CELL}`
+      });
+      await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+      
+      const value = response.data.values?.[0]?.[0];
+      if (value && !isNaN(parseInt(value))) {
+        console.log(`   📊 Last processed batch: ${parseInt(value)}`);
+        return parseInt(value);
+      }
+      console.log('   📊 No previous batch tracked, starting from -1');
+      return -1;
     });
-    const value = response.data.values?.[0]?.[0];
-    
-    if (value && !isNaN(parseInt(value))) {
-      const lastBatch = parseInt(value);
-      console.log(`   📊 Last processed batch found: ${lastBatch}`);
-      return lastBatch;
-    }
-    
-    console.log('   📊 No previous batch tracked, starting from -1');
-    return -1;
   } catch (error) {
     console.log('   ⚠️  Could not read progress tracker, starting from -1');
     return -1;
@@ -102,210 +145,208 @@ async function getLastProcessedBatch(auth) {
 
 async function setLastProcessedBatch(auth, batchNumber) {
   try {
-    const sheets = google.sheets({ version: 'v4', auth });
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: `${SHEET_NAME}!${PROGRESS_TRACKER_CELL}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[batchNumber]] }
+    await withRetry(async () => {
+      await trackApiCall();
+      const sheets = google.sheets({ version: 'v4', auth });
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_NAME}!${PROGRESS_TRACKER_CELL}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [[batchNumber]] }
+      });
+      await sleep(RATE_LIMITS.AFTER_WRITE);
+      console.log(`   💾 Progress saved: Batch ${batchNumber}`);
     });
-    console.log(`   💾 Progress saved: Batch ${batchNumber} completed`);
   } catch (error) {
     console.error('   ❌ Failed to save progress:', error.message);
   }
 }
 
 async function fetchUrls(auth, batchToProcess) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${SHEET_NAME}!D3:D`;
-  
-  console.log(`   🔍 Fetching URLs from ${range}...`);
-  const response = await sheets.spreadsheets.values.get({ 
-    spreadsheetId: SHEET_ID, 
-    range 
-  });
-  const values = response.data.values || [];
-
-  console.log(`   📥 Retrieved ${values.length} total rows from sheet`);
-  
-  const startIdx = batchToProcess * BATCH_SIZE;
-  const endIdx = Math.min(startIdx + BATCH_SIZE, values.length);
-  
-  console.log(`   📦 Processing batch ${batchToProcess + 1}: rows ${startIdx + 3} to ${endIdx + 2} (${endIdx - startIdx} rows)`);
-  
-  if (startIdx >= values.length) {
-    console.log(`   ⚠️  Batch ${batchToProcess} is beyond available data. No rows to process.`);
-    return [];
-  }
-  
-  const batchValues = values.slice(startIdx, endIdx);
-  const urls = [];
-  
-  for (let index = 0; index < batchValues.length; index++) {
-    const row = batchValues[index];
-    const actualRowIndex = startIdx + index + 3;
-    const cellRange = `${SHEET_NAME}!D${actualRowIndex}`;
-
-    try {
-      const text = row[0] || null;
-      if (!text) {
-        console.log(`   ⏭️  No text found for cell D${actualRowIndex}`);
-        continue;
-      }
-
-      const linkResponse = await sheets.spreadsheets.get({
-        spreadsheetId: SHEET_ID,
-        ranges: [cellRange],
-        includeGridData: true,
-        fields: 'sheets.data.rowData.values.hyperlink'
-      });
-
-      await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-
-      const hyperlink = linkResponse.data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values?.[0]?.hyperlink;
-
-      if (hyperlink) {
-        urls.push({ url: hyperlink, rowIndex: actualRowIndex });
-        console.log(`   ✅ Found URL in cell D${actualRowIndex}`);
-        continue;
-      }
-
-      const urlRegex = /https?:\/\/\S+/;
-      const match = text.match(urlRegex);
-      const url = match ? match[0] : null;
-
-      if (!url) {
-        console.log(`   ⚠️  No URL found in text for cell D${actualRowIndex}`);
-        continue;
-      }
-
-      urls.push({ url, rowIndex: actualRowIndex });
-      console.log(`   ✅ Found URL in cell D${actualRowIndex}`);
-    } catch (error) {
-      console.error(`   ❌ Error processing URL for cell D${actualRowIndex}:`, error.message);
+  return await withRetry(async () => {
+    await trackApiCall();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const range = `${SHEET_NAME}!D3:D`;
+    
+    console.log(`   🔍 Fetching URLs from ${range}...`);
+    const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
+    await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+    
+    const values = response.data.values || [];
+    console.log(`   📥 Retrieved ${values.length} total rows`);
+    
+    const startIdx = batchToProcess * BATCH_SIZE;
+    const endIdx = Math.min(startIdx + BATCH_SIZE, values.length);
+    
+    console.log(`   📦 Batch ${batchToProcess + 1}: rows ${startIdx + 3} to ${endIdx + 2} (${endIdx - startIdx} rows)`);
+    
+    if (startIdx >= values.length) {
+      console.log(`   ⚠️  Batch ${batchToProcess} is beyond available data`);
+      return [];
     }
-  }
+    
+    const batchValues = values.slice(startIdx, endIdx);
+    const urls = [];
+    
+    for (let index = 0; index < batchValues.length; index++) {
+      const row = batchValues[index];
+      const actualRowIndex = startIdx + index + 3;
+      const cellRange = `${SHEET_NAME}!D${actualRowIndex}`;
 
-  return urls.filter(entry => entry && entry.url);
+      try {
+        const text = row[0] || null;
+        if (!text) {
+          console.log(`   ⏭️  No text in D${actualRowIndex}`);
+          continue;
+        }
+
+        await trackApiCall();
+        const linkResponse = await sheets.spreadsheets.get({
+          spreadsheetId: SHEET_ID,
+          ranges: [cellRange],
+          includeGridData: true,
+          fields: 'sheets.data.rowData.values.hyperlink'
+        });
+
+        await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+
+        const hyperlink = linkResponse.data.sheets?.[0]?.data?.[0]?.rowData?.[0]?.values?.[0]?.hyperlink;
+
+        if (hyperlink) {
+          urls.push({ url: hyperlink, rowIndex: actualRowIndex });
+          console.log(`   ✅ Found URL in D${actualRowIndex}`);
+          continue;
+        }
+
+        const urlRegex = /https?:\/\/\S+/;
+        const match = text.match(urlRegex);
+        const url = match ? match[0] : null;
+
+        if (!url) {
+          console.log(`   ⚠️  No URL in D${actualRowIndex}`);
+          continue;
+        }
+
+        urls.push({ url, rowIndex: actualRowIndex });
+        console.log(`   ✅ Found URL in D${actualRowIndex}`);
+      } catch (error) {
+        console.error(`   ❌ Error at D${actualRowIndex}: ${error.message}`);
+      }
+    }
+
+    return urls.filter(entry => entry && entry.url);
+  });
 }
 
 async function logData(auth, message) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const logCell = 'I1';
-  const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
-    range: `${SHEET_NAME}!${logCell}`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [[`[${timestamp}] ${message}`]] }
-  });
-  console.log(`   📋 ${message}`);
-  await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+  try {
+    await trackApiCall();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${SHEET_NAME}!I1`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[`[${timestamp}] ${message}`]] }
+    });
+    console.log(`   📋 ${message}`);
+    await sleep(RATE_LIMITS.AFTER_WRITE);
+  } catch (error) {
+    console.error(`   ⚠️  Logging failed: ${error.message}`);
+  }
 }
 
 async function collectSheetData(auth, spreadsheetId, sheetTitle) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24', 'B27', 'C32', 'C11'];
-  const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
+  return await withRetry(async () => {
+    await trackApiCall();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const cellRefs = ['C3', 'C4', 'C5', 'C6', 'C7', 'C13', 'C14', 'C15', 'C18', 'C19', 'C20', 'C21', 'C24', 'B27', 'C32', 'C11'];
+    const ranges = cellRefs.map(ref => `${sheetTitle}!${ref}`);
 
-  const res = await sheets.spreadsheets.values.batchGet({
-    spreadsheetId,
-    ranges,
+    const res = await sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges });
+    await sleep(RATE_LIMITS.AFTER_BATCH_GET);
+
+    const data = {};
+    res.data.valueRanges.forEach((range, index) => {
+      data[cellRefs[index]] = range.values?.[0]?.[0] || null;
+    });
+
+    if (!data['C24']) return null;
+
+    await trackApiCall();
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+    
+    const sheet = meta.data.sheets.find(s => s.properties.title === sheetTitle);
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheet.properties.sheetId}`;
+
+    return { ...data, sheetUrl, sheetName: sheetTitle };
   });
-
-  const data = {};
-  res.data.valueRanges.forEach((range, index) => {
-    const value = range.values?.[0]?.[0] || null;
-    data[cellRefs[index]] = value;
-  });
-
-  if (!data['C24']) return null;
-
-  await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
-
-  const meta = await sheets.spreadsheets.get({ spreadsheetId });
-  const sheet = meta.data.sheets.find(s => s.properties.title === sheetTitle);
-  const sheetId = sheet.properties.sheetId;
-  const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=${sheetId}`;
-
-  return {
-    C24: data['C24'],
-    C3: data['C3'],
-    C4: data['C4'],
-    B27: data['B27'],
-    C5: data['C5'],
-    C6: data['C6'],
-    C7: data['C7'],
-    C11: data['C11'],
-    C32: data['C32'],
-    C13: data['C13'],
-    C14: data['C14'],
-    C15: data['C15'],
-    C18: data['C18'],
-    C19: data['C19'],
-    C20: data['C20'],
-    C21: data['C21'],
-    sheetUrl,
-    sheetName: sheetTitle
-  };
 }
 
 async function processUrl(spreadsheetId, auth, urlIndex, totalUrls, startTime) {
   const elapsed = Date.now() - startTime;
   if (elapsed > MAX_RUNTIME) {
-    console.log('⏰ Approaching timeout limit, stopping gracefully...');
+    console.log('⏰ Timeout limit approaching');
     return { timeout: true };
   }
   
   console.log(`\n${'='.repeat(70)}`);
-  console.log(`🔄 Processing Spreadsheet ${urlIndex}/${totalUrls}`);
-  console.log(`   📄 Spreadsheet ID: ${spreadsheetId}`);
-  console.log(`   ⏱️  Elapsed time: ${formatTime(elapsed)}`);
+  console.log(`🔄 Spreadsheet ${urlIndex}/${totalUrls} - ID: ${spreadsheetId}`);
+  console.log(`   ⏱️  Elapsed: ${formatTime(elapsed)} | API calls: ${apiCallCount}`);
   console.log(`${'='.repeat(70)}`);
   
-  const sheets = google.sheets({ version: 'v4', auth });
-
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId });
-  const sheetTitles = meta.data.sheets
-    .map(s => s.properties.title)
-    .filter(title => !SHEETS_TO_SKIP.includes(title));
-
-  console.log(`   📊 Found ${sheetTitles.length} sheets to process`);
-
-  const validData = [];
-  for (let i = 0; i < sheetTitles.length; i++) {
-    const sheetTitle = sheetTitles[i];
-    console.log(`   🔄 [${i + 1}/${sheetTitles.length}] Collecting data from: ${sheetTitle}`);
+  try {
+    await trackApiCall();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
     
-    const data = await collectSheetData(auth, spreadsheetId, sheetTitle);
-    
-    if (data !== null && Object.values(data).some(v => v !== null && v !== '')) {
-      validData.push(data);
-      console.log(`      ✅ Valid data collected`);
-    } else {
-      console.log(`      ⏭️  No valid data`);
+    const sheetTitles = meta.data.sheets
+      .map(s => s.properties.title)
+      .filter(title => !SHEETS_TO_SKIP.includes(title));
+
+    console.log(`   📊 Found ${sheetTitles.length} sheets`);
+
+    const validData = [];
+    for (let i = 0; i < sheetTitles.length; i++) {
+      console.log(`   🔄 [${i + 1}/${sheetTitles.length}] ${sheetTitles[i]}`);
+      
+      const data = await collectSheetData(auth, spreadsheetId, sheetTitles[i]);
+      
+      if (data && Object.values(data).some(v => v !== null && v !== '')) {
+        validData.push(data);
+        console.log(`      ✅ Valid data`);
+      } else {
+        console.log(`      ⏭️  No data`);
+      }
+      
+      if (i < sheetTitles.length - 1) {
+        await cooldownWithProgress(RATE_LIMITS.BETWEEN_SHEETS, 'Before next sheet');
+      }
     }
-    
-    if (i < sheetTitles.length - 1) {
-      await cooldownWithProgress(RATE_LIMITS.BETWEEN_SHEETS, `Cooling down before next sheet`);
+
+    console.log(`\n   📦 Processing ${validData.length} entries...`);
+
+    for (let i = 0; i < validData.length; i++) {
+      console.log(`   🔄 [${i + 1}/${validData.length}] ${validData[i].sheetName}`);
+      await logData(auth, `Processing: ${validData[i].sheetName}`);
+      await validateAndInsertData(auth, validData[i]);
+      
+      if (i < validData.length - 1) {
+        await sleep(RATE_LIMITS.BETWEEN_VALIDATIONS);
+      }
     }
+
+    console.log(`   ✅ Complete`);
+    return { timeout: false };
+  } catch (error) {
+    console.error(`   ❌ Error: ${error.message}`);
+    throw error;
   }
-
-  console.log(`\n   📦 Processing ${validData.length} valid data entries...`);
-
-  for (let i = 0; i < validData.length; i++) {
-    const data = validData[i];
-    console.log(`   🔄 [${i + 1}/${validData.length}] Validating and inserting: ${data.sheetName}`);
-    await logData(auth, `Fetched data from sheet: ${data.sheetName}`);
-    await validateAndInsertData(auth, data);
-  }
-
-  console.log(`   ✅ Spreadsheet processing complete`);
-  return { timeout: false };
 }
 
 async function validateAndInsertData(auth, data) {
-  const sheets = google.sheets({ version: 'v4', auth });
   const targetSheetTitles = await getTargetSheetTitles(auth);
   let processed = false;
 
@@ -338,9 +379,9 @@ async function validateAndInsertData(auth, data) {
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
       await insertDataInRow(auth, sheetTitle, existingC3Index, data, isAllTestCases ? 'C' : 'B');
-      await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+      await sleep(RATE_LIMITS.AFTER_WRITE);
       
-      await logData(auth, `Updated row ${existingC3Index} in sheet '${sheetTitle}'`);
+      await logData(auth, `Updated row ${existingC3Index} in '${sheetTitle}'`);
       processed = true;
     } else if (lastC24Index !== -1) {
       const newRowIndex = lastC24Index + 1;
@@ -348,9 +389,9 @@ async function validateAndInsertData(auth, data) {
       await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
       
       await insertDataInRow(auth, sheetTitle, newRowIndex, data, isAllTestCases ? 'C' : 'B');
-      await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+      await sleep(RATE_LIMITS.AFTER_WRITE);
       
-      await logData(auth, `Inserted row after ${lastC24Index} in sheet '${sheetTitle}'`);
+      await logData(auth, `Inserted row after ${lastC24Index} in '${sheetTitle}'`);
       processed = true;
     }
 
@@ -358,20 +399,20 @@ async function validateAndInsertData(auth, data) {
   }
 
   if (!processed) {
-    await logData(auth, `No matches found for C24 ('${data.C24}') or C3 ('${data.C3}') in any sheet.`);
+    await logData(auth, `No matches for C24='${data.C24}' or C3='${data.C3}'`);
   }
 
   return processed;
 }
 
 async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
-  const sheets = google.sheets({ version: 'v4', auth });
-
-  await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SHEET_ID,
-    requestBody: {
-      requests: [
-        {
+  await withRetry(async () => {
+    await trackApiCall();
+    const sheets = google.sheets({ version: 'v4', auth });
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        requests: [{
           insertDimension: {
             range: {
               sheetId: await getSheetId(auth, sheetTitle),
@@ -381,26 +422,26 @@ async function insertRowWithFormat(auth, sheetTitle, sourceRowIndex) {
             },
             inheritFromBefore: true
           }
-        }
-      ]
-    }
+        }]
+      }
+    });
+    await sleep(RATE_LIMITS.AFTER_WRITE);
+    console.log(`      📝 Inserted row after ${sourceRowIndex}`);
   });
-
-  console.log(`      📝 Inserted new row after row ${sourceRowIndex} in sheet '${sheetTitle}'`);
 }
 
 async function getSheetId(auth, sheetTitle) {
+  await trackApiCall();
   const sheets = google.sheets({ version: 'v4', auth });
   const res = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  const sheet = res.data.sheets.find(s => s.properties.title === sheetTitle);
-  return sheet.properties.sheetId;
+  await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+  return res.data.sheets.find(s => s.properties.title === sheetTitle).properties.sheetId;
 }
 
 function columnToNumber(col) {
   let num = 0;
   for (let i = 0; i < col.length; i++) {
-    num *= 26;
-    num += col.charCodeAt(i) - 64;
+    num = num * 26 + (col.charCodeAt(i) - 64);
   }
   return num;
 }
@@ -416,205 +457,145 @@ function numberToColumn(n) {
 }
 
 async function insertDataInRow(auth, sheetTitle, row, data, startCol) {
-  const sheets = google.sheets({ version: 'v4', auth });
+  await withRetry(async () => {
+    await trackApiCall();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const isAllTestCases = sheetTitle === "ALL TEST CASES";
 
-  const isAllTestCases = sheetTitle === "ALL TEST CASES";
+    const rowValues = [
+      data.C24, data.C3, `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
+      data.B27, data.C5, data.C6, data.C7, '',
+      data.C11, data.C32, data.C15, data.C13, data.C14,
+      data.C18, data.C19, data.C20, data.C21
+    ];
 
-  const rowValues = [
-    data.C24,
-    data.C3,
-    `=HYPERLINK("${data.sheetUrl}", "${data.C4}")`,
-    data.B27,
-    data.C5,
-    data.C6,
-    data.C7,
-    '',
-    data.C11,
-    data.C32,
-    data.C15,
-    data.C13,
-    data.C14,
-    data.C18,
-    data.C19,
-    data.C20,
-    data.C21
-  ];
+    if (isAllTestCases) rowValues.push(data.C21);
 
-  if (isAllTestCases) {
-    rowValues.push(data.C21);
-  }
+    const startIndex = columnToNumber(startCol);
+    const endCol = numberToColumn(startIndex + rowValues.length - 1);
+    const range = `${sheetTitle}!${startCol}${row}:${endCol}${row}`;
 
-  const startIndex = columnToNumber(startCol);
-  const endIndex = startIndex + rowValues.length - 1;
-  const endCol = numberToColumn(endIndex);
-
-  const range = `${sheetTitle}!${startCol}${row}:${endCol}${row}`;
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SHEET_ID,
-    range,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: {
-      values: [rowValues]
-    }
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [rowValues] }
+    });
+    await sleep(RATE_LIMITS.AFTER_WRITE);
   });
 }
 
 async function clearRowData(auth, sheetTitle, row, isAllTestCases) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const range = isAllTestCases ? `D${row}:T${row}` : `C${row}:S${row}`;
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId: SHEET_ID,
-    range: `${sheetTitle}!${range}`
+  await withRetry(async () => {
+    await trackApiCall();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const range = isAllTestCases ? `D${row}:T${row}` : `C${row}:S${row}`;
+    await sheets.spreadsheets.values.clear({
+      spreadsheetId: SHEET_ID,
+      range: `${sheetTitle}!${range}`
+    });
+    await sleep(RATE_LIMITS.AFTER_WRITE);
   });
 }
 
 async function getTargetSheetTitles(auth) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  return meta.data.sheets.map(s => s.properties.title);
+  return await withRetry(async () => {
+    await trackApiCall();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+    await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+    return meta.data.sheets.map(s => s.properties.title);
+  });
 }
 
 async function getColumnValues(auth, sheetTitle, column) {
-  const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${sheetTitle}!${column}:${column}`;
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
-  return res.data.values?.map(row => row[0]) || [];
+  return await withRetry(async () => {
+    await trackApiCall();
+    const sheets = google.sheets({ version: 'v4', auth });
+    const range = `${sheetTitle}!${column}:${column}`;
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
+    await sleep(RATE_LIMITS.BETWEEN_OPERATIONS);
+    return res.data.values?.map(row => row[0]) || [];
+  });
 }
 
 async function processSingleBatch(authClient, startTime, forceBatchNumber = null) {
-  let batchToProcess;
+  let batchToProcess = forceBatchNumber !== null ? forceBatchNumber : 
+    (AUTO_INCREMENT ? await getLastProcessedBatch(authClient) + 1 : BATCH_NUMBER);
   
-  if (forceBatchNumber !== null) {
-    batchToProcess = forceBatchNumber;
-  } else if (AUTO_INCREMENT) {
-    const lastBatch = await getLastProcessedBatch(authClient);
-    batchToProcess = lastBatch + 1;
-    console.log(`🔄 Auto-increment mode enabled`);
-    console.log(`   Last completed batch: ${lastBatch}`);
-    console.log(`   Processing batch: ${batchToProcess}`);
-  } else {
-    batchToProcess = BATCH_NUMBER;
-    console.log(`📌 Processing specified batch: ${batchToProcess}`);
-  }
-  
-  console.log(`📦 Batch size: ${BATCH_SIZE} URLs`);
+  console.log(`📦 Processing batch ${batchToProcess}, size: ${BATCH_SIZE}`);
   console.log('='.repeat(70));
-  console.log();
   
-  console.log(`📥 Fetching URLs from sheet "${SHEET_NAME}"...`);
   const urlsWithIndices = await fetchUrls(authClient, batchToProcess);
 
   if (!urlsWithIndices.length) {
-    await logData(authClient, `Batch ${batchToProcess}: No URLs to process.`);
-    console.log('\n⚠️  No URLs found to process in this batch.');
-    
+    await logData(authClient, `Batch ${batchToProcess}: No URLs`);
     if (AUTO_INCREMENT && forceBatchNumber === null) {
-      console.log('✅ All batches completed! Resetting to batch 0 for next cycle.');
+      console.log('✅ All batches done! Resetting.');
       await setLastProcessedBatch(authClient, -1);
     }
     return { successCount: 0, failCount: 0, timeoutReached: false };
   }
 
-  console.log(`\n✅ Found ${urlsWithIndices.length} URL(s) to process in this batch\n`);
+  console.log(`\n✅ Found ${urlsWithIndices.length} URL(s)\n`);
 
   const spreadsheetMap = new Map();
-  
   for (const { url, rowIndex } of urlsWithIndices) {
     const spreadsheetId = extractSpreadsheetId(url);
-    
     if (!spreadsheetId) {
-      console.log(`⚠️  Could not extract spreadsheet ID from URL in row D${rowIndex}`);
-      await logData(authClient, `Batch ${batchToProcess}: Invalid URL format in row D${rowIndex}: ${url}`);
+      console.log(`⚠️  Invalid URL in D${rowIndex}`);
       continue;
     }
     
     if (!spreadsheetMap.has(spreadsheetId)) {
-      spreadsheetMap.set(spreadsheetId, {
-        url: url,
-        rows: [rowIndex],
-        spreadsheetId: spreadsheetId
-      });
+      spreadsheetMap.set(spreadsheetId, { url, rows: [rowIndex], spreadsheetId });
     } else {
       spreadsheetMap.get(spreadsheetId).rows.push(rowIndex);
     }
   }
 
   const uniqueSpreadsheets = Array.from(spreadsheetMap.values());
-  const totalUrls = urlsWithIndices.length;
-  const duplicateCount = totalUrls - uniqueSpreadsheets.length;
+  console.log(`📊 ${urlsWithIndices.length} URLs, ${uniqueSpreadsheets.length} unique spreadsheets\n`);
 
-  console.log(`📊 Analysis:`);
-  console.log(`   Total URLs found in batch: ${totalUrls}`);
-  console.log(`   Unique spreadsheets: ${uniqueSpreadsheets.length}`);
-  if (duplicateCount > 0) {
-    console.log(`   Duplicate references: ${duplicateCount}`);
-    console.log(`\n📝 Spreadsheet grouping:`);
-    uniqueSpreadsheets.forEach((entry, index) => {
-      if (entry.rows.length > 1) {
-        console.log(`   ${index + 1}. Spreadsheet ${entry.spreadsheetId}`);
-        console.log(`      Referenced in rows: D${entry.rows.join(', D')}`);
-      }
-    });
-  }
-  console.log();
-
-  await logData(authClient, `Batch ${batchToProcess}: Found ${totalUrls} URL(s), ${uniqueSpreadsheets.length} unique spreadsheet(s) to process`);
-
-  let successCount = 0;
-  let failCount = 0;
-  let timeoutReached = false;
+  let successCount = 0, failCount = 0, timeoutReached = false;
 
   for (let i = 0; i < uniqueSpreadsheets.length; i++) {
-    const { spreadsheetId, url, rows } = uniqueSpreadsheets[i];
+    const { spreadsheetId, rows } = uniqueSpreadsheets[i];
     
-    const rowsText = rows.length > 1 
-      ? `rows D${rows.join(', D')}` 
-      : `row D${rows[0]}`;
-    
-    await logData(authClient, `Batch ${batchToProcess}: Processing spreadsheet ${spreadsheetId} (from ${rowsText})`);
+    await logData(authClient, `Batch ${batchToProcess}: Processing ${spreadsheetId}`);
     
     try {
       const result = await processUrl(spreadsheetId, authClient, i + 1, uniqueSpreadsheets.length, startTime);
       
       if (result.timeout) {
         timeoutReached = true;
-        await logData(authClient, `Batch ${batchToProcess}: Stopped at ${i + 1}/${uniqueSpreadsheets.length} due to approaching timeout`);
         break;
       }
-      
       successCount++;
     } catch (error) {
       failCount++;
-      
       if (error.message.includes('Quota exceeded') || error.code === 429) {
-        await logData(authClient, `⚠️  Quota exceeded for spreadsheet: ${spreadsheetId}. Retrying after cooldown...`);
-        await cooldownWithProgress(RATE_LIMITS.QUOTA_EXCEEDED_WAIT, 'Quota exceeded - cooling down');
+        await logData(authClient, `⚠️  Quota exceeded: ${spreadsheetId}`);
+        await cooldownWithProgress(RATE_LIMITS.QUOTA_EXCEEDED_WAIT, 'Quota recovery');
         
         try {
           const result = await processUrl(spreadsheetId, authClient, i + 1, uniqueSpreadsheets.length, startTime);
-          
           if (result.timeout) {
             timeoutReached = true;
-            await logData(authClient, `Batch ${batchToProcess}: Stopped at ${i + 1}/${uniqueSpreadsheets.length} due to approaching timeout`);
             break;
           }
-          
           successCount++;
           failCount--;
         } catch (retryError) {
-          await logData(authClient, `❌ Error processing spreadsheet on retry: ${spreadsheetId}. Error: ${retryError.message}`);
+          await logData(authClient, `❌ Retry failed: ${retryError.message}`);
         }
       } else {
-        await logData(authClient, `❌ Error processing spreadsheet: ${spreadsheetId}. Error: ${error.message}`);
+        await logData(authClient, `❌ Error: ${error.message}`);
       }
     }
 
     if (i < uniqueSpreadsheets.length - 1 && !timeoutReached) {
-      await cooldownWithProgress(
-        RATE_LIMITS.BETWEEN_URLS, 
-        `Cooling down before next spreadsheet (${i + 1}/${uniqueSpreadsheets.length} complete)`
-      );
+      await cooldownWithProgress(RATE_LIMITS.BETWEEN_URLS, `Progress: ${i + 1}/${uniqueSpreadsheets.length}`);
     }
   }
 
@@ -623,64 +604,45 @@ async function processSingleBatch(authClient, startTime, forceBatchNumber = null
   }
 
   const totalTime = Date.now() - startTime;
-  
   console.log('\n' + '='.repeat(70));
-  console.log('  📊 BATCH SUMMARY');
+  console.log('📊 BATCH SUMMARY');
   console.log('='.repeat(70));
-  console.log(`📦 Batch number: ${batchToProcess + 1}`);
-  console.log(`📄 Total URLs found in batch: ${totalUrls}`);
-  console.log(`📚 Unique spreadsheets in batch: ${uniqueSpreadsheets.length}`);
-  if (duplicateCount > 0) {
-    console.log(`🔗 Duplicate references detected: ${duplicateCount}`);
-  }
-  console.log(`✅ Successful: ${successCount}/${uniqueSpreadsheets.length}`);
-  if (failCount > 0) {
-    console.log(`❌ Failed: ${failCount}/${uniqueSpreadsheets.length}`);
-  }
-  if (timeoutReached) {
-    console.log(`⏰ Stopped early due to timeout safety limit`);
-  }
-  console.log(`⏱️  Batch time: ${formatTime(totalTime)}`);
+  console.log(`Batch: ${batchToProcess + 1}`);
+  console.log(`✅ Success: ${successCount}/${uniqueSpreadsheets.length}`);
+  if (failCount > 0) console.log(`❌ Failed: ${failCount}`);
+  if (timeoutReached) console.log(`⏰ Stopped early (timeout)`);
+  console.log(`⏱️  Time: ${formatTime(totalTime)}`);
   console.log('='.repeat(70));
 
-  await logData(authClient, `Batch ${batchToProcess}: Complete. Success: ${successCount}, Failed: ${failCount}`);
-  
   return { successCount, failCount, timeoutReached };
 }
 
 async function processAllBatches(authClient, startTime) {
-  console.log('🔄 PROCESSING ALL BATCHES MODE');
-  console.log('📊 Fetching total number of URLs...');
+  console.log('🔄 PROCESSING ALL BATCHES');
   
+  await trackApiCall();
   const sheets = google.sheets({ version: 'v4', auth: authClient });
-  const range = `${SHEET_NAME}!D3:D`;
   const response = await sheets.spreadsheets.values.get({ 
     spreadsheetId: SHEET_ID, 
-    range 
+    range: `${SHEET_NAME}!D3:D`
   });
   const totalUrls = (response.data.values || []).length;
   const totalBatches = Math.ceil(totalUrls / BATCH_SIZE);
   
-  console.log(`📦 Total URLs: ${totalUrls}`);
-  console.log(`📦 Batch size: ${BATCH_SIZE}`);
-  console.log(`📦 Total batches to process: ${totalBatches}`);
+  console.log(`📦 Total: ${totalUrls} URLs, ${totalBatches} batches`);
   console.log('='.repeat(70));
   
-  let totalSuccess = 0;
-  let totalFail = 0;
-  let batchesProcessed = 0;
+  let totalSuccess = 0, totalFail = 0, batchesProcessed = 0;
   
   for (let batchNum = 0; batchNum < totalBatches; batchNum++) {
     const elapsed = Date.now() - startTime;
     if (elapsed > MAX_RUNTIME) {
-      console.log(`⏰ Reached time limit after ${batchNum} batches`);
-      await logData(authClient, `All-batch run: Stopped at batch ${batchNum}/${totalBatches} due to timeout`);
+      console.log(`⏰ Time limit at batch ${batchNum}`);
       break;
     }
     
     console.log(`\n${'*'.repeat(70)}`);
-    console.log(`📦 PROCESSING BATCH ${batchNum + 1}/${totalBatches}`);
-    console.log(`⏱️  Elapsed: ${formatTime(elapsed)} | Remaining: ${formatTime(MAX_RUNTIME - elapsed)}`);
+    console.log(`📦 BATCH ${batchNum + 1}/${totalBatches}`);
     console.log(`${'*'.repeat(70)}\n`);
     
     const result = await processSingleBatch(authClient, startTime, batchNum);
@@ -688,55 +650,44 @@ async function processAllBatches(authClient, startTime) {
     totalFail += result.failCount;
     batchesProcessed++;
     
-    if (result.timeoutReached) {
-      console.log('⏰ Stopping all-batch processing due to timeout in current batch');
-      break;
-    }
+    if (result.timeoutReached) break;
     
-    // Cooldown between batches
     if (batchNum < totalBatches - 1) {
-      await cooldownWithProgress(RATE_LIMITS.BETWEEN_BATCHES, `Cooling down between batches`);
+      await cooldownWithProgress(RATE_LIMITS.BETWEEN_BATCHES, 'Between batches');
     }
   }
   
-  // Save final progress
   if (AUTO_INCREMENT && batchesProcessed > 0) {
     await setLastProcessedBatch(authClient, batchesProcessed - 1);
   }
   
-  const totalTime = Date.now() - startTime;
   console.log('\n' + '='.repeat(70));
-  console.log('  🎯 FINAL SUMMARY - ALL BATCHES');
+  console.log('🎯 FINAL SUMMARY');
   console.log('='.repeat(70));
-  console.log(`📦 Batches processed: ${batchesProcessed}/${totalBatches}`);
-  console.log(`✅ Total successful: ${totalSuccess}`);
-  console.log(`❌ Total failed: ${totalFail}`);
-  console.log(`⏱️  Total time: ${formatTime(totalTime)}`);
+  console.log(`Batches: ${batchesProcessed}/${totalBatches}`);
+  console.log(`✅ Success: ${totalSuccess}`);
+  console.log(`❌ Failed: ${totalFail}`);
+  console.log(`⏱️  Time: ${formatTime(Date.now() - startTime)}`);
   console.log('='.repeat(70));
-  
-  await logData(authClient, `All-batch run complete: ${batchesProcessed}/${totalBatches} batches, Success: ${totalSuccess}, Failed: ${totalFail}`);
 }
 
 async function updateTestCasesInLibrary() {
   console.log('='.repeat(70));
-  console.log('  📋 Boards Test Cases Updater - Batch Processing');
+  console.log('📋 Boards Test Cases Updater');
   console.log('='.repeat(70));
-  console.log(`⏰ Started at: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`);
+  console.log(`⏰ Started: ${new Date().toISOString()}`);
   
   const startTime = Date.now();
   const authClient = await auth.getClient();
   
   if (PROCESS_ALL_BATCHES) {
-    console.log('🔄 Mode: PROCESS ALL BATCHES');
     await processAllBatches(authClient, startTime);
   } else {
-    console.log('🔄 Mode: SINGLE BATCH');
     await processSingleBatch(authClient, startTime);
   }
   
-  const totalTime = Date.now() - startTime;
-  console.log(`\n⏰ Finished at: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`);
-  console.log(`⏱️  Total runtime: ${formatTime(totalTime)}`);
+  console.log(`\n⏰ Finished: ${new Date().toISOString()}`);
+  console.log(`⏱️  Runtime: ${formatTime(Date.now() - startTime)}`);
 }
 
 updateTestCasesInLibrary().catch(console.error);
