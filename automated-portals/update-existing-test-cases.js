@@ -127,7 +127,7 @@ async function fetchUrls(auth) {
 
 async function logData(auth, message) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const logCell = 'B1';
+  const logCell = 'I1';
   const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
