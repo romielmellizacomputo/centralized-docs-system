@@ -36,6 +36,12 @@ function formatTime(ms) {
   return `${seconds}s`;
 }
 
+// Extract spreadsheet ID from URL
+function extractSpreadsheetId(url) {
+  const match = url.match(/[-\w]{25,}/);
+  return match ? match[0] : null;
+}
+
 // Enhanced countdown with progress
 async function cooldownWithProgress(ms, message = 'Cooling down') {
   console.log(`⏳ ${message} for ${formatTime(ms)}...`);
@@ -180,15 +186,15 @@ async function collectSheetData(auth, spreadsheetId, sheetTitle) {
   };
 }
 
-async function processUrl(url, auth, urlIndex, totalUrls) {
+async function processUrl(spreadsheetId, auth, urlIndex, totalUrls) {
   console.log(`\n${'='.repeat(70)}`);
-  console.log(`🔄 Processing URL ${urlIndex}/${totalUrls}`);
+  console.log(`🔄 Processing Spreadsheet ${urlIndex}/${totalUrls}`);
+  console.log(`   📄 Spreadsheet ID: ${spreadsheetId}`);
   console.log(`${'='.repeat(70)}`);
   
-  const targetSpreadsheetId = url.match(/[-\w]{25,}/)[0];
   const sheets = google.sheets({ version: 'v4', auth });
 
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: targetSpreadsheetId });
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: spreadsheetId });
   const sheetTitles = meta.data.sheets
     .map(s => s.properties.title)
     .filter(title => !SHEETS_TO_SKIP.includes(title));
@@ -201,7 +207,7 @@ async function processUrl(url, auth, urlIndex, totalUrls) {
     const sheetTitle = sheetTitles[i];
     console.log(`   🔄 [${i + 1}/${sheetTitles.length}] Collecting data from: ${sheetTitle}`);
     
-    const data = await collectSheetData(auth, targetSpreadsheetId, sheetTitle);
+    const data = await collectSheetData(auth, spreadsheetId, sheetTitle);
     
     if (data !== null && Object.values(data).some(v => v !== null && v !== '')) {
       validData.push(data);
@@ -225,7 +231,7 @@ async function processUrl(url, auth, urlIndex, totalUrls) {
     await validateAndInsertData(auth, data);
   }
 
-  console.log(`   ✅ URL processing complete`);
+  console.log(`   ✅ Spreadsheet processing complete`);
 }
 
 async function validateAndInsertData(auth, data) {
@@ -426,53 +432,90 @@ async function updateTestCasesInLibrary() {
   }
 
   console.log(`\n✅ Found ${urlsWithIndices.length} URL(s) to process\n`);
-  await logData(authClient, `Found ${urlsWithIndices.length} URL(s) to process`);
 
-  const uniqueUrls = new Set();
-  let successCount = 0;
-  let failCount = 0;
-  let duplicateCount = 0;
-
-  for (let i = 0; i < urlsWithIndices.length; i++) {
-    const { url } = urlsWithIndices[i];
+  // Group URLs by spreadsheet ID and track source rows
+  const spreadsheetMap = new Map();
+  
+  for (const { url, rowIndex } of urlsWithIndices) {
+    const spreadsheetId = extractSpreadsheetId(url);
     
-    if (uniqueUrls.has(url)) {
-      duplicateCount++;
-      await logData(authClient, `Duplicate URL found: ${url}`);
-      console.log(`⚠️  [${i + 1}/${urlsWithIndices.length}] Skipping duplicate URL`);
+    if (!spreadsheetId) {
+      console.log(`⚠️  Could not extract spreadsheet ID from URL in row D${rowIndex}`);
+      await logData(authClient, `Invalid URL format in row D${rowIndex}: ${url}`);
       continue;
     }
+    
+    if (!spreadsheetMap.has(spreadsheetId)) {
+      spreadsheetMap.set(spreadsheetId, {
+        url: url,
+        rows: [rowIndex],
+        spreadsheetId: spreadsheetId
+      });
+    } else {
+      spreadsheetMap.get(spreadsheetId).rows.push(rowIndex);
+    }
+  }
 
-    uniqueUrls.add(url);
-    await logData(authClient, `Processing URL: ${url}`);
+  const uniqueSpreadsheets = Array.from(spreadsheetMap.values());
+  const totalUrls = urlsWithIndices.length;
+  const duplicateCount = totalUrls - uniqueSpreadsheets.length;
+
+  console.log(`📊 Analysis:`);
+  console.log(`   Total URLs found: ${totalUrls}`);
+  console.log(`   Unique spreadsheets: ${uniqueSpreadsheets.length}`);
+  if (duplicateCount > 0) {
+    console.log(`   Duplicate references: ${duplicateCount}`);
+    console.log(`\n📝 Spreadsheet grouping:`);
+    uniqueSpreadsheets.forEach((entry, index) => {
+      if (entry.rows.length > 1) {
+        console.log(`   ${index + 1}. Spreadsheet ${entry.spreadsheetId}`);
+        console.log(`      Referenced in rows: D${entry.rows.join(', D')}`);
+      }
+    });
+  }
+  console.log();
+
+  await logData(authClient, `Found ${totalUrls} URL(s), ${uniqueSpreadsheets.length} unique spreadsheet(s) to process`);
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (let i = 0; i < uniqueSpreadsheets.length; i++) {
+    const { spreadsheetId, url, rows } = uniqueSpreadsheets[i];
+    
+    const rowsText = rows.length > 1 
+      ? `rows D${rows.join(', D')}` 
+      : `row D${rows[0]}`;
+    
+    await logData(authClient, `Processing spreadsheet ${spreadsheetId} (from ${rowsText})`);
     
     try {
-      await processUrl(url, authClient, i + 1, urlsWithIndices.length);
+      await processUrl(spreadsheetId, authClient, i + 1, uniqueSpreadsheets.length);
       successCount++;
     } catch (error) {
       failCount++;
       
       if (error.message.includes('Quota exceeded') || error.code === 429) {
-        await logData(authClient, `⚠️  Quota exceeded for URL: ${url}. Retrying after cooldown...`);
+        await logData(authClient, `⚠️  Quota exceeded for spreadsheet: ${spreadsheetId}. Retrying after cooldown...`);
         await cooldownWithProgress(RATE_LIMITS.QUOTA_EXCEEDED_WAIT, 'Quota exceeded - cooling down');
         
         try {
-          await processUrl(url, authClient, i + 1, urlsWithIndices.length);
+          await processUrl(spreadsheetId, authClient, i + 1, uniqueSpreadsheets.length);
           successCount++;
           failCount--;
         } catch (retryError) {
-          await logData(authClient, `❌ Error processing URL on retry: ${url}. Error: ${retryError.message}`);
+          await logData(authClient, `❌ Error processing spreadsheet on retry: ${spreadsheetId}. Error: ${retryError.message}`);
         }
       } else {
-        await logData(authClient, `❌ Error processing URL: ${url}. Error: ${error.message}`);
+        await logData(authClient, `❌ Error processing spreadsheet: ${spreadsheetId}. Error: ${error.message}`);
       }
     }
 
-    // CRITICAL: Add cooldown between processing different URLs
-    if (i < urlsWithIndices.length - 1) {
+    // CRITICAL: Add cooldown between processing different spreadsheets
+    if (i < uniqueSpreadsheets.length - 1) {
       await cooldownWithProgress(
         RATE_LIMITS.BETWEEN_URLS, 
-        `Cooling down before next URL (${i + 1}/${urlsWithIndices.length} complete)`
+        `Cooling down before next spreadsheet (${i + 1}/${uniqueSpreadsheets.length} complete)`
       );
     }
   }
@@ -482,12 +525,14 @@ async function updateTestCasesInLibrary() {
   console.log('\n' + '='.repeat(70));
   console.log('  📊 PROCESSING SUMMARY');
   console.log('='.repeat(70));
-  console.log(`✅ Successful: ${successCount}/${urlsWithIndices.length}`);
+  console.log(`📄 Total URLs found: ${totalUrls}`);
+  console.log(`📚 Unique spreadsheets processed: ${uniqueSpreadsheets.length}`);
   if (duplicateCount > 0) {
-    console.log(`⏭️  Duplicates skipped: ${duplicateCount}`);
+    console.log(`🔗 Duplicate references detected: ${duplicateCount}`);
   }
+  console.log(`✅ Successful: ${successCount}/${uniqueSpreadsheets.length}`);
   if (failCount > 0) {
-    console.log(`❌ Failed: ${failCount}/${urlsWithIndices.length}`);
+    console.log(`❌ Failed: ${failCount}/${uniqueSpreadsheets.length}`);
   }
   console.log(`⏱️  Total time: ${formatTime(totalTime)}`);
   console.log(`⏰ Finished at: ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`);
