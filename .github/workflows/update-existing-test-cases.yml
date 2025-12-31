@@ -2,27 +2,68 @@ name: Update Existing Test Cases In Portal
 
 on:
   schedule:
-    - cron: '*/15 * * * *' 
-  workflow_dispatch:      
+    # Run every 6 hours to process different batches
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      batch_number:
+        description: 'Batch number to process (0-indexed)'
+        required: false
+        type: number
+        default: 0
+      batch_size:
+        description: 'Number of URLs per batch'
+        required: false
+        type: number
+        default: 50
 
 jobs:
   update-portal:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 330 # 5.5 hours max
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
+        
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-
+          
       - name: Install dependencies
         run: npm install
-
+        
+      - name: Determine batch number
+        id: batch
+        run: |
+          # If manually triggered, use input; otherwise calculate based on time
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "BATCH_NUMBER=${{ github.event.inputs.batch_number }}" >> $GITHUB_OUTPUT
+            echo "BATCH_SIZE=${{ github.event.inputs.batch_size }}" >> $GITHUB_OUTPUT
+          else
+            # Calculate batch based on current hour (4 batches per day)
+            HOUR=$(date +%H)
+            BATCH=$((HOUR / 6))
+            echo "BATCH_NUMBER=$BATCH" >> $GITHUB_OUTPUT
+            echo "BATCH_SIZE=50" >> $GITHUB_OUTPUT
+          fi
+          
       - name: Run update script
         env:
           CDS_PORTAL_SPREADSHEET_ID: ${{ secrets.CDS_PORTAL_SPREADSHEET_ID }}
           CDS_PORTALS_SERVICE_ACCOUNT_JSON: ${{ secrets.CDS_PORTALS_SERVICE_ACCOUNT_JSON }}
-        run: node automated-portals/update-existing-test-cases.js
+          BATCH_NUMBER: ${{ steps.batch.outputs.BATCH_NUMBER }}
+          BATCH_SIZE: ${{ steps.batch.outputs.BATCH_SIZE }}
+        run: |
+          echo "Processing batch $BATCH_NUMBER with size $BATCH_SIZE"
+          node automated-portals/update-existing-test-cases.js
+          
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: error-logs-batch-${{ steps.batch.outputs.BATCH_NUMBER }}
+          path: |
+            *.log
+            automated-portals/*.log
