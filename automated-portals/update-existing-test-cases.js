@@ -68,7 +68,7 @@ async function cooldownWithProgress(ms, message = 'Cooling down') {
 // Fetch URLs from the D column of "Boards Test Cases"
 async function fetchUrls(auth) {
   const sheets = google.sheets({ version: 'v4', auth });
-  const range = `${SHEET_NAME}!D3:D17`;
+  const range = `${SHEET_NAME}!D3:D`;
   const response = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range });
   const values = response.data.values || [];
 
