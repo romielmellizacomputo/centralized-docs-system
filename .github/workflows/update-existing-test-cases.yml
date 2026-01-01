@@ -1,37 +1,14 @@
-name: Update Existing Test Cases In Portal
+name: Update Test Cases In Portal (Optimized)
 on:
   schedule:
-    # Run every 2 hours (reduced frequency)
-    - cron: '0 */2 * * *'
+    # Run once every 6 hours to process all URLs
+    - cron: '0 */6 * * *'
   workflow_dispatch:
-    inputs:
-      process_mode:
-        description: 'Processing mode'
-        required: true
-        type: choice
-        options:
-          - 'single_batch'
-          - 'all_batches'
-        default: 'single_batch'
-      batch_number:
-        description: 'Batch number (for single_batch mode, leave empty for auto-increment)'
-        required: false
-        type: number
-      batch_size:
-        description: 'Number of URLs per batch'
-        required: false
-        type: number
-        default: 30  # REDUCED from 50
-      auto_increment:
-        description: 'Auto-increment from last batch (single_batch mode only)'
-        required: false
-        type: boolean
-        default: true
 
 jobs:
   update-portal:
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 350  # ~5.8 hours max
     
     steps:
       - name: Checkout repository
@@ -45,58 +22,16 @@ jobs:
       - name: Install dependencies
         run: npm install
         
-      - name: Determine processing configuration
-        id: config
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # Manual trigger
-            PROCESS_MODE="${{ github.event.inputs.process_mode }}"
-            
-            if [ "$PROCESS_MODE" == "all_batches" ]; then
-              echo "PROCESS_ALL_BATCHES=true" >> $GITHUB_OUTPUT
-              echo "AUTO_INCREMENT=false" >> $GITHUB_OUTPUT
-              echo "BATCH_NUMBER=0" >> $GITHUB_OUTPUT
-              echo "🔄 Manual: PROCESS ALL BATCHES"
-            else
-              echo "PROCESS_ALL_BATCHES=false" >> $GITHUB_OUTPUT
-              if [ "${{ github.event.inputs.auto_increment }}" == "true" ]; then
-                echo "AUTO_INCREMENT=true" >> $GITHUB_OUTPUT
-                echo "BATCH_NUMBER=0" >> $GITHUB_OUTPUT
-                echo "🔄 Manual: Single batch (auto-increment)"
-              else
-                echo "AUTO_INCREMENT=false" >> $GITHUB_OUTPUT
-                echo "BATCH_NUMBER=${{ github.event.inputs.batch_number }}" >> $GITHUB_OUTPUT
-                echo "📌 Manual: Batch ${{ github.event.inputs.batch_number }}"
-              fi
-            fi
-            echo "BATCH_SIZE=${{ github.event.inputs.batch_size }}" >> $GITHUB_OUTPUT
-          else
-            # Scheduled run - REDUCED batch size
-            echo "PROCESS_ALL_BATCHES=false" >> $GITHUB_OUTPUT
-            echo "AUTO_INCREMENT=true" >> $GITHUB_OUTPUT
-            echo "BATCH_NUMBER=0" >> $GITHUB_OUTPUT
-            echo "BATCH_SIZE=30" >> $GITHUB_OUTPUT  # REDUCED from 50
-            echo "⏰ Scheduled: Single batch (auto-increment)"
-          fi
-          
-      - name: Run update script
+      - name: Run optimized update script
         env:
           CDS_PORTAL_SPREADSHEET_ID: ${{ secrets.CDS_PORTAL_SPREADSHEET_ID }}
           CDS_PORTALS_SERVICE_ACCOUNT_JSON: ${{ secrets.CDS_PORTALS_SERVICE_ACCOUNT_JSON }}
-          BATCH_NUMBER: ${{ steps.config.outputs.BATCH_NUMBER }}
-          BATCH_SIZE: ${{ steps.config.outputs.BATCH_SIZE }}
-          AUTO_INCREMENT: ${{ steps.config.outputs.AUTO_INCREMENT }}
-          PROCESS_ALL_BATCHES: ${{ steps.config.outputs.PROCESS_ALL_BATCHES }}
         run: |
           echo "=========================================="
-          echo "🚀 Starting batch processing"
+          echo "🚀 Starting optimized batch processing"
           echo "=========================================="
-          echo "Process all: $PROCESS_ALL_BATCHES"
-          echo "Auto-increment: $AUTO_INCREMENT"
-          if [ "$PROCESS_ALL_BATCHES" != "true" ] && [ "$AUTO_INCREMENT" != "true" ]; then
-            echo "Batch: $BATCH_NUMBER"
-          fi
-          echo "Batch size: $BATCH_SIZE"
+          echo "Strategy: Collect all data first, then batch write"
+          echo "This will process ALL URLs in a single run"
           echo "=========================================="
           node automated-portals/update-existing-test-cases.js
           
@@ -109,3 +44,13 @@ jobs:
             *.log
             automated-portals/*.log
           retention-days: 7
+          
+      - name: Upload logs on success
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: success-logs-run-${{ github.run_number }}
+          path: |
+            *.log
+            automated-portals/*.log
+          retention-days: 3
