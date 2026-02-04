@@ -14,12 +14,47 @@ for name, val in missing_vars.items():
         print(f"❌ {name} is not set. Please set {name} environment variable.")
         sys.exit(1)
 
+def parse_date(date_str):
+    """Parse date string and return datetime object or None"""
+    if not date_str or not date_str.strip():
+        return None
+    
+    date_str = date_str.strip()
+    # Common date formats to try
+    formats = [
+        "%Y-%m-%d",
+        "%m/%d/%Y",
+        "%d/%m/%Y",
+        "%Y/%m/%d",
+        "%m-%d-%Y",
+        "%d-%m-%Y"
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    return None
+
 def should_send_reminder(row):
     row += [""] * (17 - len(row))
     assigned_date, task_name, assignee, task_type, status, estimate, output_url, test_case_link = \
         row[2].strip(), row[3].strip(), row[4].strip(), row[5].strip().lower(), row[6].strip().lower(), row[8].strip(), row[15].strip(), row[16].strip()
 
     print(f"Checking task: '{task_name}', Type: '{task_type}', Status: '{status}', Assigned Date: '{assigned_date}'")
+    
+    # Parse the assigned date to check the year
+    assigned_dt = parse_date(assigned_date)
+    if assigned_dt is None:
+        print("  => No reminder: Invalid date format.")
+        return False, None
+    
+    # Only process tasks from 2026 onwards
+    if assigned_dt.year < 2026:
+        print(f"  => No reminder: Task is from {assigned_dt.year}, before 2026.")
+        return False, None
+    
     days = days_since(assigned_date)
     print(f"Days since assigned: {days}")
     if days is None or days < 3 or task_type not in ["sprint deliverable", "parking lot task"]:
