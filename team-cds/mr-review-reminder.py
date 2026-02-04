@@ -29,29 +29,6 @@ def get_priority_color(priority):
     else:
         return "#ffe5b4"  # fallback to peach
 
-def parse_date(date_str):
-    """Parse date string and return datetime object or None"""
-    if not date_str or not date_str.strip():
-        return None
-    
-    date_str = date_str.strip()
-    # Common date formats to try
-    formats = [
-        "%Y-%m-%d",
-        "%m/%d/%Y",
-        "%d/%m/%Y",
-        "%Y/%m/%d",
-        "%m-%d-%Y",
-        "%d-%m-%Y"
-    ]
-    
-    for fmt in formats:
-        try:
-            return datetime.datetime.strptime(date_str, fmt)
-        except ValueError:
-            continue
-    return None
-
 def should_send_mr_reminder(row, index):
     row += [""] * 17  # pad row to expected length
 
@@ -63,15 +40,6 @@ def should_send_mr_reminder(row, index):
     backend_url = row[13].strip()
     frontend_url = row[14].strip()
     finished_date = row[16].strip()
-
-    # Parse the assigned date to check the year
-    assigned_dt = parse_date(assigned_date)
-    if assigned_dt is None:
-        return False, None
-    
-    # Only process MRs from 2026 onwards
-    if assigned_dt.year < 2026:
-        return False, None
 
     days = days_since(assigned_date)
     if days is None or days < 2:
